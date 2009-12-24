@@ -10,10 +10,8 @@ sys.modules['cake.builders'] = cake.builders
 
 cake.builders.compiler = dummy.DummyCompiler()
 
-cache = bytecode.CodeCache()
-
 scriptPath = os.path.join(os.path.dirname(__file__), "source.cake")
-code = cache.load(scriptPath)
+code = bytecode.loadCode(scriptPath)
 
 exec code
 

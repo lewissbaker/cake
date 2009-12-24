@@ -1,11 +1,14 @@
 import os.path
-import cake.builders
-
+import sys
+import imp
 import cake.tools.compilers.dummy as dummy
+import cake.bytecode as bytecode
+import cake
+
+cake.builders = imp.new_module('cake.builders')
+sys.modules['cake.builders'] = cake.builders
 
 cake.builders.compiler = dummy.DummyCompiler()
-
-import cake.bytecode as bytecode
 
 cache = bytecode.CodeCache()
 

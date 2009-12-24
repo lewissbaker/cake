@@ -1,3 +1,6 @@
+"""A module for managing tasks with dependencies.
+"""
+
 import threading
 
 class Task:
@@ -10,12 +13,13 @@ class Task:
     @param function: The callable function to run when run() is called.
     """    
     self.__semaphore = threading.Semaphore(0)
+    self.__lock = threading.Lock()
     self.__dependents = [ function ]
   
   def __call__(self):
     """Call this task.
     
-    The task will run if all dependencies have completed.
+    The task will run if all dependencies have completed successfully.
     """
     self.run()
   
@@ -23,19 +27,19 @@ class Task:
     """Run this task.
     
     Note that the task may not actually run until all dependencies have
-    completed. 
+    completed. The task may not run at all if any of the dependencies
+    failed.
     """
     if not self.__semaphore.acquire(False):
-      try:
-        function = self.__dependents.pop(0)
-      except KeyError:
-        return # No more functions to run 
-      function()
+      with self.__lock:
+        for function in self.__dependents:
+          function()
+        self.__dependents = None # Signal success
   
   def dependsOn(self, otherTask):
     """Add a dependency to this task.
     
-    This task will not run until 'otherTask' task has completed.
+    This task will not run until 'otherTask' task has completed successfully.
     
     @param otherTask: The task to be dependent on.
     """
@@ -47,6 +51,10 @@ class Task:
     
     @param function: A callable function to run when this task has completed.
     """    
-    self.__dependents.append(function)
-    self.__semaphore.release()    
-    self.run()  
+    with self.__lock:
+      if self.__dependents is None:
+        # Already completed successfully, run the function now
+        function()
+      else:
+        # Wait for task to complete 
+        self.__dependents.append(function)  

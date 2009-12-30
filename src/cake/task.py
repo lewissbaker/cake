@@ -57,7 +57,7 @@ class Task:
   def dependsOn(self, otherTask):
     """Add a dependency to this task.
     
-    This task will not run until 'otherTask' task has completed successfully.
+    This task will not run until 'otherTask' has completed successfully.
     
     @param otherTask: The task to be dependent on.
     """

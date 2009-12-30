@@ -1,7 +1,7 @@
 from cake.builders import compiler
 
 compiler.debugSymbols = True
-compiler.optimisation = compiler.SOME_OPTIMISATION
+compiler.optimisation = compiler.PARTIAL_OPTIMISATION
 compiler.addIncludePath("include")
 
 result = compiler.object(

@@ -9,8 +9,8 @@ class CompilerResult(object):
 class Compiler(object):
   
   NO_OPTIMISATION = 0
-  SOME_OPTIMISATION = 1
-  GLOBAL_OPTIMISATION = 2
+  PARTIAL_OPTIMISATION = 1
+  FULL_OPTIMISATION = 2
   
   def __init__(self):
     

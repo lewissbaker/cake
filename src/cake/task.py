@@ -30,6 +30,7 @@ class Task(object):
   
   def __init__(self, func, name=None):
     self.name = name
+    self._func = func
     self._state = NEW
     self._lock = threading.Lock()
     self._completeAfterCount = 0
@@ -37,7 +38,7 @@ class Task(object):
     self._callbacks = []
         
   @staticmethod
-  def getCurrent(self):
+  def getCurrent():
     """Get the currently executing task.
     
     @return: The currently executing Task or None if no current task.
@@ -91,6 +92,11 @@ class Task(object):
     self._execute()
       
   def _execute(self):
+    """Actually execute this task.
+    
+    This should typically be run on a background thread.
+    """
+    
     if self._state is not RUNNING:
       assert self._state is FAILED, "should have been cancelled"
       return
@@ -98,30 +104,42 @@ class Task(object):
     callbacks = None
     
     try:
-      result = self._func()
+      old = self.getCurrent()
+      self._current.value = self
+      try:
+        result = self._func()
+      finally:
+        self._current.value = old
+        
       with self._lock:
         self._result = result
-        if not self._completeAfterCount:
-          callbacks = self._callbacks
-          self._callbacks = None
-          if not self._completeAfterFailures:
-            self._state = SUCCEEDED
+        if self._state is RUNNING:
+          if not self._completeAfterCount:
+            callbacks = self._callbacks
+            self._callbacks = None
+            if not self._completeAfterFailures:
+              self._state = SUCCEEDED
+            else:
+              self._state = FAILED
           else:
-            self._state = FAILED
+            self._state = WAITING_FOR_COMPLETE
         else:
-          self._state = WAITING_FOR_COMPLETE
+          assert self._state is FAILED, "should have been cancelled"
         
     except Exception, e:
       trace = sys.exc_info()[2]
       with self._lock:
         self._exception = e
         self._trace = trace
-        if not self._completeAfterCount:
-          callbacks = self._callbacks
-          self._callbacks = None
-          self._state = FAILED
+        if self._state is RUNNING:
+          if not self._completeAfterCount:
+            callbacks = self._callbacks
+            self._callbacks = None
+            self._state = FAILED
+          else:
+            self._state = WAITING_FOR_COMPLETE
         else:
-          self._state = WAITING_FOR_COMPLETE
+          assert self._state is FAILED, "should have been cancelled"
         
     if callbacks:
       for callback in callbacks:
@@ -198,7 +216,7 @@ class Task(object):
     with self._lock:
       self._completeAfterCount -= 1
       if task.failed:
-        task._completeAfterFailures = True
+        self._completeAfterFailures = True
         
       if self._state is WAITING_FOR_COMPLETE and self._completeAfterCount == 0:
         if hasattr(self, "_result") and not self._completeAfterFailures:

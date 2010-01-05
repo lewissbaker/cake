@@ -9,7 +9,6 @@ from cake.tools.compilers import Compiler, CompilerResult
 class DummyCompiler(Compiler):
   
   def __init__(self):
-
     Compiler.__init__(self)
 
   def object(self, target, source):

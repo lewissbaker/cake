@@ -1,8 +1,9 @@
-from cake.builders import compiler
+from cake.builders import compiler, script
+
+script.include(script.cwd("include.cake"))
 
 compiler.debugSymbols = True
 compiler.optimisation = compiler.SOME_OPTIMISATION
-compiler.addIncludePath("include")
 
 result = compiler.object(
   target="main",
@@ -10,3 +11,4 @@ result = compiler.object(
   )
 
 print result
+print compiler.includePaths

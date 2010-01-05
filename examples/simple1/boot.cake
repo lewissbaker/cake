@@ -1,47 +1,16 @@
 import os.path
-import sys
-import imp
-import cake.tools.compilers.dummy as dummy
-import cake.bytecode as bytecode
-import cake
+import time
 
-cake.builders = imp.new_module('cake.builders')
-sys.modules['cake.builders'] = cake.builders
+from cake.tools.compilers import dummy
+from cake.engine import Engine, Variant
 
-cake.builders.compiler = dummy.DummyCompiler()
+engine = Engine()
+variant = Variant(name="debug")
+variant.tools["compiler"] = dummy.DummyCompiler()
+engine.addVariant(variant, default=True)
 
 scriptPath = os.path.join(os.path.dirname(__file__), "source.cake")
-code = bytecode.loadCode(scriptPath)
+t = engine.execute(scriptPath)
 
-exec code
-
-#from cake.engine import Engine
-#from cake.builder import Builder
-#
-#class Printer(Builder):
-#  
-#  INFO = 0
-#  WARNING = 1
-#  ERROR = 2
-#  
-#  def __init__(self, engine):
-#    self._engine = engine
-#    self.debugLevel = INFO
-#    
-#  def info(self, text):
-#    if self.debugLevel <= INFO:
-#      print text
-#    
-#  def warning(self, text):
-#    if self.debugLevel <= WARNING:
-#      print "WARN: " + text
-#
-#  def error(self, text):
-#    if self.debugLevel <= ERROR:
-#      print "ERROR: " + text
-#
-#engine = Engine()
-#engine.register(Printer, type="printer")
-#
-#execution = engine.execute("source.cake", **keywords)
-
+while not t.completed:
+  time.sleep()

@@ -1,3 +1,4 @@
+from cake.engine import Tool 
 
 class CompilerResult(object):
   
@@ -6,7 +7,7 @@ class CompilerResult(object):
     self.targets = targets
     self.task = task
   
-class Compiler(object):
+class Compiler(Tool):
   
   NO_OPTIMISATION = 0
   SOME_OPTIMISATION = 1

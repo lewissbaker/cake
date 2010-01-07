@@ -3,7 +3,7 @@ from cake.builders import compiler, script, filesys
 script.include(filesys.cwd("include.cake"))
 
 compiler.debugSymbols = True
-compiler.optimisation = compiler.SOME_OPTIMISATION
+compiler.optimisation = compiler.PARTIAL_OPTIMISATION
 
 compiler2 = compiler.clone()
 compiler2.useDebugSymbols = False

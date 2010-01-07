@@ -6,16 +6,13 @@ from cake.tools import FileTarget, getPathAndTask
 class FileSystemTool(cake.engine.Tool):
   
   def __init__(self):
-    self.env = {}
+    pass
 
   def cwd(self, *args):
     """Return the path prefixed with the current script's directory.
     """
     script = cake.engine.Script.getCurrent()
     return script.cwd(*args)
-  
-  def expandPath(self, path):
-    return cake.path.expandVars(path, self.env)
 
   def copyFile(self, source, target):
     """Copy a file from one location to another.

@@ -11,12 +11,10 @@ class Variant(object):
   def __init__(self, name):
     self.name = name
     self.tools = {}
-    self.env = {}
   
-  def clone(self):
-    v = Variant()
-    v.env = self.env.copy()
-    v.tools = dict((name, tool.clone()) for name, tool in self.tools)
+  def clone(self, name):
+    v = Variant(name)
+    v.tools = dict((name, tool.clone()) for name, tool in self.tools.iteritems())
     return v
 
 class Tool(object):
@@ -43,7 +41,7 @@ class Engine(object):
     self._defaultVariant = None
     self._byteCodeCache = {}
     self._executed = {}
-  
+      
   def addVariant(self, variant, default=False):
     """Register a new variant with this engine.
     """
@@ -83,9 +81,6 @@ class Engine(object):
       task.start()
 
     return task
-    
-  def getScriptTask(self, script):
-    key = ()
     
   def getByteCode(self, path):
     byteCode = self._byteCodeCache.get(path, None)

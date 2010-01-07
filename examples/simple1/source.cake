@@ -1,30 +1,41 @@
-from cake.builders import compiler, script, filesys
+from cake.builders import compiler, script, filesys, env
 
 script.include(filesys.cwd("include.cake"))
 
 compiler.debugSymbols = True
 compiler.optimisation = compiler.PARTIAL_OPTIMISATION
 
-compiler2 = compiler.clone()
-compiler2.useDebugSymbols = False
+sources = [
+  "foo.cpp",
+  "bar.cpp",
+  ]
+
+if env["PLATFORM"] == "windows":
+  sources += [
+    "math_win.cpp",
+    ]
+elif env["PLATFORM"] == "wii":
+  sources += [
+    "math_wii.cpp",
+    ]
 
 mainObj = compiler.object(
-  target="build/main",
+  target=env.expand("${BUILD}/main"),
   source="main.cpp",
   )
 
 otherObjs = compiler.objects(
-  target="build",
-  sources=["foo.cpp", "bar.cpp"],
+  target=env.expand("${BUILD}"),
+  sources=filesys.cwd(sources),
   )
 
 mainExe = compiler.executable(
-  target="build/main",
+  target=env.expand("${BUILD}/main"),
   sources=[mainObj] + otherObjs,
   )
 
 fooExe = filesys.copyFile(
-  target="build/foo.exe",
+  target=env.expand("${BUILD}/foo.exe"),
   source=mainExe,
   )
 

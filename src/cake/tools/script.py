@@ -1,11 +1,12 @@
-import os.path
 import cake.engine
 
-class ScriptBuilder(object):
+class ScriptTool(cake.engine.Tool):
   """Builder that provides utilities for performing Script operations.
   """
   
   def clone(self):
+    # Optimisation because this class has no state
+    # Remove this if it starts storing any member variables.
     return self
   
   def include(self, path):
@@ -22,10 +23,3 @@ class ScriptBuilder(object):
     """
     script = cake.engine.Script.getCurrent()
     return script.engine.execute(path)
-  
-  def cwd(self, path):
-    """Return the path prefixed with the current script's directory.
-    """
-    script = cake.engine.Script.getCurrent()
-    scriptDir = os.path.dirname(script.path)
-    return os.path.join(scriptDir, path)

@@ -24,8 +24,6 @@ def _makeTask(value):
 
 class Task(object):
   """A task is an operation that is performed on a background thread.
-  
-  A task must be started before it can
   """
   
   _current = threading.local()
@@ -33,12 +31,16 @@ class Task(object):
   def __init__(self, func, name=None):
     self.name = name
     self._func = func
+    self._parent = Task.getCurrent()
     self._state = NEW
     self._lock = threading.Lock()
     self._completeAfterCount = 0
     self._completeAfterFailures = False
     self._callbacks = []
-        
+
+    if self._parent is not None:
+      self._parent.completeAfter(self)
+
   @staticmethod
   def getCurrent():
     """Get the currently executing task.

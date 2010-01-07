@@ -29,8 +29,6 @@ class DummyCompiler(Compiler):
     task = Task(run)
     task.startAfter(sourceTask)
     
-    Script.getCurrent().task.completeAfter(task)
-    
     return FileTarget(path=target, task=task)
     
   def objects(self, target, sources):
@@ -56,8 +54,6 @@ class DummyCompiler(Compiler):
     task = Task(run)
     task.startAfter(tasks)
     
-    Script.getCurrent().task.completeAfter(task)
-    
     return FileTarget(path=target, task=task)
     
   def module(self, target, sources, forceExtension=True):
@@ -73,8 +69,6 @@ class DummyCompiler(Compiler):
       
     task = Task(run)
     task.startAfter(tasks)
-    
-    Script.getCurrent().task.completeAfter(task)
     
     return FileTarget(path=target, task=task)
     
@@ -92,6 +86,4 @@ class DummyCompiler(Compiler):
     task = Task(run)
     task.startAfter(tasks)
 
-    Script.getCurrent().task.completeAfter(task)
-    
     return FileTarget(path=target, task=task)

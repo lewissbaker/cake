@@ -1,7 +1,7 @@
 import cake.engine
 import cake.path
 import cake.filesys
-from cake.tools import FileTarget
+from cake.tools import FileTarget, getPathAndTask
 
 class FileSystemTool(cake.engine.Tool):
   
@@ -32,28 +32,14 @@ class FileSystemTool(cake.engine.Tool):
     if not isinstance(target, basestring):
       raise TypeError("target must be a string")
     
-    if isinstance(source, basestring):
-      sourcePath = source
-      sourceTask = None
-    elif isinstance(source, FileTarget):
-      # Assume it's a FileTarget-like object
-      sourcePath = source.path
-      sourceTask = source.task
-    else:
-      raise TypeError("source must be a string or FileTarget")
+    sourcePath, sourceTask = getPathAndTask(source)
    
     def doCopy():
       print "Copying %s to %s" % (sourcePath, target)
       cake.filesys.copyFile(sourcePath, target)
       
     copyTask = cake.task.Task(doCopy)
-    script = cake.engine.Script.getCurrent()
-    script.task.completeAfter(copyTask)
-    
-    if sourceTask is None:
-      copyTask.start()
-    else:
-      copyTask.startAfter(sourceTask)
+    copyTask.startAfter(sourceTask)
 
     return FileTarget(path=target, task=copyTask)
 

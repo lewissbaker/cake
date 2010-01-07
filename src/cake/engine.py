@@ -82,10 +82,6 @@ class Engine(object):
       self._executed[key] = script
       task.start()
 
-    callingRootScript = Script.getCurrentRoot()
-    if callingRootScript is not None:
-      callingRootScript.task.completeAfter(task)
-      
     return task
     
   def getScriptTask(self, script):

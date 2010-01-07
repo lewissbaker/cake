@@ -1,5 +1,85 @@
 import os.path
 
+def directory(path):
+  """Get the directory part of the path.
+  """
+  return os.path.dirname(path)
+
+def baseName(path):
+  """Get the file-name part of the path.
+  """
+  return os.path.basename(path)
+
+def split(path):
+  """Split the path into directory and base parts.
+  """
+  return os.path.split(path)
+
+def hasExtension(path):
+  """Query if the last part of a path has a file extension.
+  
+  A file extension is any part after the last dot inclusively.
+  """ 
+  end = path.rfind("\\")
+  end = max(path.rfind("/", end + 1), end) + 1
+  # We search in the substring AFTER the last slash.
+  # In the case that a slash is not found, the -1 returned by rfind becomes zero, 
+  # and so searches the whole string
+  extStart = path.rfind(".", end)
+  return extStart > end and path.count(".", end, extStart) != extStart - end
+
+def extension(path):
+  """Get the file extension of the last part of a path.
+  
+  A file extension is any part after the last dot inclusively.
+  """ 
+  end = path.rfind("\\")
+  end = max(path.rfind("/", end + 1), end) + 1
+  # We search in the substring AFTER the last slash.
+  # In the case that a slash is not found, the -1 returned by rfind becomes zero, 
+  # and so searches the whole string
+  extStart = path.rfind(".", end)
+  if extStart > end and path.count(".", end, extStart) != extStart - end:
+    return path[extStart:]
+  else:
+    return ""
+
+def stripExtension(path):
+  """Return the part of the path before the extension.
+  """
+  end = path.rfind("\\")
+  end = max(path.rfind("/", end + 1), end) + 1
+  # We search in the substring AFTER the last slash.
+  # In the case that a slash is not found, the -1 returned by rfind becomes zero, 
+  # and so searches the whole string
+  extStart = path.rfind(".", end)
+  if extStart > end and path.count(".", end, extStart) != extStart - end:
+    return path[:extStart]
+  else:
+    return path
+
+def forceExtension(path, ext):
+  """Return the path modified if needed to have the specified extension.
+  """
+  if os.path.normcase(extension(path)) != os.path.normcase(ext):
+    return path + ext
+  else:
+    return path
+
+def baseNameWithoutExtension(path):
+  """Get the file-name part of the path without the extension.
+  """
+  end = path.rfind("\\")
+  end = max(path.rfind("/", end + 1), end) + 1
+  # We search in the substring AFTER the last slash.
+  # In the case that a slash is not found, the -1 returned by rfind becomes zero, 
+  # and so searches the whole string
+  extStart = path.rfind(".", end)
+  if extStart > end and path.count(".", end, extStart) != extStart - end:
+    return path[end:extStart]
+  else:
+    return path[end:]
+
 def join(*args):
   """
   Find the cross product of any amount of input paths or lists of paths.
@@ -105,4 +185,3 @@ def expandVars(path, env):
       res = res + c
     index = index + 1
   return res
-

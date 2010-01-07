@@ -69,49 +69,6 @@ class Task(object):
     s = self._state
     return s is SUCCEEDED or s is FAILED
   
-<<<<<<< HEAD
-  def run(self):
-    """Run this task.
-    
-    Note that the task may not actually run until all dependencies have
-    completed. The task may not run at all if any of the dependencies
-    failed.
-    """
-    if not self.__semaphore.acquire(False):
-      # Execute the callable function
-      # If the function throws an exception dependents will not be built
-      self.__function()
-
-      with self.__lock:
-        self.__function = None # Signal success
-
-      # Execute dependents
-      for function in self.__dependents:
-        _runDependent(function)
-     
-  def dependsOn(self, otherTask):
-    """Add a dependency to this task.
-    
-    This task will not run until 'otherTask' has completed successfully.
-    
-    @param otherTask: The task to be dependent on.
-    """
-    self.__semaphore.release()    
-    otherTask.addDependent(self.run)
-    
-  def addDependent(self, function):
-    """Registers a callable function to be run when this task has completed.
-    
-    @param function: A callable function to run when this task has completed.
-    """    
-    with self.__lock:
-      if self.__function is not None:
-        # Task has not completed, so wait until it has
-        # Note we must hold the lock while appending in case another thread
-        # is halfway through run()
-        self.__dependents.append(function)
-        return
-=======
   @property
   def succeeded(self):
     """True if this task successfully finished execution.
@@ -187,8 +144,7 @@ class Task(object):
             self._state = WAITING_FOR_COMPLETE
         else:
           assert self._state is FAILED, "should have been cancelled"
->>>>>>> 1e8aa3ce1d0b96bffdfaa0e57bc4aa31ac94c513
-        
+     
     if callbacks:
       for callback in callbacks:
         try:

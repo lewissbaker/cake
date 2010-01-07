@@ -15,15 +15,15 @@ class TaskError(Exception):
   pass
 
 def _makeTask(value):
-  if isinstance(value, (Task, TaskGroup)):
+  if value is None:
+    return TaskGroup(())
+  elif isinstance(value, (Task, TaskGroup)):
     return value
   else:
     return TaskGroup(value)
 
 class Task(object):
   """A task is an operation that is performed on a background thread.
-  
-  A task must be started before it can
   """
   
   _current = threading.local()
@@ -31,12 +31,16 @@ class Task(object):
   def __init__(self, func, name=None):
     self.name = name
     self._func = func
+    self._parent = Task.getCurrent()
     self._state = NEW
     self._lock = threading.Lock()
     self._completeAfterCount = 0
     self._completeAfterFailures = False
     self._callbacks = []
-        
+
+    if self._parent is not None:
+      self._parent.completeAfter(self)
+
   @staticmethod
   def getCurrent():
     """Get the currently executing task.
@@ -316,10 +320,11 @@ class TaskGroup:
   """
   
   def __init__(self, tasks):
-    self._tasks = tuple(tasks)
-    self._unfinishedCount = len(tasks)
-    self._lock = threading.Lock()
+    self._tasks = tuple(t for t in tasks if t is not None)
+    self._unfinishedCount = len(self._tasks)
+    
     if self._unfinishedCount:
+      self._lock = threading.Lock()
       self._callbacks = []
     else:
       self._callbacks = None
@@ -384,10 +389,11 @@ class TaskGroup:
     """Add a callback to be called when all tasks in the task group
     have completed.
     """
-    with self._lock:
-      if self._callbacks is not None:
-        self._callbacks.append(callback)
-        return
+    if self._callbacks is not None:
+      with self._lock:
+        if self._callbacks is not None:
+          self._callbacks.append(callback)
+          return
     
     try:
       callback()
@@ -398,13 +404,14 @@ class TaskGroup:
   def _childFinished(self):
     """Method called when a child task completes.
     """
-    with self._lock:
-      self._unfinishedCount -= 1
-      if self._unfinishedCount == 0:
-        callbacks = self._callbacks
-        self._callbacks = None
-      else:
-        return
+    if self._callbacks is not None:
+      with self._lock:
+        self._unfinishedCount -= 1
+        if self._unfinishedCount == 0:
+          callbacks = self._callbacks
+          self._callbacks = None
+        else:
+          return
       
     for callback in callbacks:
       try:

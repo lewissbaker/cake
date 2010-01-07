@@ -1,7 +1,10 @@
 import threading
+import os.path
+
 import cake.bytecode
 import cake.builders
 import cake.task
+import cake.path
 
 class Variant(object):
   
@@ -17,10 +20,17 @@ class Variant(object):
     return v
 
 class Tool(object):
+  """Base class for user-defined Cake tools.
+  """
   
   def clone(self):
-    cls = self.__class__
-    new = cls()
+    """Return an independent clone of this tool.
+    
+    The default clone behaviour performs a shallow copy of the
+    member variables of the tool. You should override this method
+    if you need a more sophisticated clone.
+    """
+    new = self.__class__()
     new.__dict__ = self.__dict__.copy()
     return new
 
@@ -55,25 +65,27 @@ class Engine(object):
     key = (path, variant)
     
     if key in self._executed:
-      script, task = self._executed[key]
+      script = self._executed[key]
     else:
-      script = Script(path=path, variant=variant, engine=self)
       def execute():
         cake.builders.__dict__.clear()
         for name, tool in variant.tools.items():
           setattr(cake.builders, name, tool.clone())
         script.execute()
       task = cake.task.Task(execute)
-      self._executed[key] = (script, task)
+      script = Script(
+        path=path,
+        variant=variant,
+        task=task,
+        engine=self,
+        )
+      self._executed[key] = script
       task.start()
 
-    callingRootScript = Script.getCurrentRoot()
-    if callingRootScript is not None:
-      callingKey = callingRootScript.path, callingRootScript.variant
-      _, callingTask = self._executed[callingKey]
-      callingTask.completeAfter(task)
-      
     return task
+    
+  def getScriptTask(self, script):
+    key = ()
     
   def getByteCode(self, path):
     byteCode = self._byteCodeCache.get(path, None)
@@ -86,45 +98,65 @@ class Script(object):
   
   _current = threading.local()
   
-  def __init__(self, path, variant, engine, parent=None):
+  def __init__(self, path, variant, engine, task, parent=None):
     self.path = path
+    self.dir = os.path.dirname(path)
     self.variant = variant
     self.engine = engine
+    self.task = task
     if parent is None:
+      self.root = self
       self._included = {self.path : self}
     else:
+      self.root = parent.root
       self._included = parent._included
 
   @staticmethod
   def getCurrent():
+    """Get the current thread's currently executing script.
+    """
     return getattr(Script._current, "value", None)
   
   @staticmethod
   def getCurrentRoot():
+    """Get the current thread's root script.
+    
+    This is the top-level script currently being executed.
+    A script may not be the top-level script if it is executed due
+    to inclusion from another script.
+    """
     current = Script.getCurrent()
     if current is not None:
       return current.root
     else:
       return None
 
-  @property
-  def root(self):
-    """The root script of the execution tree.
+  def cwd(self, *args):
+    """Return the path prefixed with the current script's directory.
     """
-    result = self
-    while result.parent is not None:
-      result = result.parent
-    return result
+    return cake.path.join(self.dir, *args)
 
   def include(self, path):
+    """Include another script for execution within this script's context.
+    
+    A script will only be included once within a given context.
+    """
     if path in self._included:
       return
       
-    includedScript = Script(path, self.variant, self.engine, parent=self)
+    includedScript = Script(
+      path=path,
+      variant=self.variant,
+      engine=self.engine,
+      task=self.task,
+      parent=self,
+      )
     self._included[path] = includedScript
     includedScript.execute()
     
   def execute(self):
+    """Execute this script.
+    """
     byteCode = self.engine.getByteCode(self.path)
     old = Script.getCurrent()
     Script._current.value = self

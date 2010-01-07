@@ -270,7 +270,6 @@ class TaskTests(unittest.TestCase):
       
       t = cake.task.Task(b)
       t.start()
-      cake.task.Task.getCurrent().completeAfter(t)
       
     def c():
       result.append("c")

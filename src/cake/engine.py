@@ -1,5 +1,11 @@
+import hashlib
 import threading
+import os
 import os.path
+try:
+  import cPickle as pickle
+except ImportError:
+  import pickle
 
 import cake.bytecode
 import cake.builders
@@ -40,6 +46,9 @@ class Engine(object):
     self._variants = set()
     self._defaultVariant = None
     self._byteCodeCache = {}
+    self._timestampCache = {}
+    self._digestCache = {}
+    self._dependencyInfoCache = {}
     self._executed = {}
       
   def addVariant(self, variant, default=False):
@@ -89,6 +98,146 @@ class Engine(object):
       self._byteCodeCache[path] = byteCode
     return byteCode
     
+  def getTimestamp(self, path):
+    timestamp = self._timestampCache.get(path, None)
+    if timestamp is None:
+      stat = os.stat(path)
+      timestamp = stat.st_mtime
+      self._timestampCache[path] = timestamp
+    return timestamp
+
+  def updateFileDigestCache(self, path, timestamp, digest):
+    """Update the internal cache of file digests with a new entry.
+    
+    @param path: The path of the file.
+    @param timestamp: The timestamp of the file at the time the digest
+    was calculated.
+    @param digest: The digest of the contents of the file.
+    """
+    key = (path, timestamp)
+    self._digestCache[key] = digest
+
+  def getFileDigest(self, path):
+    """Get the SHA1 digest of a file's contents.
+    """
+    timestamp = self.getTimestamp(path)
+    key = (path, timestamp)
+    digest = self._digestCache.get(key, None)
+    if digest is None:
+      hasher = hashlib.sha1()
+      with open(path, 'rb') as f:
+        blockSize = 512 * 1024
+        data = f.read(blockSize)
+        while data:
+          hasher.update(data)
+          data = f.read(blockSize)
+      digest = hasher.digest()
+      self._digestCache[key] = digest
+      
+    return digest
+    
+  def getDependencyInfo(self, targetPath):
+    """Load the dependency info for the specified target.
+    
+    The dependency info contains information about the parameters and
+    dependencies of a target at the time it was last built.
+    
+    @param target: The FileInfo object for the specified target. 
+    
+    @return: A DependencyInfo object for the target.
+    
+    @raise EnvironmentError: if the dependency info could not be retrieved.
+    """
+    dependencyInfo = self._dependencyInfoCache.get(targetPath, None)
+    if dependencyInfo is None:
+      depPath = targetPath + '.dep'
+      
+      with open(depPath, 'rb') as f:
+        dependencyInfo = pickle.load(f)
+      
+      # Check that the dependency info is valid  
+      if not isinstance(dependencyInfo, DependencyInfo):
+        raise EnvironmentError("invalid dependency file")
+      elif dependencyInfo.version != DependencyInfo.VERSION:
+        raise EnvironmentError("wrong dependency file version")
+
+      self._dependencyInfoCache[targetPath] = dependencyInfo
+      
+    return dependencyInfo
+    
+  def storeDependencyInfo(self, dependencyInfo):
+    """Call this method after a target was built to save the
+    dependencies of the target.
+    """
+    depPath = dependencyInfo.targets[0].path + '.dep'
+    for target in dependencyInfo.targets:
+      self._dependencyInfoCache[target.path] = dependencyInfo
+    
+    cake.filesys.makeDirs(cake.path.directory(depPath))
+    with open(depPath, 'wb') as f:
+      pickle.dump(dependencyInfo, f, pickle.HIGHEST_PROTOCOL)
+    
+class DependencyInfo(object):
+  
+  VERSION = 1
+  
+  def __init__(self, targets, args, dependencies):
+    self.version = self.VERSION
+    self.targets = targets
+    self.args = args
+    self.dependencies = dependencies
+
+  def calculateDigest(self, engine):
+    """Calculate the digest of the sources/dependencies.
+    """
+    hasher = hashlib.sha1()
+    
+    # Include the paths of the targets in the digest
+    for t in self.targets:
+      hasher.update(t.path.encode("utf8"))
+      
+    # Include parameters of the build    
+    hasher.update(repr(self.args).encode("utf8"))
+    
+    for d in self.dependencies:
+      
+      # Let the engine know of any cached file digests from a
+      # previous run.
+      if d.timestamp is not None and d.digest is not None:
+        engine.updateFileDigestCache(d.path, d.timestamp, d.digest)
+      
+      # Include the dependency file's path and content digest in
+      # this digest.
+      hasher.update(d.path.encode("utf8"))
+      hasher.update(engine.getFileDigest(d.path))
+      
+    return hasher.digest()
+
+class FileInfo(object):
+  
+  VERSION = 1
+  
+  def __init__(self, path, timestamp=None, digest=None):
+    self.version = self.VERSION
+    self.path = path
+    self.timestamp = timestamp
+    self.digest = digest
+    
+  def exists(self, engine):
+    return os.path.isfile(self.path)
+    
+  def hasChanged(self, engine):
+    if self.version != FileInfo.VERSION:
+      return True
+    
+    try:
+      currentTimestamp = engine.getTimestamp(self.path)
+    except EnvironmentError:
+      # File doesn't exist any more?
+      return True 
+    
+    return currentTimestamp != self.timestamp
+
 class Script(object):
   
   _current = threading.local()

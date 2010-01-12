@@ -29,7 +29,7 @@ otherObjs = compiler.objects(
   sources=filesys.cwd(sources),
   )
 
-mainExe = compiler.executable(
+mainExe = compiler.program(
   target=env.expand("${BUILD}/main"),
   sources=[mainObj] + otherObjs,
   )

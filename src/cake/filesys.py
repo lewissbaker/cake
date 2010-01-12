@@ -2,6 +2,21 @@ import shutil
 import os
 import os.path
 
+def exists(path):
+  """Check if a file or directory exists at the path.
+  """
+  return os.path.exists(path)
+
+def isFile(path):
+  """Check if a file exists at the path.
+  """
+  return os.path.isfile(path)
+
+def isDirectory(path):
+  """Check if a directory exists at the path.
+  """
+  return os.path.isdir(path)
+
 def copyFile(source, target):
   """Copy a file from source path to target path.
   

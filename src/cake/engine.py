@@ -12,6 +12,14 @@ import cake.builders
 import cake.task
 import cake.path
 
+class BuildError(Exception):
+  def __init__(self, target, message):
+    self.target = target
+    self.message = message
+    
+  def __str__(self):
+    return "%s: %s" % (self.target, self.message)
+
 class Variant(object):
   
   def __init__(self, name):
@@ -186,6 +194,22 @@ class DependencyInfo(object):
     self.targets = targets
     self.args = args
     self.dependencies = dependencies
+
+  def isUpToDate(self, engine, args):
+    """Query if the targets are up to date.
+    """
+    if args != self.args:
+      return False
+    
+    for target in self.targets:
+      if not target.exists(engine):
+        return False
+    
+    for dependency in self.dependencies:
+      if dependency.hasChanged(engine):
+        return False
+      
+    return True
 
   def calculateDigest(self, engine):
     """Calculate the digest of the sources/dependencies.

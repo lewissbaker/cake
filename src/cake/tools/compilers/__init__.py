@@ -91,12 +91,12 @@ class Compiler(Tool):
     
     return FileTarget(path=target, task=objectTask)
     
-  def objects(self, target, sources):
+  def objects(self, targetDir, sources):
     """Build a collection of objects to a target directory.
     
-    @param target: Path to the target directory where the built objects
+    @param targetDir: Path to the target directory where the built objects
     will be placed.
-    @type target: string
+    @type targetDir: string
     
     @param sources: A list of source files to compile to object files.
     @type sources: sequence of string or FileTarget objects
@@ -108,7 +108,7 @@ class Compiler(Tool):
     for source in sources:
       sourcePath, _ = getPathAndTask(source)
       sourceName = cake.path.baseNameWithoutExtension(sourcePath)
-      targetPath = cake.path.join(target, sourceName)
+      targetPath = cake.path.join(targetDir, sourceName)
       results.append(self.object(targetPath, source))
     return results
     

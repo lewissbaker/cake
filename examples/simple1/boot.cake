@@ -43,3 +43,8 @@ t = engine.execute(scriptPath)
 sem = threading.Semaphore(0)
 t.addCallback(sem.release)
 sem.acquire()
+
+if t.succeeded:
+  print "Build succeeded"
+else:
+  print "Build failed"

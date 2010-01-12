@@ -31,9 +31,18 @@ class FileSystemTool(cake.engine.Tool):
     
     sourcePath, sourceTask = getPathAndTask(source)
    
+    engine = cake.engine.Script.getCurrent().engine
+   
     def doCopy():
+      if cake.filesys.isFile(target) and \
+         engine.getTimestamp(sourcePath) <= engine.getTimestamp(target):
+        # up-to-date
+        return
+      
       print "Copying %s to %s" % (sourcePath, target)
+      cake.filesys.makeDirs(cake.path.directory(target))
       cake.filesys.copyFile(sourcePath, target)
+      engine.notifyFileChanged(target)
       
     copyTask = cake.task.Task(doCopy)
     copyTask.startAfter(sourceTask)

@@ -24,6 +24,11 @@ def makeCommand(name):
 
 class DummyCompiler(Compiler):
   
+  objectSuffix = '.obj'
+  librarySuffix = '.lib'
+  moduleSuffix = '.dll'
+  programSuffix = '.exe'
+  
   def __init__(self):
     Compiler.__init__(self)
 

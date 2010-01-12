@@ -106,6 +106,9 @@ class Engine(object):
       self._byteCodeCache[path] = byteCode
     return byteCode
     
+  def notifyFileChanged(self, path):
+    self._timestampCache.pop(path, None)
+    
   def getTimestamp(self, path):
     timestamp = self._timestampCache.get(path, None)
     if timestamp is None:

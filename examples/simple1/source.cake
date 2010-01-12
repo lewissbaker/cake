@@ -25,7 +25,7 @@ mainObj = compiler.object(
   )
 
 otherObjs = compiler.objects(
-  target=env.expand("${BUILD}"),
+  targetDir=env.expand("${BUILD}"),
   sources=filesys.cwd(sources),
   )
 

@@ -1,0 +1,37 @@
+Cake TODO List (in no particular order)
+--------------
+
+Thread-pool support
+- Tasks to be queued to thread pool when started
+
+Merge TaskGroup functionality into Task class
+
+Distributed builds
+
+Faster object cache lookup for dependency changes (dubious need?)
+
+Bootstrap script
+- Finds boot.cake
+- Looks at command-line args to choose variant/scripts to run
+- Forced rebuild switch
+
+Path tidyup
+- Make sure paths are being normalised everywhere they need to be
+
+Compiler Support
+- MSVC (7.1, 8, 9) express/standard editions
+- GCC
+- MinGW
+- Support for auto-detecting compiler paths or using predefined compiler paths
+
+Platform Support
+- Windows
+- Linux
+- Mac
+- Cygwin
+- Wii/PS3/Xbox360
+
+Other tools
+- zip/gzip/tar archivers
+
+Visual Studio project/solution generation

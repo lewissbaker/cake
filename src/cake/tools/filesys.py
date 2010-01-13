@@ -1,17 +1,14 @@
-import cake.engine
 import cake.path
 import cake.filesys
-from cake.tools import FileTarget, getPathAndTask
+from cake.tools import Tool, FileTarget, getPathAndTask
+from cake.engine import Script
 
-class FileSystemTool(cake.engine.Tool):
+class FileSystemTool(Tool):
   
-  def __init__(self):
-    pass
-
   def cwd(self, *args):
     """Return the path prefixed with the current script's directory.
     """
-    script = cake.engine.Script.getCurrent()
+    script = Script.getCurrent()
     return script.cwd(*args)
 
   def copyFile(self, source, target):
@@ -31,20 +28,25 @@ class FileSystemTool(cake.engine.Tool):
     
     sourcePath, sourceTask = getPathAndTask(source)
    
-    engine = cake.engine.Script.getCurrent().engine
+    engine = Script.getCurrent().engine
    
     def doCopy():
       if cake.filesys.isFile(target) and \
          engine.getTimestamp(sourcePath) <= engine.getTimestamp(target):
         # up-to-date
         return
+
+      engine.logger.outputInfo("Copying %s to %s\n" % (sourcePath, target))
       
-      print "Copying %s to %s" % (sourcePath, target)
-      cake.filesys.makeDirs(cake.path.directory(target))
-      cake.filesys.copyFile(sourcePath, target)
+      try:
+        cake.filesys.makeDirs(cake.path.directory(target))
+        cake.filesys.copyFile(sourcePath, target)
+      except EnvironmentError, e:
+        engine.raiseError("%s: %s" % (target, str(e)))
+
       engine.notifyFileChanged(target)
       
-    copyTask = cake.task.Task(doCopy)
+    copyTask = engine.createTask(doCopy)
     copyTask.startAfter(sourceTask)
 
     return FileTarget(path=target, task=copyTask)

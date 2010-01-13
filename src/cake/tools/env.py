@@ -1,14 +1,10 @@
-import cake.engine
+import cake.path
+from cake.tools import Tool
 
-class Environment(cake.engine.Tool):
+class Environment(Tool):
   
   def __init__(self):
     self.__vars = {}
-    
-  def clone(self):
-    new = self.__class__()
-    new.__vars = self.__vars.copy()
-    return new
     
   def __getitem__(self, key):
     """Return an environment variable given its key.

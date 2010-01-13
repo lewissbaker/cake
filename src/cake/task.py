@@ -54,6 +54,10 @@ class Task(object):
     return self._state
 
   @property
+  def parent(self):
+    return self._parent
+  
+  @property
   def started(self):
     """True if this task has been started.
     

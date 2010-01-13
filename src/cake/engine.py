@@ -1,5 +1,7 @@
 import hashlib
 import threading
+import traceback
+import sys
 import os
 import os.path
 try:
@@ -7,18 +9,14 @@ try:
 except ImportError:
   import pickle
 
+import cake.logging
 import cake.bytecode
 import cake.builders
 import cake.task
 import cake.path
 
 class BuildError(Exception):
-  def __init__(self, target, message):
-    self.target = target
-    self.message = message
-    
-  def __str__(self):
-    return "%s: %s" % (self.target, self.message)
+  pass
 
 class Variant(object):
   
@@ -30,21 +28,6 @@ class Variant(object):
     v = Variant(name)
     v.tools = dict((name, tool.clone()) for name, tool in self.tools.iteritems())
     return v
-
-class Tool(object):
-  """Base class for user-defined Cake tools.
-  """
-  
-  def clone(self):
-    """Return an independent clone of this tool.
-    
-    The default clone behaviour performs a shallow copy of the
-    member variables of the tool. You should override this method
-    if you need a more sophisticated clone.
-    """
-    new = self.__class__()
-    new.__dict__ = self.__dict__.copy()
-    return new
 
 class Engine(object):
   """Main object that holds all of the singleton resources for a build.
@@ -58,6 +41,7 @@ class Engine(object):
     self._digestCache = {}
     self._dependencyInfoCache = {}
     self._executed = {}
+    self.logger = cake.logging.Logger()
       
   def addVariant(self, variant, default=False):
     """Register a new variant with this engine.
@@ -65,6 +49,56 @@ class Engine(object):
     self._variants.add(variant)
     if default:
       self._defaultVariant = variant
+    
+  def createTask(self, func, name=None):
+    def _wrapper():
+      try:
+        func()
+      except BuildError:
+        # Assume build errors have already been reported
+        raise
+      except Exception, e:
+        tbs = [traceback.extract_tb(sys.exc_info()[2])]
+        if tb is not None:
+          tbs.append(tb)
+          pt = parentTask
+          while pt.parent is not None:
+            if hasattr(pt, "traceback"):
+              tbs.append(pt.traceback)
+            pt = pt.parent
+            
+        tbs.reverse()
+        tracebackString = ''.join(
+          ''.join(traceback.format_list(tb)) for tb in tbs
+          )
+        exceptionString = ''.join(traceback.format_exception_only(type(e), e))
+        message = 'Unhandled Task Exception:\n%s%s' % (tracebackString, exceptionString)
+        self.logger.outputError(message)
+        raise
+      
+    task = cake.task.Task(_wrapper, name)
+
+    # Find the script that executed this task    
+    script = Script.getCurrent()
+    if script is not None:
+      tb = traceback.extract_stack()[:-1]
+    else:
+      tb = None
+    
+    parentTask = task.parent
+    while tb is None and parentTask is not None:
+      tb = getattr(parentTask, "traceback", None)
+      parentTask = parentTask.parent
+      
+    task.traceback = tb
+
+    return task
+    
+  def raiseError(self, message):
+    """Log an error and raise the BuildError exception.
+    """
+    self.logger.outputError(message)
+    raise BuildError(message)
     
   def execute(self, path, variant=None):
     """Execute the script with the specified variant.
@@ -87,7 +121,7 @@ class Engine(object):
         for name, tool in variant.tools.items():
           setattr(cake.builders, name, tool.clone())
         script.execute()
-      task = cake.task.Task(execute)
+      task = self.createTask(execute)
       script = Script(
         path=path,
         variant=variant,
@@ -98,7 +132,7 @@ class Engine(object):
       task.start()
 
     return task
-    
+
   def getByteCode(self, path):
     byteCode = self._byteCodeCache.get(path, None)
     if byteCode is None:

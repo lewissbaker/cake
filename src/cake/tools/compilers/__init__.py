@@ -5,11 +5,16 @@ __all__ = ["Compiler"]
 
 import cake.path
 import cake.filesys
-from cake.engine import Tool, Script, DependencyInfo, FileInfo, BuildError
-from cake.tools import FileTarget, getPathsAndTasks, getPathAndTask
+from cake.engine import Script, DependencyInfo, FileInfo, BuildError
+from cake.tools import Tool, FileTarget, getPathsAndTasks, getPathAndTask
 from cake.task import Task
 
 class Compiler(Tool):
+  """class.
+  
+  @ivar debugSymbols: If true then the compiler will output debug symbols.
+  @type debugSymbols: boolean
+  """
   
   NO_OPTIMISATION = 0
   PARTIAL_OPTIMISATION = 1
@@ -28,16 +33,19 @@ class Compiler(Tool):
   programSuffix = ''
   
   objectCachePath = None
+  includePaths = None
+  defines = None
+  _argsCache = None
   
   def __init__(self):
+    self._argsCache = {}
     self.includePaths = []
     self.defines = []
-    
-  def clone(self):
-    result = Tool.clone(self)
-    result.includePaths = list(self.includePaths)
-    result.defines = list(self.defines)
-    return result
+
+  def __setattr__(self, name, value):
+    super(Compiler, self).__setattr__(name, value)
+    if name != '_argsCache':
+      self._argsCache = {}
     
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
@@ -55,7 +63,7 @@ class Compiler(Tool):
     else:
       self.defines.append("{0}={1}".format(define, value))
     
-  def object(self, target, source, forceExtension=True):
+  def object(self, target, source, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
     
     @param target: Path of the target object file.
@@ -74,24 +82,30 @@ class Compiler(Tool):
      
     # Take a snapshot of the build settings at this point and use that.
     compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+      
+    return compiler._object(target, source, forceExtension)
+    
+  def _object(self, target, source, forceExtension=True):
     
     # Make note of which build engine we're using too
     engine = Script.getCurrent().engine
     
     if forceExtension:
-      target = cake.path.forceExtension(target, compiler.objectSuffix)
+      target = cake.path.forceExtension(target, self.objectSuffix)
     
     source, sourceTask = getPathAndTask(source)
     
-    objectTask = Task(
-      lambda t=target, s=source, e=engine, c=compiler:
+    objectTask = engine.createTask(
+      lambda t=target, s=source, e=engine, c=self:
         c.buildObject(t, s, e)
       )
     objectTask.startAfter(sourceTask)
     
     return FileTarget(path=target, task=objectTask)
     
-  def objects(self, targetDir, sources):
+  def objects(self, targetDir, sources, **kwargs):
     """Build a collection of objects to a target directory.
     
     @param targetDir: Path to the target directory where the built objects
@@ -104,12 +118,16 @@ class Compiler(Tool):
     @return: A list of FileTarget objects, one for each object being
     built.
     """
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+    
     results = []
     for source in sources:
       sourcePath, _ = getPathAndTask(source)
       sourceName = cake.path.baseNameWithoutExtension(sourcePath)
       targetPath = cake.path.join(targetDir, sourceName)
-      results.append(self.object(targetPath, source))
+      results.append(compiler._object(targetPath, source, forceExtension=True))
     return results
     
   def library(self, target, sources, forceExtension=True):
@@ -140,7 +158,7 @@ class Compiler(Tool):
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.librarySuffix)
     
-    libraryTask = Task(
+    libraryTask = engine.createTask(
       lambda t=target, s=paths, e=engine, c=compiler:
         c.buildLibrary(t, s, e)
       )
@@ -167,7 +185,7 @@ class Compiler(Tool):
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.moduleSuffix)
     
-    moduleTask = Task(
+    moduleTask = engine.createTask(
       lambda t=target, s=paths, e=engine, c=compiler:
         c.buildModule(t, s, e)
       )
@@ -203,7 +221,7 @@ class Compiler(Tool):
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.programSuffix)
     
-    programTask = Task(
+    programTask = engine.createTask(
       lambda t=target, s=paths, e=engine, c=compiler:
         c.buildProgram(t, s, e)
       )
@@ -267,8 +285,8 @@ class Compiler(Tool):
 
       # Need to preprocess and scan the source file to get the new
       # list of dependencies.
-      preprocess()
-      newDependencies = scan()
+      preprocess(engine)
+      newDependencies = scan(engine)
       
       newDependencyInfo.dependencies = [
         FileInfo(
@@ -289,7 +307,7 @@ class Compiler(Tool):
         return
       
       # Finally, we need to do the compilation
-      compile()
+      compile(engine)
       
       # and save info on the dependencies of the newly built target
       engine.storeDependencyInfo(newDependencyInfo)
@@ -307,7 +325,7 @@ class Compiler(Tool):
       #
       
       # Need to run preprocessor first
-      preprocess()
+      preprocess(engine)
   
       newDependencies = []
 
@@ -326,13 +344,13 @@ class Compiler(Tool):
           )
         engine.storeDependencyInfo(newDependencyInfo)
       
-      scanTask = Task(lambda: newDependencies.extend(scan()))
+      scanTask = engine.createTask(lambda e=engine: newDependencies.extend(scan(e)))
       scanTask.start()
       
-      compileTask = Task(compile)
+      compileTask = engine.createTask(lambda e=engine: compile(e))
       compileTask.start()
       
-      storeDependencyInfoTask = Task(storeDependencyInfo)
+      storeDependencyInfoTask = engine.createTask(storeDependencyInfo)
       storeDependencyInfoTask.startAfter([scanTask, compileTask])
   
   def getObjectCommands(self, target, source):

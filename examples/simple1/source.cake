@@ -39,4 +39,3 @@ fooExe = filesys.copyFile(
   source=mainExe,
   )
 
-print compiler.includePaths

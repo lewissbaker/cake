@@ -23,7 +23,7 @@ env["COMPILER"] = "dummy"
 
 windowsDebug = windows.clone(name="win32-debug")
 compiler = windowsDebug.tools["compiler"]
-compiler.useDebugSymbols = True
+compiler.debugSymbols = True
 compiler.optimisation = compiler.NO_OPTIMISATION
 env = windowsDebug.tools["env"]
 env["RELEASE"] = "debug"
@@ -31,7 +31,7 @@ engine.addVariant(windowsDebug, default=True)
 
 windowsOptimised = windows.clone("win32-opt")
 compiler = windowsOptimised.tools["compiler"]
-compiler.useDebugSymbols = True
+compiler.debugSymbols = True
 compiler.optimisation = compiler.PARTIAL_OPTIMISATION
 env = windowsOptimised.tools["env"]
 env["RELEASE"] = "optimised"

@@ -5,6 +5,7 @@ __all__ = ["Compiler"]
 
 import cake.path
 import cake.filesys
+import cake.tools
 from cake.engine import Script, DependencyInfo, FileInfo, BuildError
 from cake.tools import Tool, FileTarget, getPathsAndTasks, getPathAndTask
 from cake.task import Task
@@ -33,9 +34,6 @@ class Compiler(Tool):
   programSuffix = ''
   
   objectCachePath = None
-  includePaths = None
-  defines = None
-  _argsCache = None
   
   def __init__(self):
     self._argsCache = {}

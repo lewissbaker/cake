@@ -59,38 +59,27 @@ class Engine(object):
         raise
       except Exception, e:
         tbs = [traceback.extract_tb(sys.exc_info()[2])]
-        if tb is not None:
-          tbs.append(tb)
-          pt = parentTask
-          while pt.parent is not None:
-            if hasattr(pt, "traceback"):
-              tbs.append(pt.traceback)
-            pt = pt.parent
-            
-        tbs.reverse()
+
+        t = task
+        while t is not None:
+          tb = getattr(t, "traceback", None)
+          if tb is not None:
+            tbs.append(t.traceback)
+          t = t.parent
+
         tracebackString = ''.join(
-          ''.join(traceback.format_list(tb)) for tb in tbs
+          ''.join(traceback.format_list(tb)) for tb in reversed(tbs)
           )
         exceptionString = ''.join(traceback.format_exception_only(type(e), e))
         message = 'Unhandled Task Exception:\n%s%s' % (tracebackString, exceptionString)
         self.logger.outputError(message)
         raise
-      
+
     task = cake.task.Task(_wrapper, name)
 
-    # Find the script that executed this task    
-    script = Script.getCurrent()
-    if script is not None:
-      tb = traceback.extract_stack()[:-1]
-    else:
-      tb = None
-    
-    parentTask = task.parent
-    while tb is None and parentTask is not None:
-      tb = getattr(parentTask, "traceback", None)
-      parentTask = parentTask.parent
-      
-    task.traceback = tb
+    # Set a traceback for the parent script task    
+    if Script.getCurrent() is not None:
+      task.traceback = traceback.extract_stack()[:-1]
 
     return task
     

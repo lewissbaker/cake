@@ -2,9 +2,6 @@ from cake.builders import compiler, script, filesys, env
 
 script.include(filesys.cwd("include.cake"))
 
-compiler.debugSymbols = True
-compiler.optimisation = compiler.PARTIAL_OPTIMISATION
-
 sources = [
   "foo.cpp",
   "bar.cpp",
@@ -21,7 +18,7 @@ elif env["PLATFORM"] == "wii":
 
 mainObj = compiler.object(
   target=env.expand("${BUILD}/main"),
-  source="main.cpp",
+  source=filesys.cwd("main.cpp"),
   )
 
 otherObjs = compiler.objects(
@@ -38,4 +35,3 @@ fooExe = filesys.copyFile(
   target=env.expand("${BUILD}/foo.exe"),
   source=mainExe,
   )
-

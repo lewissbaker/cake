@@ -14,13 +14,13 @@ FAILED = "failed"
 class TaskError(Exception):
   pass
 
-def _makeTask(value):
+def _makeTasks(value):
   if value is None:
-    return TaskGroup(())
-  elif isinstance(value, (Task, TaskGroup)):
-    return value
+    return []
+  elif isinstance(value, Task):
+    return [value]
   else:
-    return TaskGroup(value)
+    return value
 
 class Task(object):
   """A task is an operation that is performed on a background thread.
@@ -29,11 +29,13 @@ class Task(object):
   _current = threading.local()
   
   def __init__(self, func, name=None):
-    self.name = name
+    self._name = name
     self._func = func
     self._parent = Task.getCurrent()
     self._state = NEW
     self._lock = threading.Lock()
+    self._startAfterCount = 0
+    self._startAfterFailures = False
     self._completeAfterCount = 0
     self._completeAfterFailures = False
     self._callbacks = []
@@ -51,10 +53,20 @@ class Task(object):
 
   @property
   def state(self):
+    """Get the state of this task.
+    """
     return self._state
 
   @property
+  def name(self):
+    """Get the name of this task.
+    """
+    return self._name
+  
+  @property
   def parent(self):
+    """Get the parent of this task.
+    """
     return self._parent
   
   @property
@@ -90,15 +102,63 @@ class Task(object):
     
     Fails if the task has already been started or has been cancelled.
     """
+    self.startAfter(None)
+
+  def startAfter(self, other):
+    """Start this task after other tasks have completed.
+    
+    This task is cancelled (transition to FAILED state) if any of the
+    other tasks fail.
+    
+    @param other: the other task or a list of other tasks to start
+    after.
+    @type other: L{Task} or C{list} of L{Task}
+    
+    @raise TaskError: If this task has already been started or
+    cancelled.
+    """
+    otherTasks = _makeTasks(other)
     
     with self._lock:
       if self._state is not NEW:
         raise TaskError("task already started")
-      self._state = RUNNING
+      self._state = WAITING_FOR_START
+      self._startAfterCount = len(otherTasks) + 1
     
-    # TODO: Put call in thread-pool
-    self._execute()
+    def _callback(task):
       
+      callbacks = None
+      
+      with self._lock:
+        if task.failed:
+          self._startAfterFailures = True
+
+        self._startAfterCount -= 1
+        if self._startAfterCount > 0:
+          return
+        
+        if self._startAfterFailures:
+          self._state = FAILED
+          callbacks = self._callbacks
+          self._callbacks = None
+        else:
+          self._state = RUNNING
+
+      if callbacks is None:
+        # TODO: Put call to self._execute() on thread-pool          
+        self._execute()
+      else:
+        for callback in callbacks:
+          try:
+            callback()
+          except Exception:
+            pass
+    
+    for t in otherTasks:
+      t.addCallback(lambda: _callback(t))
+      
+    _callback(self)
+    
   def _execute(self):
     """Actually execute this task.
     
@@ -157,70 +217,25 @@ class Task(object):
           # TODO: Warning/Error here?
           pass
 
-  def startAfter(self, other):
-    """Start this task after other tasks have completed.
-    
-    This task is cancelled (transition to FAILED state) if any of the
-    other tasks fail.
-    
-    @param other: the other task or a list of other tasks to start
-    after.
-    @type other: L{Task} or C{list} of L{Task}
-    
-    @raise TaskError: If this task has already been started or
-    cancelled.
-    """
-    other = _makeTask(other)
-    
-    with self._lock:
-      if self._state is not NEW:
-        raise TaskError("task already started")
-      self._state = WAITING_FOR_START
-    
-    def callback():
-      
-      callbacks = None
-      
-      with self._lock:
-        if self._state is WAITING_FOR_START:
-          if other.failed:
-            self._state = FAILED
-            callbacks = self._callbacks
-            self._callbacks = None
-          else:
-            self._state = RUNNING
-        else:
-          return
-
-      if callbacks is None:
-        # TODO: Put call to self._execute() on thread-pool          
-        self._execute()
-      else:
-        for callback in callbacks:
-          try:
-            callback()
-          except Exception:
-            pass
-    
-    other.addCallback(callback)
-
   def completeAfter(self, other):
     """Make sure this task doesn't complete until other tasks have completed.
     
     @param other: The Task or list of Tasks to wait for.
     """
-    other = _makeTask(other)
-    
+    otherTasks = _makeTasks(other)
+
     with self._lock:
       if self.completed:
         raise TaskError("Task function has already finished executing.")
-      self._completeAfterCount += 1
+      self._completeAfterCount += len(otherTasks)
       
-    other.addCallback(lambda: self._completeAfterCallback(other))
+    for t in otherTasks:      
+      t.addCallback(lambda: self._completeAfterCallback(t))
 
   def _completeAfterCallback(self, task):
     
     callbacks = None
+    
     with self._lock:
       self._completeAfterCount -= 1
       if task.failed:
@@ -274,108 +289,3 @@ class Task(object):
           callback()
         except Exception:
           pass
-    
-class TaskGroup:
-  """A task that completes when all of a collection of tasks have completed.
-  """
-  
-  def __init__(self, tasks):
-    self._tasks = tuple(t for t in tasks if t is not None)
-    self._unfinishedCount = len(self._tasks)
-    
-    if self._unfinishedCount:
-      self._lock = threading.Lock()
-      self._callbacks = []
-    else:
-      self._callbacks = None
-      
-    for task in self._tasks:
-      task.addCallback(self._childFinished)
-
-  @property
-  def started(self):
-    """True if all tasks have started, False otherwise.
-    """
-    for task in self._tasks:
-      if not task.started:
-        return False
-    else:
-      return True
-
-  @property
-  def completed(self):
-    """True if this task group has completed, False otherwise.
-    """
-    for task in self._tasks:
-      if not task.completed:
-        return False 
-    else:
-      return True
-
-  @property
-  def failed(self):
-    """True if all tasks have completed and some of them have failed,
-    otherwise False.
-    """
-    # This is effectively calculating (completed and not succeeded)
-    failed = False
-    for task in self._tasks:
-      s = task.state
-      if s is FAILED:
-        failed = True
-      elif s is not SUCCEEDED:
-        # Not completed yet
-        return False
-    else:
-      return failed
-
-  @property
-  def succeeded(self):
-    """True if all tasks have completed with success.
-    """
-    for task in self._tasks:
-      if not task.succeeded:
-        return False
-    else:
-      return True
-
-  def cancel(self):
-    """Cancel all child tasks.
-    """
-    for task in self._tasks:
-      task.cancel()
-
-  def addCallback(self, callback):
-    """Add a callback to be called when all tasks in the task group
-    have completed.
-    """
-    if self._callbacks is not None:
-      with self._lock:
-        if self._callbacks is not None:
-          self._callbacks.append(callback)
-          return
-    
-    try:
-      callback()
-    except Exception:
-      # TODO: Log an error here - a callback failed
-      pass
-
-  def _childFinished(self):
-    """Method called when a child task completes.
-    """
-    if self._callbacks is not None:
-      with self._lock:
-        self._unfinishedCount -= 1
-        if self._unfinishedCount == 0:
-          callbacks = self._callbacks
-          self._callbacks = None
-        else:
-          return
-      
-    for callback in callbacks:
-      try:
-        callback()
-      except Exception:
-        # TODO: Log an error here - a callback failed
-        pass

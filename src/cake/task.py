@@ -155,7 +155,7 @@ class Task(object):
             pass
     
     for t in otherTasks:
-      t.addCallback(lambda: _callback(t))
+      t.addCallback(lambda t=t: _callback(t))
       
     _callback(self)
     
@@ -230,7 +230,7 @@ class Task(object):
       self._completeAfterCount += len(otherTasks)
       
     for t in otherTasks:      
-      t.addCallback(lambda: self._completeAfterCallback(t))
+      t.addCallback(lambda t=t: self._completeAfterCallback(t))
 
   def _completeAfterCallback(self, task):
     

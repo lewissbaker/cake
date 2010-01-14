@@ -210,7 +210,51 @@ class TaskTests(unittest.TestCase):
     else:
       self.fail("task didn't complete")
     
-  def testCompleteAfterMultiple(self):
+  def testStartAfterMultipleSomeFail(self):
+    
+    result = []
+    def a():
+      raise Exception()
+    def b():
+      result.append("b")
+    def c():
+      result.append("c")
+      
+    ta = cake.task.Task(a)
+    tb = cake.task.Task(b)
+    tc = cake.task.Task(c)
+    tc.startAfter([ta, tb])
+    
+    self.assertTrue(tc.started)
+    self.assertFalse(ta.started)
+    self.assertFalse(tb.started)
+    
+    tb.start()
+    
+    for _ in xrange(5):
+      if tb.completed:
+        self.assertTrue(tb.succeeded)
+        break
+      time.sleep(0.1)
+    else:
+      self.fail("task didn't complete")
+    
+    self.assertFalse(tc.completed)
+    
+    ta.start()
+    
+    for _ in xrange(5):
+      if tc.completed:
+        self.assertTrue(ta.failed)
+        self.assertTrue(tb.succeeded)
+        self.assertTrue(tc.failed)
+        self.assertEqual(result, ["b"])
+        break
+      time.sleep(0.1)
+    else:
+      self.fail("task didn't complete")
+    
+  def testMultipleSubTasks(self):
     result = []
     
     def a():
@@ -257,7 +301,7 @@ class TaskTests(unittest.TestCase):
     else:
       self.fail("task c didn't complete")
 
-  def testCompleteAfterFailedTaskFails(self):
+  def testFailedSubTasksFailsParent(self):
     
     result = []
     
@@ -284,6 +328,55 @@ class TaskTests(unittest.TestCase):
         self.assertTrue(ta.failed)
         self.assertTrue(tc.failed)
         self.assertEqual(result, ["a", "b"])
+        break
+      time.sleep(0.1)
+    else:
+      self.fail("task c didn't complete")
+
+  def testCompleteAfterMultipleSomeFail(self):
+    
+    result = []
+    
+    def a():
+      result.append("a")
+      
+    def b1():
+      raise Exception()
+      
+    def b2():
+      result.append("b2")
+      
+    def c():
+      result.append("c")
+      
+    tb1 = cake.task.Task(b1)
+    tb2 = cake.task.Task(b2)
+
+    ta = cake.task.Task(a)
+    ta.completeAfter([tb1, tb2])
+
+    tc = cake.task.Task(c)
+    tc.startAfter(ta)
+
+    ta.start()
+    
+    self.assertFalse(tc.completed)
+    self.assertFalse(ta.completed)
+
+    tb2.start()
+    
+    self.assertFalse(tc.completed)
+    self.assertFalse(ta.completed)
+    
+    tb1.start()
+    
+    for _ in xrange(5):
+      if tc.completed:
+        self.assertTrue(ta.failed)
+        self.assertTrue(tb1.failed)
+        self.assertTrue(tb2.succeeded)
+        self.assertTrue(tc.failed)
+        self.assertTrue(result in [["a", "b2"], ["b2", "a"]])
         break
       time.sleep(0.1)
     else:

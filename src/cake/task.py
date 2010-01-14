@@ -28,7 +28,7 @@ class Task(object):
   
   _current = threading.local()
   
-  def __init__(self, func, name=None):
+  def __init__(self, func=None, name=None):
     self._name = name
     self._func = func
     self._parent = Task.getCurrent()
@@ -175,7 +175,10 @@ class Task(object):
       old = self.getCurrent()
       self._current.value = self
       try:
-        result = self._func()
+        if self._func is not None:
+          result = self._func()
+        else:
+          result = None
       finally:
         self._current.value = old
         

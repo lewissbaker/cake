@@ -90,7 +90,7 @@ def run(args, cwd=None):
   finished = threading.Event()
   
   def onFinish():
-    if taskGroup.succeeded:
+    if mainTask.succeeded:
       if engine.logger.warningCount:
         msg = "Build succeeded with %i warnings." % engine.logger.warningCount
       else:
@@ -106,8 +106,10 @@ def run(args, cwd=None):
     engine.logger.outputInfo(msg)
     finished.set()
   
-  taskGroup = cake.task.TaskGroup(tasks)
-  taskGroup.addCallback(onFinish)
+  mainTask = cake.task.Task()
+  mainTask.addCallback(onFinish)
+  mainTask.startAfter(tasks)
+  
   finished.wait()
   
   return engine.logger.errorCount

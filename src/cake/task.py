@@ -28,8 +28,7 @@ class Task(object):
   
   _current = threading.local()
   
-  def __init__(self, func=None, name=None):
-    self._name = name
+  def __init__(self, func=None):
     self._func = func
     self._parent = Task.getCurrent()
     self._state = NEW
@@ -56,12 +55,6 @@ class Task(object):
     """Get the state of this task.
     """
     return self._state
-
-  @property
-  def name(self):
-    """Get the name of this task.
-    """
-    return self._name
   
   @property
   def parent(self):
@@ -130,11 +123,17 @@ class Task(object):
       callbacks = None
       
       with self._lock:
+        # If one task fails we should fail too
         if task.failed:
           self._startAfterFailures = True
 
+        # Wait for all other tasks to complete 
         self._startAfterCount -= 1
         if self._startAfterCount > 0:
+          return
+        
+        # Someone may have eg. cancelled us already
+        if self._state is not WAITING_FOR_START:
           return
         
         if self._startAfterFailures:

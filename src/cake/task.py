@@ -4,12 +4,16 @@
 import sys
 import threading
 
+from cake.threadpool import ThreadPool, getProcessorCount
+
 NEW = "new"
 WAITING_FOR_START = "waiting for start"
 RUNNING = "running"
 WAITING_FOR_COMPLETE = "waiting for complete"
 SUCCEEDED = "succeeded"
 FAILED = "failed"
+
+_threadPool = ThreadPool(numWorkers=getProcessorCount())
 
 class TaskError(Exception):
   pass
@@ -144,8 +148,9 @@ class Task(object):
           self._state = RUNNING
 
       if callbacks is None:
-        # TODO: Put call to self._execute() on thread-pool          
-        self._execute()
+        # TODO: Put call to self._execute() on thread-pool
+        _threadPool.queueJob(self._execute)          
+        #self._execute()
       else:
         for callback in callbacks:
           try:

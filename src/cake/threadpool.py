@@ -30,7 +30,7 @@ class JobQueue(object):
   def get(self):
     """Get the next job from the back of the queue. Blocks until a job is
     available.
-    """    
+    """
     self._jobSemaphore.acquire()
     job = self._jobs.pop()
     return lambda job=job: self._executeJob(job)
@@ -38,7 +38,7 @@ class JobQueue(object):
   def put(self, job, index=0):
     """Put a job on the queue at a given index. Defaults to putting the job
     on the front of the queue.
-    """    
+    """
     self._jobs.insert(index, job)
     self._submitted += 1 # Must increase count before signalling a new job 
     self._jobSemaphore.release() # Signal a new job
@@ -107,6 +107,9 @@ class ThreadPool(object):
     # Wait for the threads to finish      
     for thread in self._workers:
       thread.join()
+
+    self._jobQueue = JobQueue()
+    self._workers[:] = []
     
   def queueJob(self, callable):
     """Queue a new job to be executed by the thread pool. Blocks if
@@ -130,21 +133,15 @@ class ThreadPool(object):
     """Process jobs continuously until dismissed.
     """
     while True:
-      # Get the next job
       job = self._jobQueue.get()
-
-      # Execute the job
       try:
         job()
       except self.ExitThreadException:
-        return # Exit the thread
+        break # Exit the thread
       except Exception:
         sys.stderr.write("Uncaught exception\n")
         sys.stderr.write(traceback.format_exc())
-      except:
-        sys.stderr.write("------------ Hit exception\n")
-        raise
-      
+
   def _exitJob(self):
     """Thread exit job.
     """

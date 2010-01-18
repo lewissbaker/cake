@@ -3,6 +3,7 @@ import os.path
 import sys
 import optparse
 import threading
+import datetime
 
 import cake.engine
 import cake.task
@@ -44,6 +45,8 @@ def run(args, cwd=None):
   if exited with success.
   @rtype: int
   """
+  
+  startTime = datetime.datetime.utcnow()
   
   usage = "usage: %prog [options] <cake-script>*"
   
@@ -92,17 +95,17 @@ def run(args, cwd=None):
   def onFinish():
     if mainTask.succeeded:
       if engine.logger.warningCount:
-        msg = "Build succeeded with %i warnings." % engine.logger.warningCount
+        msg = "Build succeeded with %i warnings.\n" % engine.logger.warningCount
       else:
-        msg = "Build succeeded."
+        msg = "Build succeeded.\n"
     else:
       if engine.logger.warningCount:
-        msg = "Build failed with %i errors and %i warnings." % (
+        msg = "Build failed with %i errors and %i warnings.\n" % (
           engine.logger.errorCount,
           engine.logger.warningCount,
           )
       else:
-        msg = "Build failed with %i errors." % engine.logger.errorCount
+        msg = "Build failed with %i errors.\n" % engine.logger.errorCount
     engine.logger.outputInfo(msg)
     finished.set()
   
@@ -111,5 +114,9 @@ def run(args, cwd=None):
   mainTask.startAfter(tasks)
   
   finished.wait()
+  
+  endTime = datetime.datetime.utcnow()
+  
+  engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
   
   return engine.logger.errorCount

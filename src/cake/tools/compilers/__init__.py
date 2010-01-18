@@ -257,7 +257,7 @@ class Compiler(Tool):
     """
     preprocess, scan, compile = self.getObjectCommands(target, source, engine)
     
-    args = [repr(preprocess), repr(compile)]
+    args = [repr(preprocess), repr(scan), repr(compile)]
     
     # Check if the object file needs building
     try:

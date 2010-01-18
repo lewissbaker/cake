@@ -4,6 +4,8 @@
 import sys
 import threading
 
+from cake.threadpool import ThreadPool, getProcessorCount
+
 NEW = "new"
 WAITING_FOR_START = "waiting for start"
 RUNNING = "running"
@@ -11,9 +13,11 @@ WAITING_FOR_COMPLETE = "waiting for complete"
 SUCCEEDED = "succeeded"
 FAILED = "failed"
 
+_threadPool = ThreadPool(numWorkers=getProcessorCount())
+
 class TaskError(Exception):
   pass
-
+  
 def _makeTasks(value):
   if value is None:
     return []
@@ -28,8 +32,7 @@ class Task(object):
   
   _current = threading.local()
   
-  def __init__(self, func=None, name=None):
-    self._name = name
+  def __init__(self, func=None):
     self._func = func
     self._parent = Task.getCurrent()
     self._state = NEW
@@ -56,12 +59,6 @@ class Task(object):
     """Get the state of this task.
     """
     return self._state
-
-  @property
-  def name(self):
-    """Get the name of this task.
-    """
-    return self._name
   
   @property
   def parent(self):
@@ -125,40 +122,47 @@ class Task(object):
       self._state = WAITING_FOR_START
       self._startAfterCount = len(otherTasks) + 1
     
-    def _callback(task):
-      
-      callbacks = None
-      
-      with self._lock:
-        if task.failed:
-          self._startAfterFailures = True
-
-        self._startAfterCount -= 1
-        if self._startAfterCount > 0:
-          return
-        
-        if self._startAfterFailures:
-          self._state = FAILED
-          callbacks = self._callbacks
-          self._callbacks = None
-        else:
-          self._state = RUNNING
-
-      if callbacks is None:
-        # TODO: Put call to self._execute() on thread-pool          
-        self._execute()
-      else:
-        for callback in callbacks:
-          try:
-            callback()
-          except Exception:
-            pass
-    
     for t in otherTasks:
-      t.addCallback(lambda t=t: _callback(t))
+      t.addCallback(lambda t=t: self._startAfterCallback(t))
       
-    _callback(self)
+    self._startAfterCallback(self)
+
+  def _startAfterCallback(self, task):
     
+    callbacks = None
+    
+    with self._lock:
+      # If one task fails we should fail too
+      if task.failed:
+        self._startAfterFailures = True
+
+      # Wait for all other tasks to complete 
+      self._startAfterCount -= 1
+      if self._startAfterCount > 0:
+        return
+      
+      # Someone may have eg. cancelled us already
+      if self._state is not WAITING_FOR_START:
+        return
+      
+      if self._startAfterFailures:
+        self._state = FAILED
+        callbacks = self._callbacks
+        self._callbacks = None
+      else:
+        self._state = RUNNING
+
+    if callbacks is None:
+      # TODO: Put call to self._execute() on thread-pool
+      _threadPool.queueJob(self._execute)          
+      #self._execute()
+    else:
+      for callback in callbacks:
+        try:
+          callback()
+        except Exception:
+          pass
+              
   def _execute(self):
     """Actually execute this task.
     

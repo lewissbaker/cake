@@ -86,7 +86,9 @@ class ThreadPool(object):
     # Create the worker threads
     for _ in xrange(numWorkers):
       worker = threading.Thread(target=self._runThread)
-      worker.setDaemon(True)
+# HACK: Make the thread a daemon otherwise the KeyboardInterrupt can
+#  cause issues with thread shutdown. Does this problem still exist?
+      #worker.setDaemon(True)
       worker.start()
       self._workers.append(worker)
     

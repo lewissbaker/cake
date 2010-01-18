@@ -8,7 +8,7 @@ class ThreadPoolTests(unittest.TestCase):
     def job():
       result.append(None)
        
-    threadPool = ThreadPool(numWorkers=1)
+    threadPool = ThreadPool(numWorkers=10)
     threadPool.queueJob(job)
     threadPool.waitForJobsToComplete()
     threadPool.shutdown()
@@ -20,11 +20,11 @@ class ThreadPoolTests(unittest.TestCase):
     def job():
       result.append(None)
        
-    threadPool = ThreadPool(numWorkers=1)
+    threadPool = ThreadPool(numWorkers=10)
     for _ in xrange(50):
       threadPool.queueJob(job)
     threadPool.waitForJobsToComplete()
-    del threadPool
+    threadPool.shutdown()
     
     self.assertEqual(len(result), 50)
 

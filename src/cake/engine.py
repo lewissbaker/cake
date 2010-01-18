@@ -50,7 +50,7 @@ class Engine(object):
     if default:
       self._defaultVariant = variant
     
-  def createTask(self, func, name=None):
+  def createTask(self, func):
     def _wrapper():
       try:
         func()
@@ -75,7 +75,7 @@ class Engine(object):
         self.logger.outputError(message)
         raise
 
-    task = cake.task.Task(_wrapper, name)
+    task = cake.task.Task(_wrapper)
 
     # Set a traceback for the parent script task    
     if Script.getCurrent() is not None:

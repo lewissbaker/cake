@@ -10,6 +10,23 @@ from cake.engine import Script, DependencyInfo, FileInfo, BuildError
 from cake.tools import Tool, FileTarget, getPathsAndTasks, getPathAndTask
 from cake.task import Task
 
+class Command(object):
+  
+  def __init__(self, args, func):
+    self.args = args
+    self.func = func
+    
+  def __repr__(self):
+    return repr(self.args)
+  
+  def __call__(self, *args):
+    return self.func(*args)
+
+def makeCommand(args):
+  def run(func):
+    return Command(args, func)
+  return run
+
 class Compiler(Tool):
   """class.
   
@@ -36,15 +53,10 @@ class Compiler(Tool):
   objectCachePath = None
   
   def __init__(self):
-    self._argsCache = {}
+    super(Compiler, self).__init__()
     self.includePaths = []
     self.defines = []
 
-  def __setattr__(self, name, value):
-    super(Compiler, self).__setattr__(name, value)
-    if name != '_argsCache':
-      self._argsCache = {}
-    
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
     
@@ -243,7 +255,7 @@ class Compiler(Tool):
     
     @param engine: The build Engine to use when building this object.
     """
-    preprocess, scan, compile = self.getObjectCommands(target, source)
+    preprocess, scan, compile = self.getObjectCommands(target, source, engine)
     
     args = [repr(preprocess), repr(compile)]
     
@@ -283,8 +295,8 @@ class Compiler(Tool):
 
       # Need to preprocess and scan the source file to get the new
       # list of dependencies.
-      preprocess(engine)
-      newDependencies = scan(engine)
+      preprocess()
+      newDependencies = scan()
       
       newDependencyInfo.dependencies = [
         FileInfo(
@@ -305,7 +317,7 @@ class Compiler(Tool):
         return
       
       # Finally, we need to do the compilation
-      compile(engine)
+      compile()
       
       # and save info on the dependencies of the newly built target
       engine.storeDependencyInfo(newDependencyInfo)
@@ -323,7 +335,7 @@ class Compiler(Tool):
       #
       
       # Need to run preprocessor first
-      preprocess(engine)
+      preprocess()
   
       newDependencies = []
 
@@ -342,10 +354,10 @@ class Compiler(Tool):
           )
         engine.storeDependencyInfo(newDependencyInfo)
       
-      scanTask = engine.createTask(lambda e=engine: newDependencies.extend(scan(e)))
+      scanTask = engine.createTask(lambda: newDependencies.extend(scan()))
       scanTask.start()
       
-      compileTask = engine.createTask(lambda e=engine: compile(e))
+      compileTask = engine.createTask(compile)
       compileTask.start()
       
       storeDependencyInfoTask = engine.createTask(storeDependencyInfo)

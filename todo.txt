@@ -4,15 +4,12 @@ Cake TODO List (in no particular order)
 Thread-pool support
 - Tasks to be queued to thread pool when started
 
-Merge TaskGroup functionality into Task class
-
 Distributed builds
 
 Faster object cache lookup for dependency changes (dubious need?)
 
 Bootstrap script
-- Finds boot.cake
-- Looks at command-line args to choose variant/scripts to run
+- Looks at command-line args to choose variant
 - Forced rebuild switch
 
 Path tidyup

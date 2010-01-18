@@ -1,5 +1,6 @@
 import cake.path
 from cake.tools.compilers.dummy import DummyCompiler
+from cake.tools.compilers.msvc import MsvcCompiler
 from cake.tools.script import ScriptTool
 from cake.tools.filesys import FileSystemTool
 from cake.tools.env import Environment
@@ -13,10 +14,14 @@ env["ROOT"] = cake.path.directory(__file__)
 env["BUILD"] = "${ROOT}/build/${PLATFORM}_${COMPILER}_${RELEASE}"
 
 windows = base.clone(name="windows")
-windows.tools["compiler"] = DummyCompiler()
+windows.tools["compiler"] = MsvcCompiler(
+  clExe="cl.exe",
+  libExe="lib.exe",
+  linkExe="link.exe",
+  )
 env = windows.tools["env"]
 env["PLATFORM"] = "windows"
-env["COMPILER"] = "dummy"
+env["COMPILER"] = "msvc"
 
 windowsDebug = windows.clone(name="win32-debug")
 compiler = windowsDebug.tools["compiler"]

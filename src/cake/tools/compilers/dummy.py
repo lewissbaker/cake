@@ -3,24 +3,7 @@ __all__ = ["DummyCompiler"]
 
 import cake.filesys
 import cake.path
-from cake.tools.compilers import Compiler
-
-class DummyCommand(object):
-  
-  def __init__(self, args, func):
-    self.args = args
-    self.func = func
-    
-  def __repr__(self):
-    return repr(self.args)
-  
-  def __call__(self, *args):
-    return self.func(*args)
-
-def makeCommand(args):
-  def run(func):
-    return DummyCommand(args, func)
-  return run
+from cake.tools.compilers import Compiler, makeCommand
 
 class DummyCompiler(Compiler):
   
@@ -32,7 +15,7 @@ class DummyCompiler(Compiler):
   def __init__(self):
     Compiler.__init__(self)
 
-  def getObjectCommands(self, target, source):
+  def getObjectCommands(self, target, source, engine):
 
     preprocessorArgs = self._argsCache.get('preprocessor', None)
     compilerArgs = self._argsCache.get('compiler', None)
@@ -51,19 +34,19 @@ class DummyCompiler(Compiler):
     preprocessTarget = target + ".i"
     
     @makeCommand(preprocessorArgs + [source, "/o", preprocessTarget])
-    def preprocess(engine):
+    def preprocess():
       print "Preprocessing %s" % source
       cake.filesys.makeDirs(cake.path.directory(preprocessTarget))
       with open(preprocessTarget, 'wb'):
         pass
 
     @makeCommand("dummy-scan")
-    def scan(engine):
+    def scan():
       print "Scanning %s" % source
       return [source]
     
     @makeCommand(compilerArgs + [preprocessTarget, "/o", target])
-    def compile(engine):
+    def compile():
       print "Compiling %s" % source
       cake.filesys.makeDirs(cake.path.directory(target))
       with open(target, 'wb'):

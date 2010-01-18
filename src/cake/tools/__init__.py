@@ -27,11 +27,48 @@ class ToolMetaclass(type):
       oldSetattr(self, name, value)
     cls.__setattr__ = __setattr__
 
+def memoise(func):
+  """Decorator that can be placed on Tool methods to memoise the result.
+  
+  The result cache is invalidated whenever an attribute is set on the
+  instance.
+  """
+  
+  undefined = object()
+  def run(*args, **kwargs):
+    kwargsTuple = tuple((k,v) for k, v in kwargs.iteritems())
+    
+    self = args[0]
+    key = (func, args[1:], kwargsTuple)
+
+    cache = self._Tool__memoise
+    result = cache.get(key, undefined)
+    if result is undefined:
+      result = func(*args, **kwargs)
+      cache[key] = result
+    return result
+  
+  try:
+    run.func_name = func.func_name
+    run.func_doc = func.func_doc
+  except AttributeError:
+    pass
+  
+  return run
+
 class Tool(object):
   """Base class for user-defined Cake tools.
   """
   
   __metaclass__ = ToolMetaclass
+  
+  def __init__(self):
+    self.__memoise = {}
+  
+  def __setattr__(self, name, value):
+    if name != '_Tool__memoise' and hasattr(self, '_Tool__memoise'):
+      self.__memoise.clear()
+    super(Tool, self).__setattr__(name, value)
   
   def clone(self):
     """Return an independent clone of this tool.

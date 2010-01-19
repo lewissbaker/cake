@@ -16,9 +16,12 @@ elif env["PLATFORM"] == "wii":
     "math_wii.cpp",
     ]
 
+compiler.pdbFile = env.expand("${BUILD}/foo.pdb")
+
 mainObj = compiler.object(
   target=env.expand("${BUILD}/main"),
   source=filesys.cwd("main.cpp"),
+  pdbFile=env.expand("${BUILD}/main.pdb"),
   )
 
 otherObjs = compiler.objects(

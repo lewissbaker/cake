@@ -45,6 +45,12 @@ class Compiler(Tool):
   debugSymbols = False
   optimisation = NO_OPTIMISATION
   
+  enableRtti = True
+  enableExceptions = True
+  
+  warningLevel = None
+  warningsAsErrors = False
+  
   objectSuffix = '.o'
   librarySuffix = '.a'
   moduleSuffix = '.so'
@@ -56,6 +62,7 @@ class Compiler(Tool):
     super(Compiler, self).__init__()
     self.includePaths = []
     self.defines = []
+    self.forceIncludes = []
 
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
@@ -255,7 +262,7 @@ class Compiler(Tool):
     
     @param engine: The build Engine to use when building this object.
     """
-    preprocess, scan, compile = self.getObjectCommands(target, source, engine)
+    preprocess, scan, compile, canBeCached = self.getObjectCommands(target, source, engine)
     
     args = [repr(preprocess), repr(scan), repr(compile)]
     
@@ -268,7 +275,7 @@ class Compiler(Tool):
     except EnvironmentError:
       oldDependencyInfo = None
 
-    if self.objectCachePath is not None:
+    if canBeCached and self.objectCachePath is not None:
       #
       # Building the object using the object cache
       #
@@ -366,9 +373,10 @@ class Compiler(Tool):
   def getObjectCommands(self, target, source):
     """Get the command-lines for compiling a source to a target.
     
-    @return: A (preprocess, scan, compile) tuple of the commands
-    to execute for preprocessing, dependency scanning and compiling
-    the source file respectively.
+    @return: A (preprocess, scan, compile, cache) tuple of the commands
+    to execute for preprocessing, dependency scanning, compiling the source
+    file and a flag indicating whether the compile result can be cached
+    respectively.
     """
     raise BuildError(target, "Don't know how to compile %s" % source)
   

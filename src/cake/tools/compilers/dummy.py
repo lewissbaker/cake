@@ -17,6 +17,8 @@ class DummyCompiler(Compiler):
 
   def getObjectCommands(self, target, source, engine):
 
+    canBeCached = True
+
     preprocessorArgs = self._argsCache.get('preprocessor', None)
     compilerArgs = self._argsCache.get('compiler', None)
 
@@ -52,4 +54,4 @@ class DummyCompiler(Compiler):
       with open(target, 'wb'):
         pass
 
-    return preprocess, scan, compile
+    return preprocess, scan, compile, canBeCached

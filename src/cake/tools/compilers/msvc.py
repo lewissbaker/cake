@@ -5,15 +5,19 @@ import os.path
 import subprocess
 import tempfile
 import re
+import threading
 
 import cake.filesys
 import cake.path
 from cake.tools.compilers import Compiler, makeCommand
 from cake.tools import memoise
+from cake.task import Task
 
 class MsvcCompiler(Compiler):
 
   _lineRegex = re.compile('#line [0-9]+ "(?P<path>.+)"', re.MULTILINE)
+  _pdbQueue = {}
+  _pdbQueueLock = threading.Lock()
   
   objectSuffix = '.obj'
   librarySuffix = '.lib'
@@ -25,14 +29,20 @@ class MsvcCompiler(Compiler):
   runtimeLibraries = None
   useFunctionLevelLinking = False
   useStringPooling = False
+  useMinimalRebuild = False
+  useEditAndContinue = False
   
   errorReport = 'queue'
   
-  def __init__(self,
+  pdbFile = None
+  
+  def __init__(
+    self,
     clExe=None,
     libExe=None,
     linkExe=None,
     dllPaths=None,
+    architecture=None,
     ):
     super(MsvcCompiler, self).__init__()
     self.__clExe = clExe
@@ -104,12 +114,29 @@ class MsvcCompiler(Compiler):
     
     return args
     
+  @property
+  @memoise
+  def _needPdbFile(self):
+    if self.pdbFile is not None and self.debugSymbols:
+      return True
+    elif self.useMinimalRebuild or self.useEditAndContinue:
+      return True
+    else:
+      return False
+    
   @memoise
   def _getCompileCommonArgs(self, language):
     args = list(self._getCommonArgs(language))
+
+    if self.useEditAndContinue:
+      args.append("/ZI") # Output debug info to PDB (edit-and-continue)
+    elif self._needPdbFile:
+      args.append("/Zi") # Output debug info to PDB (no edit-and-continue)
+    elif self.debugSymbols:
+      args.append("/Z7") # Output debug info embedded in .obj
     
-    if self.debugSymbols:
-      args.append("/Z7") # Embed debug info in .obj
+    if self.useMinimalRebuild:
+      args.append("/Gm") # Enable minimal rebuild
     
     args.append("/c")
     return args
@@ -159,9 +186,15 @@ class MsvcCompiler(Compiler):
       preprocessArgs.append('/Tp' + source)
       compileArgs.append('/Tp' + preprocessTarget)
 
+    if self._needPdbFile:
+      pdbFile = self.pdbFile if self.pdbFile is not None else target + '.pdb'
+      compileArgs.append('/Fd' + pdbFile)
+    else:
+      pdbFile = None
+
     compileArgs.append('/Fo' + target)
     
-    preprocessorOutput = [] 
+    preprocessorOutput = []
     
     @makeCommand(preprocessArgs)
     def preprocess():
@@ -256,7 +289,35 @@ class MsvcCompiler(Compiler):
           else: 
             engine.logger.outputInfo(line)
         
-        if exitCode != 0:
-          engine.raiseError("cl: failed with code %i" % exitCode)
+      if exitCode != 0:
+        engine.raiseError("cl: failed with code %i" % exitCode)
       
-    return preprocess, scan, compile
+    @makeCommand(compileArgs)
+    def compileWhenPdbIsFree():
+      with self._pdbQueueLock:
+        predecessor = self._pdbQueue.get(pdbFile, None)
+        if predecessor is not None:
+          # Another compile task is using this .pdb
+          # We'll start after it finishes
+          compileTask = Task(compile)
+          predecessor.addCallback(compileTask.start)
+        else:
+          # No prior compiles using this .pdb can start this
+          # one immediately in the same task.
+          compileTask = Task.getCurrent()
+        self._pdbQueue[pdbFile] = compileTask
+        
+      if predecessor is None:
+        compile()
+      
+    if pdbFile is not None:
+      # Debug info is embedded in the .pdb so we can't cache the
+      # object file without somehow pulling the .pdb along for
+      # the ride.
+      canBeCached = False
+      return preprocess, scan, compileWhenPdbIsFree, canBeCached 
+    else:
+      # Debug info is embedded in the .obj so we can cache the
+      # object file without losing debug info.
+      canBeCached = True
+      return preprocess, scan, compile, canBeCached

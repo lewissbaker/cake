@@ -196,7 +196,7 @@ class MsvcCompiler(Compiler):
     
     preprocessorOutput = []
     
-    @makeCommand(preprocessArgs)
+    @makeCommand(preprocessArgs + ['>', preprocessTarget])
     def preprocess():
       engine.logger.outputInfo("run: %s\n" % " ".join(preprocessArgs))
       
@@ -244,6 +244,7 @@ class MsvcCompiler(Compiler):
     @makeCommand("msvc-scan")
     def scan():
       engine.logger.outputInfo("scan: %s\n" % preprocessTarget)
+      # TODO: Add dependencies on DLLs used by cl.exe
       dependencies = [self.__clExe]
       uniqueDeps = set()
       for match in self._lineRegex.finditer(preprocessorOutput[0]):
@@ -321,3 +322,76 @@ class MsvcCompiler(Compiler):
       # object file without losing debug info.
       canBeCached = True
       return preprocess, scan, compile, canBeCached
+
+  @memoise
+  def _getCommonLibraryArgs(self):
+    args = [cake.path.baseName(self.__libExe), '/nologo']
+    
+    # XXX: MSDN says /errorReport:queue is supported by lib.exe
+    # but it seems to go unrecognised in MSVC8.
+    #if self.errorReport:
+    #  args.append('/ERRORREPORT:' + self.errorReport.upper())
+
+    if self.optimisation == self.FULL_OPTIMISATION:
+      args.append('/LTCG')
+
+    if self.warningsAsErrors:
+      args.append('/WX')
+    else:
+      args.append('/WX:NO')
+
+    return args
+
+  def getLibraryCommand(self, target, sources, engine):
+    
+    args = list(self._getCommonLibraryArgs())
+
+    args.append('/OUT:' + target)
+    
+    args.extend(sources)
+    
+    @makeCommand(args)
+    def archive():
+
+      engine.logger.outputInfo("run: %s\n" % " ".join(args))
+      
+      argsFile = target + '.args' 
+      with open(argsFile, 'wt') as f:
+        for arg in args[1:]:
+          f.write(arg + '\n')
+
+      try:
+        p = subprocess.Popen(
+          args=[args[0], '@' + argsFile],
+          executable=self.__libExe,
+          env=self._getProcessEnv(),
+          stdin=subprocess.PIPE,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.STDOUT,
+          )
+      except EnvironmentError, e:
+        engine.raiseError("cake: failed to launch %s: %s" % (self.__libExe, str(e)))
+    
+      p.stdin.close()
+      output = p.stdout.read()
+      exitCode = p.wait()
+    
+      for line in output:
+        if not line.rstrip():
+          continue
+        if 'error' in line:
+          engine.logger.outputError(line)
+        elif 'warning' in line:
+          engine.logger.outputWarning(line)
+        else:
+          engine.logger.outputInfo(line)
+          
+      if exitCode != 0:
+        engine.raiseError("lib: failed with exit code %i" % exitCode)
+
+    @makeCommand("lib-scan")
+    def scan():
+      # TODO: Add dependencies on DLLs used by lib.exe
+      return [self.__libExe] + sources
+
+    return archive, scan

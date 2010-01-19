@@ -20,7 +20,7 @@ msvsInstall = cake.path.join(programFiles, "Microsoft Visual Studio 8")
 windows = base.clone(name="windows")
 windows.tools["compiler"] = MsvcCompiler(
   clExe=cake.path.join(msvsInstall, r"VC\bin\cl.exe"),
-  libExe="lib.exe",
+  libExe=cake.path.join(msvsInstall, r"VC\bin\lib.exe"),
   linkExe="link.exe",
   dllPaths=[cake.path.join(msvsInstall, r"Common7\IDE")],
   )

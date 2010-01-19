@@ -370,7 +370,7 @@ class Compiler(Tool):
       storeDependencyInfoTask = engine.createTask(storeDependencyInfo)
       storeDependencyInfoTask.startAfter([scanTask, compileTask])
   
-  def getObjectCommands(self, target, source):
+  def getObjectCommands(self, target, source, engine):
     """Get the command-lines for compiling a source to a target.
     
     @return: A (preprocess, scan, compile, cache) tuple of the commands
@@ -378,7 +378,7 @@ class Compiler(Tool):
     file and a flag indicating whether the compile result can be cached
     respectively.
     """
-    raise BuildError(target, "Don't know how to compile %s" % source)
+    engine.raiseError("Don't know how to compile %s" % source)
   
   def buildLibrary(self, target, sources, engine):
     """Perform the actual build of a library.
@@ -392,8 +392,10 @@ class Compiler(Tool):
     @param engine: The Engine object to use for dependency checking
     etc.
     """
+
+    archive, scan = self.getLibraryCommand(target, sources, engine)
     
-    args = sources
+    args = repr(archive)
     
     if cake.filesys.isFile(target):
       try:
@@ -403,21 +405,27 @@ class Compiler(Tool):
       except EnvironmentError:
         pass
   
-    print "Archiving %s" % target
     cake.filesys.makeDirs(cake.path.directory(target))
-    with open(target, 'wb'):
-      pass
+    
+    archive()
+    
+    dependencies = scan()
     
     newDependencyInfo = DependencyInfo(
       targets=[FileInfo(target)],
       args=args,
       dependencies=[
         FileInfo(path=path, timestamp=engine.getTimestamp(path))
-        for path in sources
+        for path in dependencies
         ],
       )
     
     engine.storeDependencyInfo(newDependencyInfo)
+  
+  def getLibraryCommand(self, target, sources, engine):
+    """Get the command for constructing a library.
+    """
+    engine.raiseError("Don't know how to archive %s" % target)
   
   def buildModule(self, target, sources, engine):
     """Perform the actual build of a module.

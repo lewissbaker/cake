@@ -29,6 +29,11 @@ otherObjs = compiler.objects(
   sources=filesys.cwd(sources),
   )
 
+lib = compiler.library(
+  target=env.expand("${BUILD}/other"),
+  sources=otherObjs,
+  )
+
 mainExe = compiler.program(
   target=env.expand("${BUILD}/main"),
   sources=[mainObj] + otherObjs,

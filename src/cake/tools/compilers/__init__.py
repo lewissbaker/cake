@@ -45,6 +45,12 @@ class Compiler(Tool):
   debugSymbols = False
   optimisation = NO_OPTIMISATION
   
+  enableRtti = True
+  enableExceptions = True
+  
+  warningLevel = None
+  warningsAsErrors = False
+  
   objectSuffix = '.o'
   librarySuffix = '.a'
   moduleSuffix = '.so'
@@ -56,6 +62,7 @@ class Compiler(Tool):
     super(Compiler, self).__init__()
     self.includePaths = []
     self.defines = []
+    self.forceIncludes = []
 
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.

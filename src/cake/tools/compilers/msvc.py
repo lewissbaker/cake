@@ -23,6 +23,10 @@ class MsvcCompiler(Compiler):
   outputFullPath = True
   memoryLimit = None
   runtimeLibraries = None
+  useFunctionLevelLinking = False
+  useStringPooling = False
+  
+  errorReport = 'queue'
   
   def __init__(self,
     clExe=None,
@@ -37,7 +41,7 @@ class MsvcCompiler(Compiler):
     self.__dllPaths = dllPaths
     
   @memoise
-  def _getCommonArgs(self):
+  def _getCommonArgs(self, language):
     args = [
       os.path.basename(self.__clExe),
       "/nologo",
@@ -49,9 +53,6 @@ class MsvcCompiler(Compiler):
     if self.memoryLimit is not None:
       args.append("/Zm%i" % self.memoryLimit)
 
-    if self.debugSymbols:
-      args.append("/Z7") # Embed debug info in .obj
- 
     if self.runtimeLibraries == 'release-dll':
       args.append("/MD")
     elif self.runtimeLibraries == 'debug-dll':
@@ -61,25 +62,55 @@ class MsvcCompiler(Compiler):
     elif self.runtimeLibraries == 'debug-static':
       args.append("/MTd")
  
+    if self.useFunctionLevelLinking:
+      args.append('/Gy') # Enable function-level linking
+ 
+    if self.useStringPooling:
+      args.append('/GF') # Eliminate duplicate strings
+ 
+    if language == 'C++':
+      if self.enableRtti:
+        args.append('/GR') # Enable RTTI
+      else:
+        args.append('/GR-') # Disable RTTI
+      
+      if self.enableExceptions == "SEH":
+        args.append('/EHa') # Enable SEH exceptions
+      elif self.enableExceptions:
+        args.append('/EHsc') # Enable exceptions
+      else:
+        args.append('/EHsc-') # Disable exceptions
+ 
+    if self.warningLevel is not None:
+      args.append('/W%s' % self.warningLevel)
+      
+    if self.warningsAsErrors:
+      args.append('/WX')
+ 
+    if self.errorReport:
+      args.append('/errorReport:' + self.errorReport)
+ 
     return args 
     
   @memoise
-  def _getPreprocessorCommonArgs(self):
-    args = list(self._getCommonArgs())
+  def _getPreprocessorCommonArgs(self, language):
+    args = list(self._getCommonArgs(language))
    
-    for define in self.defines:
-      args.append("/D%s" % define)
-      
-    for includePath in self.includePaths:
-      args.append("/I%s" % includePath)
+    args.extend("/D" + define for define in self.defines)
+    args.extend("/I" + path for path in self.includePaths)
+    args.extend("/FI" + path for path in self.forceIncludes)
 
     args.append("/E")
     
     return args
     
   @memoise
-  def _getCompileCommonArgs(self):
-    args = list(self._getCommonArgs())
+  def _getCompileCommonArgs(self, language):
+    args = list(self._getCommonArgs(language))
+    
+    if self.debugSymbols:
+      args.append("/Z7") # Embed debug info in .obj
+    
     args.append("/c")
     return args
     
@@ -118,10 +149,9 @@ class MsvcCompiler(Compiler):
     preprocessTarget = target + '.i'
 
     processEnv = dict(self._getProcessEnv())    
-
-    compileArgs = list(self._getCompileCommonArgs())
+    compileArgs = list(self._getCompileCommonArgs(language))
+    preprocessArgs = list(self._getPreprocessorCommonArgs(language))
     
-    preprocessArgs = list(self._getPreprocessorCommonArgs())
     if language == 'C':
       preprocessArgs.append('/Tc' + source)
       compileArgs.append('/Tc' + preprocessTarget)

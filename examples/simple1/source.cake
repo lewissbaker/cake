@@ -16,8 +16,7 @@ elif env["PLATFORM"] == "wii":
     "math_wii.cpp",
     ]
 
-#compiler.pdbFile = env.expand("${BUILD}/foo.pdb")
-compiler.useMinimalRebuild = True
+compiler.pdbFile = env.expand("${BUILD}/foo.pdb")
 
 mainObj = compiler.object(
   target=env.expand("${BUILD}/main"),

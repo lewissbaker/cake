@@ -297,18 +297,20 @@ class MsvcCompiler(Compiler):
     def compileWhenPdbIsFree():
       with self._pdbQueueLock:
         predecessor = self._pdbQueue.get(pdbFile, None)
-        if predecessor is not None:
-          # Another compile task is using this .pdb
-          # We'll start after it finishes
-          compileTask = Task(compile)
-          predecessor.addCallback(compileTask.start)
-        else:
+        if predecessor is None or predecessor.completed:
           # No prior compiles using this .pdb can start this
           # one immediately in the same task.
           compileTask = Task.getCurrent()
+          compileNow = True
+        else:
+          # Another compile task is using this .pdb
+          # We'll start after it finishes
+          compileTask = engine.createTask(compile)
+          predecessor.addCallback(compileTask.start)
+          compileNow = False
         self._pdbQueue[pdbFile] = compileTask
         
-      if predecessor is None:
+      if compileNow:
         compile()
       
     if pdbFile is not None:

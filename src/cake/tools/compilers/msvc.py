@@ -13,6 +13,17 @@ from cake.tools.compilers import Compiler, makeCommand
 from cake.tools import memoise
 from cake.task import Task
 
+def _escapeArg(arg):
+  if ' ' in arg:
+    if '"' in arg:
+      arg = arg.replace('"', '\\"')
+    return '"%s"' % arg
+  else:
+    return arg
+
+def _escapeArgs(args):
+  return [_escapeArg(arg) for arg in args]
+
 class MsvcCompiler(Compiler):
 
   _lineRegex = re.compile('#line [0-9]+ "(?P<path>.+)"', re.MULTILINE)
@@ -196,7 +207,7 @@ class MsvcCompiler(Compiler):
     
     preprocessorOutput = []
     
-    @makeCommand(preprocessArgs + ['>', preprocessTarget])
+    @makeCommand(preprocessArgs + ['>', _escapeArg(preprocessTarget)])
     def preprocess():
       engine.logger.outputInfo("run: %s\n" % " ".join(preprocessArgs))
       
@@ -226,11 +237,11 @@ class MsvcCompiler(Compiler):
           if not line or line == sourceName:
             continue
           if 'error' in line:
-            engine.logger.outputError(line)
+            engine.logger.outputError(line + '\n')
           elif 'warning' in line:
-            engine.logger.outputWarning(line)
+            engine.logger.outputWarning(line + '\n')
           else:
-            engine.logger.outputInfo(line)
+            engine.logger.outputInfo(line + '\n')
 
         if exitCode != 0:
           raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
@@ -327,7 +338,7 @@ class MsvcCompiler(Compiler):
 
   @memoise
   def _getCommonLibraryArgs(self):
-    args = [cake.path.baseName(self.__libExe), '/nologo']
+    args = [cake.path.baseName(self.__libExe), '/NOLOGO']
     
     # XXX: MSDN says /errorReport:queue is supported by lib.exe
     # but it seems to go unrecognised in MSVC8.
@@ -348,9 +359,9 @@ class MsvcCompiler(Compiler):
     
     args = list(self._getCommonLibraryArgs())
 
-    args.append('/OUT:' + target)
+    args.append('/OUT:' + _escapeArg(target))
     
-    args.extend(sources)
+    args.extend(_escapeArgs(sources))
     
     @makeCommand(args)
     def archive():
@@ -359,12 +370,12 @@ class MsvcCompiler(Compiler):
       
       argsFile = target + '.args' 
       with open(argsFile, 'wt') as f:
-        for arg in args[1:]:
+        for arg in args[2:]:
           f.write(arg + '\n')
 
       try:
         p = subprocess.Popen(
-          args=[args[0], '@' + argsFile],
+          args=[args[0], args[1], '@' + argsFile],
           executable=self.__libExe,
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,
@@ -375,7 +386,7 @@ class MsvcCompiler(Compiler):
         engine.raiseError("cake: failed to launch %s: %s" % (self.__libExe, str(e)))
     
       p.stdin.close()
-      output = p.stdout.read()
+      output = p.stdout.readlines()
       exitCode = p.wait()
     
       for line in output:
@@ -397,3 +408,83 @@ class MsvcCompiler(Compiler):
       return [self.__libExe] + sources
 
     return archive, scan
+
+  def _resolveLibraries(self, engine):
+    results = []
+    for library in self.libraries:
+      if not cake.path.directory(library):
+        fileNames = [library]
+        if not library.endswith(self.librarySuffix):
+          fileNames.append(library + self.librarySuffix)
+          
+        for candidate in cake.path.join(self.libraryPaths, fileNames):
+          if cake.filesys.isFile(candidate):
+            results.append(candidate)
+            break
+        else:
+          engine.raiseError(
+            "cake: failed to find library '%s' in libraryPaths:\n%s" % (
+              "".join("- %s\n" % path for path in self.libraryPaths)
+              ))
+      else:
+        if not cake.filesys.isFile(library):
+          engine.raiseError(
+            "cake: library '%s' does not exist." % library
+            )
+        results.append(library)
+        
+    return results
+
+  def getProgramCommands(self, target, sources, engine):
+    
+    sources = sources + self._resolveLibraries(engine)
+    
+    args = [cake.path.baseName(self.__linkExe), '/nologo']
+    
+    args.extend('/libpath:' + path for path in self.libraryPaths)
+    
+    args.append('/out:' + target)
+    args.extend(sources)
+    
+    @makeCommand(args)
+    def link():
+      engine.logger.outputInfo("run: %s\n" % " ".join(args))
+      
+      argFile = target + '.args'
+      
+      with open(argFile, 'wt') as f:
+        for arg in args[1:]:
+          f.write(_escapeArg(arg) + '\n')
+      
+      try:
+        p = subprocess.Popen(
+          args=[args[0], '@' + argFile],
+          executable=self.__linkExe,
+          env=self._getProcessEnv(),
+          stdin=subprocess.PIPE,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.STDOUT,
+          )
+      except EnvironmentError, e:
+        engine.raiseError(
+          "cake: failed to launch %s: %s" % (self.__linkExe, str(e))
+          )
+
+      p.stdin.close()
+      output = p.stdout.readlines()
+      exitCode = p.wait()
+      
+      for line in output:
+        if not line.rstrip():
+          continue
+        engine.logger.outputInfo(line + '\n')
+        
+      if exitCode != 0:
+        engine.raiseError("link: failed with exit code %i" % exitCode)
+        
+    @makeCommand("link-scan")
+    def scan():
+      return [self.__linkExe] + sources
+    
+    return link, scan
+  

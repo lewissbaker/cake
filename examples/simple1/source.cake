@@ -36,7 +36,7 @@ lib = compiler.library(
 
 mainExe = compiler.program(
   target=env.expand("${BUILD}/main"),
-  sources=[mainObj] + otherObjs,
+  sources=[mainObj] + [lib],
   )
 
 fooExe = filesys.copyFile(

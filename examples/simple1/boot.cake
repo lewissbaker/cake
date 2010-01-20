@@ -18,11 +18,20 @@ programFiles = os.environ['PROGRAMFILES']
 msvsInstall = cake.path.join(programFiles, "Microsoft Visual Studio 8") 
 
 windows = base.clone(name="windows")
-windows.tools["compiler"] = MsvcCompiler(
+compiler = windows.tools["compiler"] = MsvcCompiler(
   clExe=cake.path.join(msvsInstall, r"VC\bin\cl.exe"),
   libExe=cake.path.join(msvsInstall, r"VC\bin\lib.exe"),
-  linkExe="link.exe",
+  linkExe=cake.path.join(msvsInstall, r"VC\bin\link.exe"),
   dllPaths=[cake.path.join(msvsInstall, r"Common7\IDE")],
+  )
+compiler.addIncludePath(
+  cake.path.join(msvsInstall, r"VC\include"),
+  )
+compiler.addLibraryPath(
+  cake.path.join(msvsInstall, r"VC\lib")
+  )
+compiler.addLibraryPath(
+  cake.path.join(msvsInstall, r"VC\PlatformSDK\Lib"),
   )
 env = windows.tools["env"]
 env["PLATFORM"] = "windows"

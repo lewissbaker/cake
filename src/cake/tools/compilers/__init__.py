@@ -63,6 +63,9 @@ class Compiler(Tool):
     self.includePaths = []
     self.defines = []
     self.forceIncludes = []
+    self.libraryScripts = []
+    self.libraryPaths = []
+    self.libraries = []
 
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
@@ -79,6 +82,22 @@ class Compiler(Tool):
       self.defines.append(define)
     else:
       self.defines.append("{0}={1}".format(define, value))
+    
+  def addLibrary(self, name, script=None):
+    """Add a library to the list of libraries to link with.
+    
+    @param name: Name/path of the library to link with.
+    @param script: If specified, path of the cake script that
+    builds the specified library.
+    """
+    self.libraries.append(name)
+    if script is not None:
+      self.libraryScripts.append(script)
+
+  def addLibraryPath(self, path):
+    """Add a path to the library search path.
+    """
+    self.libraryPaths.append(path)
     
   def object(self, target, source, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
@@ -235,6 +254,9 @@ class Compiler(Tool):
 
     paths, tasks = getPathsAndTasks(sources)
     
+    for script in compiler.libraryScripts:
+      tasks.append(engine.execute(script))
+    
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.programSuffix)
     
@@ -243,8 +265,6 @@ class Compiler(Tool):
         c.buildProgram(t, s, e)
       )
     programTask.startAfter(tasks)
-    
-    # XXX: What about returning paths to import libraries?
     
     return FileTarget(path=target, task=programTask)
         
@@ -479,7 +499,10 @@ class Compiler(Tool):
     @param engine: The Engine object to use for dependency checking
     etc.
     """
-    args = sources
+
+    link, scan = self.getProgramCommands(target, sources, engine)
+
+    args = [repr(link), repr(scan)]
     
     if cake.filesys.isFile(target):
       try:
@@ -489,18 +512,16 @@ class Compiler(Tool):
       except EnvironmentError:
         pass
   
-    print "Linking %s" % target
-    
-    cake.filesys.makeDirs(cake.path.directory(target))
-    with open(target, 'wb'):
-      pass
+    link()
+  
+    dependencies = scan()
     
     newDependencyInfo = DependencyInfo(
       targets=[FileInfo(target)],
       args=args,
       dependencies=[
         FileInfo(path=path, timestamp=engine.getTimestamp(path))
-        for path in sources
+        for path in dependencies
         ],
       )
     

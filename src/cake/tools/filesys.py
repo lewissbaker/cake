@@ -39,7 +39,7 @@ class FileSystemTool(Tool):
       engine.logger.outputInfo("Copying %s to %s\n" % (sourcePath, target))
       
       try:
-        cake.filesys.makeDirs(cake.path.directory(target))
+        cake.filesys.makeDirs(cake.path.dirName(target))
         cake.filesys.copyFile(sourcePath, target)
       except EnvironmentError, e:
         engine.raiseError("%s: %s" % (target, str(e)))

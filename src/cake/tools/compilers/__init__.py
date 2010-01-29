@@ -426,7 +426,7 @@ class Compiler(Tool):
       except EnvironmentError:
         pass
   
-    cake.filesys.makeDirs(cake.path.directory(target))
+    cake.filesys.makeDirs(cake.path.dirName(target))
     
     archive()
     
@@ -472,7 +472,7 @@ class Compiler(Tool):
         pass
   
     print "Linking %s" % target
-    cake.filesys.makeDirs(cake.path.directory(target))
+    cake.filesys.makeDirs(cake.path.dirName(target))
     with open(target, 'wb'):
       pass
     

@@ -246,7 +246,7 @@ class MsvcCompiler(Compiler):
         if exitCode != 0:
           raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
 
-      cake.filesys.makeDirs(cake.path.directory(preprocessTarget))
+      cake.filesys.makeDirs(cake.path.dirName(preprocessTarget))
       with open(preprocessTarget, 'wb') as f:
         f.write(output)
 
@@ -268,7 +268,7 @@ class MsvcCompiler(Compiler):
     @makeCommand(compileArgs)
     def compile():
       engine.logger.outputInfo("run: %s\n" % " ".join(compileArgs))
-      cake.filesys.makeDirs(cake.path.directory(target))
+      cake.filesys.makeDirs(cake.path.dirName(target))
       
       with tempfile.TemporaryFile() as errFile:
         try:
@@ -412,7 +412,7 @@ class MsvcCompiler(Compiler):
   def _resolveLibraries(self, engine):
     results = []
     for library in self.libraries:
-      if not cake.path.directory(library):
+      if not cake.path.dirName(library):
         fileNames = [library]
         if not library.endswith(self.librarySuffix):
           fileNames.append(library + self.librarySuffix)

@@ -1,13 +1,18 @@
 import cake.path
+
 from cake.tools import Tool
 
 class Environment(Tool):
+  """A dictionary of key/value pairs used for path substitution.
+  """
   
   def __init__(self):
+    """Default constructor.
+    """
     self.__vars = {}
     
   def __getitem__(self, key):
-    """Return an environment variable given its key.
+    """Return an environment variables value given its key.
     """
     return self.__vars[key]
   
@@ -17,23 +22,36 @@ class Environment(Tool):
     self.__vars[key] = value
     
   def __delitem__(self, key):
+    """Delete an environment variable given its key. 
+    """
     del self.__vars[key]
 
   def get(self, *args):
+    """Return an environment variable or default value if not found.
+    """
     return self.__vars.get(*args)
 
-  def set(self, **kwargs):
-    self.__vars.update(kwargs)
-    return self
+  def set(self, **kwargs):    
+    """Set a series of keys/values.
+    """
+    self.__environment.update(kwargs)
     
   def setDefault(self, **kwargs):
+    """Set a value only if it doesn't already exist.
+    """
     for key, value in kwargs.iteritems():
       self.__vars.setdefault(key, value)
-    return self
 
+  def delete(self, *arguments):    
+    """Delete a value.
+    """
+    for a in arguments:
+      del self.__vars[a]
+      
   def update(self, values):
+    """Update the environment with key/value pairs from 'values'.
+    """
     self.__vars.update(values)
-    return self
     
   def expand(self, value):
     """Expand variables in the specified string.

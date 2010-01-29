@@ -27,8 +27,7 @@ def copyFile(source, target):
   shutil.copyfile(source, target)
   
 def makeDirs(path):
-  """
-  Recursively create directories.
+  """Recursively create directories.
   
   Unlike os.makedirs(), it does not throw an exception if the
   directory already exists. 
@@ -39,7 +38,7 @@ def makeDirs(path):
   
   try:
     os.makedirs(path)
-  except Exception, e:
-    # Ignore failures due to directory already existing.
+  except Exception:
+    # Ignore failure due to directory already existing.
     if not os.path.isdir(path):
       raise

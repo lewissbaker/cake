@@ -289,7 +289,7 @@ class Engine(object):
     for target in dependencyInfo.targets:
       self._dependencyInfoCache[target.path] = dependencyInfo
     
-    cake.filesys.makeDirs(cake.path.directory(depPath))
+    cake.filesys.makeDirs(cake.path.dirName(depPath))
     with open(depPath, 'wb') as f:
       pickle.dump(dependencyInfo, f, pickle.HIGHEST_PROTOCOL)
     

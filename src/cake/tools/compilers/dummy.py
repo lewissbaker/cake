@@ -38,7 +38,7 @@ class DummyCompiler(Compiler):
     @makeCommand(preprocessorArgs + [source, "/o", preprocessTarget])
     def preprocess():
       print "Preprocessing %s" % source
-      cake.filesys.makeDirs(cake.path.directory(preprocessTarget))
+      cake.filesys.makeDirs(cake.path.dirName(preprocessTarget))
       with open(preprocessTarget, 'wb'):
         pass
 
@@ -50,7 +50,7 @@ class DummyCompiler(Compiler):
     @makeCommand(compilerArgs + [preprocessTarget, "/o", target])
     def compile():
       print "Compiling %s" % source
-      cake.filesys.makeDirs(cake.path.directory(target))
+      cake.filesys.makeDirs(cake.path.dirName(target))
       with open(target, 'wb'):
         pass
 

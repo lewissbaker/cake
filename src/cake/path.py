@@ -1,6 +1,6 @@
 import os.path
 
-def directory(path):
+def dirName(path):
   """Get the directory part of the path.
   """
   return os.path.dirname(path)
@@ -81,8 +81,7 @@ def baseNameWithoutExtension(path):
     return path[end:]
 
 def join(*args):
-  """
-  Find the cross product of any amount of input paths or lists of paths.
+  """Find the cross product of any amount of input paths or lists of paths.
   
   Example:
   join("a", "b", "c") -> "a/b/c"
@@ -124,8 +123,7 @@ def join(*args):
     return results[0]
 
 def expandVars(path, env):
-  """
-  Recursively expand shell variables of the form $var and ${var}.
+  """Recursively expand shell variables of the form $var and ${var}.
 
   This function is a copy of os.path.expandvars() with added support for
   recursion.

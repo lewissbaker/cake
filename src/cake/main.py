@@ -29,7 +29,7 @@ def searchUpForFile(path, file):
     if cake.filesys.isFile(candidate):
       return candidate
   
-    parent = cake.path.directory(path)
+    parent = cake.path.dirName(path)
     if parent == path:
       return None
     

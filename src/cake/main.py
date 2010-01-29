@@ -35,7 +35,7 @@ def searchUpForFile(path, file):
     
     path = parent
 
-def run(args, cwd=None):
+def run(args=None, cwd=None):
   """Run a cake build with the specified command-line args.
   
   @param args: A list of command-line args for cake.
@@ -45,6 +45,9 @@ def run(args, cwd=None):
   if exited with success.
   @rtype: int
   """
+  
+  if args is None:
+    args = sys.argv[1:]
   
   startTime = datetime.datetime.utcnow()
   
@@ -120,3 +123,6 @@ def run(args, cwd=None):
   engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
   
   return engine.logger.errorCount
+
+if __name__ == '__main__':
+  sys.exit(run())

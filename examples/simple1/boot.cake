@@ -7,7 +7,7 @@ from cake.tools.filesys import FileSystemTool
 from cake.tools.env import Environment
 from cake.engine import Variant
 
-base = Variant(name="base")
+base = Variant()
 base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
 env = base.tools["env"] = Environment()
@@ -17,7 +17,7 @@ env["BUILD"] = "${ROOT}/build/${PLATFORM}_${COMPILER}_${RELEASE}"
 programFiles = os.environ['PROGRAMFILES']
 msvsInstall = cake.path.join(programFiles, "Microsoft Visual Studio 8") 
 
-windows = base.clone(name="windows")
+windows = base.clone()
 compiler = windows.tools["compiler"] = MsvcCompiler(
   clExe=cake.path.join(msvsInstall, r"VC\bin\cl.exe"),
   libExe=cake.path.join(msvsInstall, r"VC\bin\lib.exe"),
@@ -45,7 +45,7 @@ env = windowsDebug.tools["env"]
 env["RELEASE"] = "debug"
 engine.addVariant(windowsDebug, default=True)
 
-windowsOptimised = windows.clone("win32-opt")
+windowsOptimised = windows.clone(name="win32-opt")
 compiler = windowsOptimised.tools["compiler"]
 compiler.debugSymbols = True
 compiler.optimisation = compiler.PARTIAL_OPTIMISATION

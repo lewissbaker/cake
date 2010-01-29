@@ -1,5 +1,4 @@
-"""cake.bytecode
-
+"""
 Utility functions for loading byte-compiled scripts.
 """
 
@@ -10,6 +9,7 @@ import imp
 import marshal
 import os
 import struct
+import platform
 
 # Magic header written at start of file
 _MAGIC = imp.get_magic()
@@ -19,7 +19,7 @@ _NOTMAGIC = '\0' * _MAGIC_LEN
 assert _MAGIC != _NOTMAGIC
 
 # Define an internal helper according to the platform
-if os.name == "mac":
+if platform.system() in ['Darwin']:
   import MacOS
   def _setCreatorType(file):
     MacOS.SetCreatorAndType(file, 'Pyth', 'PYC ')

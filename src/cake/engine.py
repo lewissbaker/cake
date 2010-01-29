@@ -4,6 +4,8 @@ import traceback
 import sys
 import os
 import os.path
+import time
+import math
 try:
   import cPickle as pickle
 except ImportError:
@@ -16,16 +18,35 @@ import cake.task
 import cake.path
 
 class BuildError(Exception):
+  """Exception raised when a build fails.
+  
+  This exception is treated as expected by the Cake build system as it won't
+  output the stack-trace if raised by a task.
+  """
   pass
 
 class Variant(object):
+  """A container for build configuration information.
+  """
   
-  def __init__(self, name):
+  def __init__(self, name=None):
+    """Construct an empty variant.
+    
+    @param name: The name of the new variant.
+    @type name: string or None
+    """
     self.name = name
     self.tools = {}
   
-  def clone(self, name):
-    v = Variant(name)
+  def clone(self, name=None):
+    """Create an independent copy of this variant.
+    
+    @param name: The name of the new variant.
+    @type name: string or None
+    
+    @return: The new Variant.
+    """
+    v = Variant(name=name)
     v.tools = dict((name, tool.clone()) for name, tool in self.tools.iteritems())
     return v
 
@@ -45,12 +66,32 @@ class Engine(object):
       
   def addVariant(self, variant, default=False):
     """Register a new variant with this engine.
+    
+    @param variant: The Variant object to register.
+    @type variant: L{Variant}
+    
+    @param default: If True then make this newly added variant the default
+    build variant.
+    @type default: C{bool}
     """
     self._variants.add(variant)
     if default:
       self._defaultVariant = variant
     
   def createTask(self, func):
+    """Construct a new task that will call the specified function.
+    
+    This function wraps the function in an exception handler that prints out
+    the stacktrace and exception details if an exception is raised by the
+    function.
+    
+    @param func: The function that will be called with no args by the task once
+    the task has been started.
+    @type func: any callable
+    
+    @return: The newly created Task.
+    @rtype: L{cake.task.Task}
+    """
     def _wrapper():
       try:
         func()
@@ -92,8 +133,15 @@ class Engine(object):
   def execute(self, path, variant=None):
     """Execute the script with the specified variant.
     
-    Return a task object that completes when the script and any
+    @param path: Path of the Cake script file to execute.
+    @type path: string
+
+    @param variant: The build variant to execute this script with.
+    @type variant: L{Variant} 
+
+    @return: A Task object that completes when the script and any
     tasks it starts finish executing.
+    @rtype: L{cake.task.Task}
     """
     if variant is None:
       variant = self._defaultVariant
@@ -123,6 +171,15 @@ class Engine(object):
     return task
 
   def getByteCode(self, path):
+    """Load a python file and return the compiled byte-code.
+    
+    @param path: The path of the python file to load.
+    @type path: string
+    
+    @return: A code object that can be executed with the python 'exec'
+    statement.
+    @rtype: C{types.CodeType}
+    """
     byteCode = self._byteCodeCache.get(path, None)
     if byteCode is None:
       byteCode = cake.bytecode.loadCode(path)
@@ -130,13 +187,32 @@ class Engine(object):
     return byteCode
     
   def notifyFileChanged(self, path):
+    """Let the engine know a file has changed.
+    
+    This allows the engine to invalidate any information about the file
+    it may have previously cached.
+    
+    @param path: The path of the file that has changed.
+    @type path: string
+    """
     self._timestampCache.pop(path, None)
     
   def getTimestamp(self, path):
+    """Get the timestamp of the file at the specified path.
+    
+    @param path: Path of the file whose timestamp you want.
+    @type path: string
+    
+    @return: The timestamp in seconds since 1 Jan, 1970 UTC.
+    @type: float 
+    """
     timestamp = self._timestampCache.get(path, None)
     if timestamp is None:
       stat = os.stat(path)
-      timestamp = stat.st_mtime
+      timestamp = time.mktime(time.gmtime(stat.st_mtime))
+      # The above calculation truncates to the nearest second so we need to
+      # re-add the fractional part back to the timestamp otherwise 
+      timestamp += math.fmod(stat.st_mtime, 1)
       self._timestampCache[path] = timestamp
     return timestamp
 
@@ -153,6 +229,12 @@ class Engine(object):
 
   def getFileDigest(self, path):
     """Get the SHA1 digest of a file's contents.
+    
+    @param path: Path of the file to digest.
+    @type path: string
+    
+    @return: The SHA1 digest of the file's contents.
+    @rtype: string of 20 bytes
     """
     timestamp = self.getTimestamp(path)
     key = (path, timestamp)
@@ -212,6 +294,10 @@ class Engine(object):
       pickle.dump(dependencyInfo, f, pickle.HIGHEST_PROTOCOL)
     
 class DependencyInfo(object):
+  """Object that holds the dependency info for a target.
+  
+  @ivar version: The current version of the dependency info.
+  """
   
   VERSION = 1
   

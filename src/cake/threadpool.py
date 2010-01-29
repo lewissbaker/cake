@@ -1,18 +1,24 @@
-"""Provides a simple thread-pool utility for managing execution of multiple jobs
+"""
+Provides a simple thread-pool utility for managing execution of multiple jobs
 in parallel on separate threads.
 """
 
 import threading
-import win32api
 import sys
+import platform
 import traceback
 
-def getProcessorCount():
-  """Return the number of processors/cores in the current system.
-  
-  Useful for determining the maximum parallelism of the current system.
-  """
-  return win32api.GetSystemInfo()[5]
+if platform.system() == 'Windows':
+  import win32api
+  def getProcessorCount():
+    """Return the number of processors/cores in the current system.
+    
+    Useful for determining the maximum parallelism of the current system.
+    """
+    return win32api.GetSystemInfo()[5]
+else:
+  def getProcessorCount():
+    return 1
 
 class JobQueue(object):
   """A lightweight job queue class, similar to Queue.Queue.

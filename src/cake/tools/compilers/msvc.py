@@ -12,6 +12,67 @@ import cake.path
 from cake.tools.compilers import Compiler, makeCommand
 from cake.tools import memoise
 from cake.task import Task
+from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
+
+def findCompiler(architecture='x86'):
+  """Returns an MSVC compiler given an architecture.
+  
+  Raises an EnvironmentError if a compiler or matching platform SDK
+  cannot be found.
+  
+  @param architecture: The machine architecture to compile for.
+  """
+  versions = [
+    r'VisualStudio\8.0',
+    r'VCExpress\9.0',
+    ]
+  
+  for version in versions:
+    try:
+      msvcProductDir = getMsvcProductDir(version)
+      msvsInstallDir = getMsvsInstallDir(version)
+    
+      # Use the compilers platform SDK if installed
+      platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
+      if not cake.filesys.isDirectory(platformSdkDir):
+        platformSdkDir = getPlatformSdkDir()
+
+      # Break when we find the compiler dirs
+      break
+    except WindowsError:
+      if version is versions[-1]:
+        raise EnvironmentError(
+          "Could not find Microsoft Visual Studio C++ compiler."
+          )
+  
+  clExe = cake.path.join(msvcProductDir, "bin", "cl.exe")
+  libExe = cake.path.join(msvcProductDir, "bin", "lib.exe")
+  linkExe = cake.path.join(msvcProductDir, "bin", "link.exe")
+  dllPaths = [msvsInstallDir]
+    
+  compiler = MsvcCompiler(
+    clExe,
+    libExe,
+    linkExe,
+    dllPaths,
+    architecture
+    )
+
+  msvcIncludeDir = cake.path.join(msvcProductDir, "include")
+  msvcLibDir = cake.path.join(msvcProductDir, "lib")
+
+  platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
+  if architecture =='x64':
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
+  else:
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
+
+  compiler.addIncludePath(msvcIncludeDir)
+  compiler.addLibraryPath(msvcLibDir)
+  compiler.addIncludePath(platformSdkIncludeDir)
+  compiler.addLibraryPath(platformSdkLibDir)
+  
+  return compiler
 
 def _escapeArg(arg):
   if ' ' in arg:

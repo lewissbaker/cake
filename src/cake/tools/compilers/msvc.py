@@ -26,6 +26,8 @@ def _escapeArgs(args):
 
 class MsvcCompiler(Compiler):
 
+  name = 'msvc'
+
   _lineRegex = re.compile('#line [0-9]+ "(?P<path>.+)"', re.MULTILINE)
   _pdbQueue = {}
   _pdbQueueLock = threading.Lock()
@@ -36,9 +38,16 @@ class MsvcCompiler(Compiler):
   programSuffix = '.exe'
   
   outputFullPath = True
+  outputMapFile = False
   memoryLimit = None
+  stackSize = None
+  heapSize = None
   runtimeLibraries = None
+  subSystem = None
+  moduleVersion = None
+  
   useFunctionLevelLinking = False
+  useIncrementalLinking = False
   useStringPooling = False
   useMinimalRebuild = False
   useEditAndContinue = False
@@ -46,6 +55,7 @@ class MsvcCompiler(Compiler):
   errorReport = 'queue'
   
   pdbFile = None
+  strippedPdbFile = None
   
   def __init__(
     self,
@@ -60,6 +70,11 @@ class MsvcCompiler(Compiler):
     self.__libExe = libExe
     self.__linkExe = linkExe
     self.__dllPaths = dllPaths
+    self.__architecture = architecture
+    
+  @property
+  def architecture(self):
+    return self.__architecture
     
   @memoise
   def _getCommonArgs(self, language):
@@ -435,15 +450,79 @@ class MsvcCompiler(Compiler):
         
     return results
 
+  @memoise
+  def _getLinkCommonArgs(self):
+    
+    args = [cake.path.baseName(self.__linkExe), '/NOLOGO']
+
+    # XXX: MSVC8 linker complains about /errorReport being unrecognised.
+    if self.errorReport:
+      args.append('/ERRORREPORT:%s' % self.errorReport.upper())
+      
+    if self.useIncrementalLinking:
+      args.append('/INCREMENTAL')
+    else:
+      args.append('/INCREMENTAL:NO')
+      
+    if self.useFunctionLevelLinking:
+      args.append('/OPT:REF') # Eliminate unused functions (COMDATs)
+      args.append('/OPT:ICF') # Identical COMDAT folding
+    else:
+      args.append('/OPT:NOREF') # Keep unreferenced functions
+    
+    if self.moduleVersion is not None:
+      args.append('/VERSION:' + self.moduleVersion)
+    
+    if isinstance(self.stackSize, tuple):
+      # Specify stack (reserve, commit) sizes
+      args.append('/STACK:%i,%i' % self.stackSize)
+    elif self.stackSize is not None:
+      # Specify stack reserve size
+      args.append('/STACK:%i' % self.stackSize)
+    
+    if isinstance(self.heapSize, tuple):
+      # Specify heap (reserve, commit) sizes
+      args.append('/HEAP:%i,%i' % self.heapSize)
+    elif self.heapSize is not None:
+      # Specify heap reserve size
+      args.append('/HEAP:%i' % self.heapSize)
+    
+    if self.optimisation == self.FULL_OPTIMISATION:
+      # Link-time code generation (global optimisation)
+      args.append('/LTCG:NOSTATUS')
+    
+    if self.outputMapFile:
+      args.append('/MAP')
+    
+    if self.debugSymbols:
+      args.append('/DEBUG')
+      
+      if self.pdbFile is not None:
+        args.append('/PDB:' + self.pdbFile)
+        
+      if self.strippedPdbFile is not None:
+        args.append('/PDBSTRIPPED:' + self.strippedPdbFile)
+    
+    if self.warningsAsErrors:
+      args.append('/WX')
+    
+    args.extend('/LIBPATH:' + path for path in self.libraryPaths)
+    
+    return args
+
   def getProgramCommands(self, target, sources, engine):
     
     sources = sources + self._resolveLibraries(engine)
     
-    args = [cake.path.baseName(self.__linkExe), '/nologo']
+    args = self._getLinkCommonArgs()
+
+    if self.subSystem is not None:
+      args.append('/SUBSYSTEM:' + self.subSystem)
     
-    args.extend('/libpath:' + path for path in self.libraryPaths)
+    if self.debugSymbols and self.pdbFile is None:
+      args.append('/PDB:%s.pdb' % target)
     
-    args.append('/out:' + target)
+    args.append('/OUT:' + target)
     args.extend(sources)
     
     @makeCommand(args)

@@ -12,6 +12,95 @@ import cake.path
 from cake.tools.compilers import Compiler, makeCommand
 from cake.tools import memoise
 from cake.task import Task
+from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
+
+def findCompiler(version=None, architecture='x86'):
+  """Returns an MSVC compiler given a version and architecture.
+  
+  Raises an EnvironmentError if a compiler or matching platform SDK
+  cannot be found.
+  
+  @param version: The specific version to find. If version is None the
+  latest version is found instead. 
+  @param architecture: The machine architecture to compile for.
+  """
+  if version is not None:
+    versions = [version]
+  else:
+    # Prefer later versions over earlier ones
+    versions = [
+      '9.0',
+      '8.0',
+      ]
+
+  # Prefer Enterprise edition over Express
+  editions = [
+    'VisualStudio',
+    'VCExpress',
+    ]
+
+  for v in versions:
+    found = False
+    for e in editions:
+      try:
+        registryPath = e + '\\' + v
+        msvcProductDir = getMsvcProductDir(registryPath)
+        msvsInstallDir = getMsvsInstallDir(registryPath)
+      
+        # Use the compilers platform SDK if installed
+        platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
+        if not cake.filesys.isDirectory(platformSdkDir):
+          platformSdkDir = getPlatformSdkDir()
+
+        # Break when we have found all compiler dirs
+        found = True
+        break
+      except WindowsError:
+        # Try the next version/edition
+        continue
+    if found:
+      break
+  else:
+    raise EnvironmentError(
+      "Could not find Microsoft Visual Studio C++ compiler."
+      )
+  
+  clExe = cake.path.join(msvcProductDir, "bin", "cl.exe")
+  libExe = cake.path.join(msvcProductDir, "bin", "lib.exe")
+  linkExe = cake.path.join(msvcProductDir, "bin", "link.exe")
+  rcExe = cake.path.join(msvcProductDir, "bin", "rc.exe")
+  if not cake.filesys.isFile(rcExe):
+    rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
+  mtExe = cake.path.join(msvcProductDir, "bin", "mt.exe")
+  if not cake.filesys.isFile(mtExe):
+    mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
+  dllPaths = [msvsInstallDir]
+    
+  compiler = MsvcCompiler(
+    clExe=clExe,
+    libExe=libExe,
+    linkExe=linkExe,
+    rcExe=rcExe,
+    mtExe=mtExe,
+    dllPaths=dllPaths,
+    architecture=architecture,
+    )
+
+  msvcIncludeDir = cake.path.join(msvcProductDir, "include")
+  msvcLibDir = cake.path.join(msvcProductDir, "lib")
+
+  platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
+  if architecture =='x64':
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
+  else:
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
+
+  compiler.addIncludePath(msvcIncludeDir)
+  compiler.addLibraryPath(msvcLibDir)
+  compiler.addIncludePath(platformSdkIncludeDir)
+  compiler.addLibraryPath(platformSdkLibDir)
+  
+  return compiler
 
 def _escapeArg(arg):
   if ' ' in arg:
@@ -620,12 +709,16 @@ class MsvcCompiler(Compiler):
             ))
           
         p.stdin.close()
-        output = p.stdout.readlines()
+        output = [line for line in p.stdout.readlines() if line.strip()]
         exitCode = p.wait()
+
+        # Skip any leading logo output by some of the later versions of rc.exe
+        if len(output) >= 2 and \
+           output[0].startswith('Microsoft (R) Windows (R) Resource Compiler Version ') and \
+           output[1].startswith('Copyright (C) Microsoft Corporation.  All rights reserved.'):
+          output = output[2:]
         
         for line in output:
-          if not line.rstrip():
-            continue
           engine.logger.outputInfo(line)
         
         if exitCode != 0:

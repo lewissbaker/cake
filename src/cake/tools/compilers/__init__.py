@@ -29,7 +29,7 @@ def makeCommand(args):
   return run
 
 class Compiler(Tool):
-  """class.
+  """Base class for C/C++ compiler tools.
   
   @ivar debugSymbols: If true then the compiler will output debug symbols.
   @type debugSymbols: boolean
@@ -167,7 +167,7 @@ class Compiler(Tool):
       results.append(compiler._object(targetPath, source, forceExtension=True))
     return results
     
-  def library(self, target, sources, forceExtension=True):
+  def library(self, target, sources, forceExtension=True, **kwargs):
     """Build a library from a collection of objects.
     
     @param target: Path of the library file to build.
@@ -186,6 +186,8 @@ class Compiler(Tool):
 
     # Take a snapshot of the current compiler settings
     compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
   
     # And a copy of the current build engine
     engine = Script.getCurrent().engine
@@ -203,7 +205,7 @@ class Compiler(Tool):
     
     return FileTarget(path=target, task=libraryTask)
     
-  def module(self, target, sources, forceExtension=True):
+  def module(self, target, sources, forceExtension=True, **kwargs):
     """Build a module/dynamic-library.
     
     Modules are executable code that can be dynamically loaded at
@@ -213,6 +215,8 @@ class Compiler(Tool):
     
     # Take a snapshot of the current compiler settings
     compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
   
     # And a copy of the current build engine
     engine = Script.getCurrent().engine
@@ -232,7 +236,7 @@ class Compiler(Tool):
     
     return FileTarget(path=target, task=moduleTask)
     
-  def program(self, target, sources, forceExtension=True):
+  def program(self, target, sources, forceExtension=True, **kwargs):
     """Build an executable program.
 
     @param target: Path to the target executable.
@@ -249,6 +253,8 @@ class Compiler(Tool):
     
     # Take a snapshot of the current compiler settings
     compiler = self.clone()
+    for name, value in kwargs.iteritems():
+      setattr(compiler, name, value)
   
     # And a copy of the current build engine
     engine = Script.getCurrent().engine

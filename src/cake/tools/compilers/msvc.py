@@ -45,6 +45,7 @@ class MsvcCompiler(Compiler):
   runtimeLibraries = None
   subSystem = None
   moduleVersion = None
+  embedManifest = False
   
   useFunctionLevelLinking = False
   useIncrementalLinking = False
@@ -62,6 +63,8 @@ class MsvcCompiler(Compiler):
     clExe=None,
     libExe=None,
     linkExe=None,
+    mtExe=None,
+    rcExe=None,
     dllPaths=None,
     architecture=None,
     ):
@@ -69,6 +72,8 @@ class MsvcCompiler(Compiler):
     self.__clExe = clExe
     self.__libExe = libExe
     self.__linkExe = linkExe
+    self.__mtExe = mtExe
+    self.__rcExe = rcExe
     self.__dllPaths = dllPaths
     self.__architecture = architecture
     
@@ -506,6 +511,13 @@ class MsvcCompiler(Compiler):
     if self.warningsAsErrors:
       args.append('/WX')
     
+    if self.__architecture == 'x86':
+      args.append('/MACHINE:X86')
+    elif self.__architecture == 'x64':
+      args.append('/MACHINE:X64')
+    elif self.__architecture == 'ia64':
+      args.append('/MACHINE:IA64')
+    
     args.extend('/LIBPATH:' + path for path in self.libraryPaths)
     
     return args
@@ -521,6 +533,24 @@ class MsvcCompiler(Compiler):
     
     if self.debugSymbols and self.pdbFile is None:
       args.append('/PDB:%s.pdb' % target)
+    
+    if self.embedManifest:
+      if not self.__mtExe:
+        engine.raiseError("You must set path to mt.exe with embedManifest=True\n")
+      
+      manifestResourceId = 1 # 2 for dll
+      embeddedManifest = target + '.embed.manifest'
+      if self.useIncrementalLinking:
+        if not self.__rcExe:
+          engine.raiseError("You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n")
+        
+        intermediateManifest = target + '.intermediate.manifest'
+        embeddedRc = embeddedManifest + '.rc'
+        embeddedRes = embeddedManifest + '.res'
+        args.append('/MANIFESTFILE:' + intermediateManifest)
+        args.append(embeddedRes)
+      else:
+        args.append('/MANIFESTFILE:' + embeddedManifest)
     
     args.append('/OUT:' + target)
     args.extend(sources)
@@ -556,14 +586,189 @@ class MsvcCompiler(Compiler):
       for line in output:
         if not line.rstrip():
           continue
-        engine.logger.outputInfo(line + '\n')
+        engine.logger.outputInfo(line)
         
       if exitCode != 0:
-        engine.raiseError("link: failed with exit code %i" % exitCode)
+        engine.raiseError("link: failed with exit code %i\n" % exitCode)
+       
+    @makeCommand(args) 
+    def linkWithManifestIncremental():
+      
+      def compileRcToRes():
+        
+        rcArgs = [
+          cake.path.baseName(self.__rcExe),
+          "/fo" + embeddedRes,
+          embeddedRc,
+          ]
+
+        engine.logger.outputInfo("run: %s\n" % " ".join(rcArgs))
+        
+        try:
+          p = subprocess.Popen(
+            args=rcArgs,
+            executable=self.__rcExe,
+            env=self._getProcessEnv(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            )
+        except EnvironmentError, e:
+          engine.raiseError("cake: failed to launch %s: %s" % (
+            self.__rcExe,
+            str(e),
+            ))
+          
+        p.stdin.close()
+        output = p.stdout.readlines()
+        exitCode = p.wait()
+        
+        for line in output:
+          if not line.rstrip():
+            continue
+          engine.logger.outputInfo(line)
+        
+        if exitCode != 0:
+          engine.raiseError("rc: failed with exit code %i" % exitCode)
+      
+      def updateEmbeddedManifestFile():
+        """Updates the embedded manifest file based on the manifest file
+        output by the link stage.
+        
+        @return: True if the manifest file changed, False if the manifest
+        file stayed the same.
+        """
+        
+        mtArgs = [
+          cake.path.baseName(self.__mtExe),
+          "/nologo",
+          "/notify_update",
+          "/manifest", intermediateManifest,
+          "/out:" + embeddedManifest,
+          ]
+
+        engine.logger.outputInfo("run: %s\n" % " ".join(mtArgs))
+        
+        try:
+          p = subprocess.Popen(
+            args=mtArgs,
+            executable=self.__mtExe,
+            env=self._getProcessEnv(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            )
+        except EnvironmentError, e:
+          engine.raiseError("cake: failed to launch %s: %s" % (
+            self.__mtExe,
+            str(e),
+            ))
+          
+        p.stdin.close()
+        output = p.stdout.readlines()
+        exitCode = p.wait()
+        
+        for line in output:
+          if not line.rstrip():
+            continue
+          engine.logger.outputInfo(line)
+        
+        # The magic number here is the exit code output by the mt.exe
+        # tool when the manifest file hasn't actually changed. We can
+        # avoid a second link if the manifest file hasn't changed.
+        
+        if exitCode != 0 and exitCode != 1090650113:
+          engine.raiseError("mt: failed with exit code %i\n" % exitCode)
+
+        return exitCode != 0
+      
+      # Create an empty embeddable manifest if one doesn't already exist
+      if not cake.filesys.isFile(embeddedManifest):
+        engine.logger.outputInfo("Creating dummy manifest: %s\n" % embeddedManifest)
+        open(embeddedManifest, 'wb').close()
+      
+      # Generate .embed.manifest.rc
+      engine.logger.outputInfo("Creating %s\n" % embeddedRc)
+      with open(embeddedRc, 'w') as f:
+        # Use numbers so we don't have to include any headers
+        # 24 - RT_MANIFEST
+        f.write('%i 24 "%s"\n' % (
+          manifestResourceId,
+          embeddedManifest.replace("\\", "\\\\")
+          ))
+      
+      compileRcToRes()
+      link()
+      
+      if cake.filesys.isFile(intermediateManifest) and updateEmbeddedManifestFile():
+        # Manifest file changed so we need to re-link to embed it
+        compileRcToRes()
+        link()
+    
+    @makeCommand(args)
+    def linkWithManifestNonIncremental():
+      """This strategy for embedding the manifest embeds the manifest in-place
+      in the executable since it doesn't need to worry about invalidating the
+      ability to perform incremental links.
+      """
+      # Perform the link as usual
+      link()
+      
+      # If we are linking with static runtimes there may be no manifest
+      # output, in which case we can skip embedding it.
+      
+      if not cake.filesys.isFile(embeddedManifest):
+        engine.logger.outputInfo("Skipping embedding manifest: no manifest to embed\n")
+        return
+      
+      mtArgs = [
+        cake.path.baseName(self.__mtExe),
+        "/nologo",
+        "/manifest", embeddedManifest,
+        "/outputresource:%s;%i" % (target, manifestResourceId),
+        ]
+      
+      engine.logger.outputInfo("run: %s\n" % " ".join(mtArgs))
+      
+      try:
+        p = subprocess.Popen(
+          args=mtArgs,
+          executable=self.__mtExe,
+          env=self._getProcessEnv(),
+          stdin=subprocess.PIPE,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.STDOUT,
+          )
+      except EnvironmentError, e:
+        engine.raiseError("cake: failed to launch %s: %s\n" % (
+          self.__mtExe,
+          str(e),
+          ))
+        
+      p.stdin.close()
+      output = p.stdout.readlines()
+      exitCode = p.wait()
+      
+      for line in output:
+        if not line.rstrip():
+          continue
+        if 'error' in line:
+          engine.logger.outputError(line)
+        else:
+          engine.logger.outputInfo(line)
+          
+      if exitCode != 0:
+        engine.raiseError("mt: failed with exit code %i\n" % exitCode)
         
     @makeCommand("link-scan")
     def scan():
       return [self.__linkExe] + sources
     
-    return link, scan
+    if self.embedManifest:
+      if self.useIncrementalLinking:
+        return linkWithManifestIncremental, scan
+      else:
+        return linkWithManifestNonIncremental, scan
+    else:
+      return link, scan
   

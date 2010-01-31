@@ -22,6 +22,9 @@ compiler = windows.tools["compiler"] = MsvcCompiler(
   clExe=cake.path.join(msvsInstall, r"VC\bin\cl.exe"),
   libExe=cake.path.join(msvsInstall, r"VC\bin\lib.exe"),
   linkExe=cake.path.join(msvsInstall, r"VC\bin\link.exe"),
+  mtExe=cake.path.join(msvsInstall, r"VC\bin\mt.exe"),
+  rcExe=cake.path.join(msvsInstall, r"VC\bin\rc.exe"),
+  architecture='x86',
   dllPaths=[cake.path.join(msvsInstall, r"Common7\IDE")],
   )
 compiler.addIncludePath(
@@ -33,6 +36,7 @@ compiler.addLibraryPath(
 compiler.addLibraryPath(
   cake.path.join(msvsInstall, r"VC\PlatformSDK\Lib"),
   )
+compiler.runtimeLibraries = 'release-dll'
 env = windows.tools["env"]
 env["PLATFORM"] = "windows"
 env["COMPILER"] = "msvc"

@@ -14,4 +14,6 @@ objects = compiler.objects(
 compiler.program(
   target=env.expand("${BUILD}/test"),
   sources=objects,
+  embedManifest=True,
+  useIncrementalLinking=True,
   )

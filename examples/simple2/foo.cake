@@ -7,11 +7,11 @@ sources = filesys.cwd([
   ])
 
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}"),
+  targetDir=env.expand("${BUILD}/simple2"),
   sources=sources,
   )
 
 compiler.library(
-  target=env.expand("${BUILD}/foo"),
+  target=env.expand("${BUILD}/simple2/foo"),
   sources=objects
   )

@@ -49,7 +49,7 @@ def findCompiler(version=None, architecture='x86'):
       
         # Use the compilers platform SDK if installed
         platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
-        if not cake.filesys.isDirectory(platformSdkDir):
+        if not cake.filesys.isDir(platformSdkDir):
           platformSdkDir = getPlatformSdkDir()
 
         # Break when we have found all compiler dirs

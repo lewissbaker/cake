@@ -33,6 +33,11 @@ class Task(object):
   _current = threading.local()
   
   def __init__(self, func=None):
+    """Construct a task given a function.
+    
+    @param func: The function this task should run.
+    @type func: any callable
+    """
     self._func = func
     self._parent = Task.getCurrent()
     self._state = NEW
@@ -128,7 +133,8 @@ class Task(object):
     self._startAfterCallback(self)
 
   def _startAfterCallback(self, task):
-    
+    """Callback that is called by each task we must start after.
+    """    
     callbacks = None
     
     with self._lock:
@@ -168,7 +174,6 @@ class Task(object):
     
     This should typically be run on a background thread.
     """
-    
     if self._state is not RUNNING:
       assert self._state is FAILED, "should have been cancelled"
       return
@@ -240,7 +245,8 @@ class Task(object):
       t.addCallback(lambda t=t: self._completeAfterCallback(t))
 
   def _completeAfterCallback(self, task):
-    
+    """Callback that is called by each task we must complete after.
+    """
     callbacks = None
     
     with self._lock:

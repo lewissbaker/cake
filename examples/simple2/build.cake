@@ -7,12 +7,12 @@ sources = filesys.cwd([
   ])
 
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}"),
+  targetDir=env.expand("${BUILD}/simple2"),
   sources=sources,
   )
 
 compiler.program(
-  target=env.expand("${BUILD}/test"),
+  target=env.expand("${BUILD}/simple2/test"),
   sources=objects,
   embedManifest=True,
   useIncrementalLinking=True,

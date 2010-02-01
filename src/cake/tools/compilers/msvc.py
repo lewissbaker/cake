@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import re
 import threading
+import weakref
 
 import cake.filesys
 import cake.path
@@ -118,6 +119,7 @@ class MsvcCompiler(Compiler):
   name = 'msvc'
 
   _lineRegex = re.compile('#line [0-9]+ "(?P<path>.+)"', re.MULTILINE)
+  
   _pdbQueue = {}
   _pdbQueueLock = threading.Lock()
   
@@ -518,32 +520,6 @@ class MsvcCompiler(Compiler):
 
     return archive, scan
 
-  def _resolveLibraries(self, engine):
-    results = []
-    for library in self.libraries:
-      if not cake.path.dirName(library):
-        fileNames = [library]
-        if not library.endswith(self.librarySuffix):
-          fileNames.append(library + self.librarySuffix)
-          
-        for candidate in cake.path.join(self.libraryPaths, fileNames):
-          if cake.filesys.isFile(candidate):
-            results.append(candidate)
-            break
-        else:
-          engine.raiseError(
-            "cake: failed to find library '%s' in libraryPaths:\n%s" % (
-              "".join("- %s\n" % path for path in self.libraryPaths)
-              ))
-      else:
-        if not cake.filesys.isFile(library):
-          engine.raiseError(
-            "cake: library '%s' does not exist." % library
-            )
-        results.append(library)
-        
-    return results
-
   @memoise
   def _getLinkCommonArgs(self):
     
@@ -613,7 +589,8 @@ class MsvcCompiler(Compiler):
 
   def getProgramCommands(self, target, sources, engine):
     
-    sources = sources + self._resolveLibraries(engine)
+    libraryPaths = self._resolveLibraries(engine)
+    sources = sources + libraryPaths
     
     args = self._getLinkCommonArgs()
 

@@ -4,6 +4,9 @@ Defines base class for C/C++ compiler tools.
 
 __all__ = ["Compiler"]
 
+import weakref
+import os.path
+
 import cake.path
 import cake.filesys
 import cake.tools
@@ -39,6 +42,9 @@ class Compiler(Tool):
   PARTIAL_OPTIMISATION = 1
   FULL_OPTIMISATION = 2
 
+  # Map of engine to map of library path to list of object paths
+  __libraryObjects = weakref.WeakKeyDictionary()
+
   ###
   # Default settings
   ###
@@ -57,6 +63,8 @@ class Compiler(Tool):
   moduleSuffix = '.so'
   programSuffix = ''
   
+  linkObjectsInLibrary = False
+  
   objectCachePath = None
   
   def __init__(self):
@@ -67,6 +75,41 @@ class Compiler(Tool):
     self.libraryScripts = []
     self.libraryPaths = []
     self.libraries = []
+
+  @classmethod
+  def _getObjectsInLibrary(cls, engine, path):
+    """Get a list of the paths of object files in the specified library.
+    
+    @param engine: The Engine that is looking up the results.
+    @type engine: cake.engine.Engine
+    
+    @param path: Path of the library previously built by a call to library().
+    
+    @return: A tuple of the paths of objects in the library.
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = cls.__libraryObjects.get(engine, None)
+    if libraryObjects:
+      return libraryObjects.get(path, None)
+    else:
+      return None
+
+  @classmethod
+  def _setObjectsInLibrary(cls, engine, path, objectPaths):
+    """Set the list of paths of object files in the specified library.
+    
+    @param engine: The Engine that is looking up the results.
+    @type engine: cake.engine.Engine
+    
+    @param path: Path of the library previously built by a call to library().
+    @type path: string
+    
+    @param objectPaths: A list of the objects built by a call to library().
+    @type objectPaths: list of strings
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = cls.__libraryObjects.setdefault(engine, {})
+    libraryObjects[path] = tuple(objectPaths)
 
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
@@ -197,6 +240,8 @@ class Compiler(Tool):
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.librarySuffix)
     
+    self._setObjectsInLibrary(engine, target, paths)
+    
     libraryTask = engine.createTask(
       lambda t=target, s=paths, e=engine, c=compiler:
         c.buildLibrary(t, s, e)
@@ -277,6 +322,54 @@ class Compiler(Tool):
         
   ###########################
   # Internal methods not part of public API
+  
+  def _resolveLibraries(self, engine):
+    """Resolve the list of library names to library paths.
+    
+    Searches for each library in the libraryPaths.
+    If self.linkObjectsInLibrary is True then returns the paths of object files
+    that comprise the library instead of the library path.
+    
+    @param engine: The engine to use for logging error messages.
+    @type engine: cake.engine.Engine
+    
+    @return: A list of library/object paths.
+    @type: list of string
+    """
+    libraryPaths = []
+    for library in self.libraries:
+      if not cake.path.dirName(library):
+        fileNames = [library]
+        if not library.endswith(self.librarySuffix):
+          fileNames.append(library + self.librarySuffix)
+          
+        for candidate in cake.path.join(self.libraryPaths, fileNames):
+          if cake.filesys.isFile(candidate):
+            libraryPaths.append(candidate)
+            break
+        else:
+          engine.raiseError(
+            "cake: failed to find library '%s' in libraryPaths:\n%s" % (
+              "".join("- %s\n" % path for path in self.libraryPaths)
+              ))
+      else:
+        if not cake.filesys.isFile(library):
+          engine.raiseError(
+            "cake: library '%s' does not exist." % library
+            )
+        libraryPaths.append(library)
+      
+    if self.linkObjectsInLibrary:
+      results = []
+      for libraryPath in libraryPaths:
+        objects = self._getObjectsInLibrary(engine, libraryPath)
+        if objects is None:
+          results.append(libraryPath)
+        else:
+          results.extend(objects)
+      return results
+    else:
+      return libraryPaths
   
   def buildObject(self, target, source, engine):
     """Perform the actual build of an object.

@@ -12,7 +12,7 @@ def isFile(path):
   """
   return os.path.isfile(path)
 
-def isDirectory(path):
+def isDir(path):
   """Check if a directory exists at the path.
   """
   return os.path.isdir(path)

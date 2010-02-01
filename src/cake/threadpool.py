@@ -7,6 +7,7 @@ import threading
 import sys
 import platform
 import traceback
+import atexit
 
 if platform.system() == 'Windows':
   import win32api
@@ -67,11 +68,8 @@ class ThreadPool(object):
       worker.start()
       self._workers.append(worker)
     
-  def __del__(self):
-    """On shutdown we complete any currently executing jobs then exit. Jobs
-    waiting on the queue may not be executed.
-    """
-    self.shutdown()
+    # Make sure the threads are joined before program exit
+    atexit.register(self.shutdown)
     
   def shutdown(self):
     """On shutdown we complete any currently executing jobs then exit. Jobs

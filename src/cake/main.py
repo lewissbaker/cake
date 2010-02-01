@@ -87,7 +87,7 @@ def run(args=None, cwd=None):
   for arg in args:
     if not os.path.isabs(arg):
       arg = os.path.join(cwd, arg)
-    if cake.filesys.isDirectory(arg):
+    if cake.filesys.isDir(arg):
       arg = cake.path.join(arg, 'build.cake')
 
     task = engine.execute(arg)

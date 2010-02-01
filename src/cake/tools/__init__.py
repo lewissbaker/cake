@@ -82,18 +82,39 @@ class Tool(object):
     return new
 
 class FileTarget(object):
+  """A class returned by tools that produce a file result.
+  
+  @ivar path: The path to the target file.
+  @type path: string
+  @ivar task: A task that completes when the target file has been written. 
+  @type task: C{FileTarget}
+  """
   
   def __init__(self, path, task):
+    """Construct a FileTarget from a path and task.
+    """
     self.path = path
     self.task = task
 
 def getPathAndTask(file):
+  """Returns a path and task given a file.
+  
+  @param file: The path or FileTarget to split.
+  @type file: string or C{FileTarget} 
+  @return: A file path and task (or None). 
+  """
   if isinstance(file, FileTarget):
     return file.path, file.task
   else:
     return file, None
 
 def getPathsAndTasks(files):
+  """Returns a list of paths and tasks for given files.
+
+  @param files: The paths or FileTarget's to split.
+  @type files: list of string or C{FileTarget} 
+  @return: Lists of paths and tasks. 
+  """
   paths = []
   tasks = []
   for f in files:
@@ -105,6 +126,12 @@ def getPathsAndTasks(files):
   return paths, tasks
 
 def deepCopyBuiltins(obj):
+  """Returns a deep copy of only builtin types.
+  
+  @param obj: The given object to copy.
+  @return: A copy of the given object for builtin types, or the same object
+  for non-builtin types.
+  """
   if isinstance(obj, dict):
     return dict((deepCopyBuiltins(k), deepCopyBuiltins(v)) for k, v in obj.iteritems())
   elif isinstance(obj, (list, tuple, set)):

@@ -15,7 +15,6 @@ class ThreadPoolTests(unittest.TestCase):
     threadPool = ThreadPool(numWorkers=10)
     threadPool.queueJob(job)
     e.wait()
-    threadPool.shutdown()
     
     self.assertEqual(len(result), 1)
     
@@ -32,7 +31,6 @@ class ThreadPoolTests(unittest.TestCase):
       threadPool.queueJob(job)
     for _ in xrange(jobCount):
       s.acquire()
-    threadPool.shutdown()
     
     self.assertEqual(len(result), 50)
 

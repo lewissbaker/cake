@@ -1,7 +1,8 @@
 import unittest
 import threading
+import sys
 
-from cake.threadpool import ThreadPool
+import cake.threadpool
 
 class ThreadPoolTests(unittest.TestCase):
 
@@ -12,7 +13,7 @@ class ThreadPoolTests(unittest.TestCase):
       result.append(None)
       e.set()
        
-    threadPool = ThreadPool(numWorkers=10)
+    threadPool = cake.threadpool.ThreadPool(numWorkers=10)
     threadPool.queueJob(job)
     e.wait()
     
@@ -26,7 +27,7 @@ class ThreadPoolTests(unittest.TestCase):
       result.append(None)
       s.release()
        
-    threadPool = ThreadPool(numWorkers=10)
+    threadPool = cake.threadpool.ThreadPool(numWorkers=10)
     for _ in xrange(jobCount):
       threadPool.queueJob(job)
     for _ in xrange(jobCount):
@@ -35,5 +36,6 @@ class ThreadPoolTests(unittest.TestCase):
     self.assertEqual(len(result), 50)
 
 if __name__ == "__main__":
-  import sys;sys.argv = ['', 'ThreadPoolTests']
-  unittest.main()
+  suite = unittest.TestLoader().loadTestsFromTestCase(ThreadPoolTests)
+  runner = unittest.TextTestRunner(verbosity=2)
+  sys.exit(not runner.run(suite).wasSuccessful())

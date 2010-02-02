@@ -1,5 +1,6 @@
 import unittest
 import os.path
+import sys
 
 class PathTests(unittest.TestCase):
   
@@ -87,3 +88,8 @@ class PathTests(unittest.TestCase):
     self.assertEqual(extension("foo/baz"), "")
     self.assertEqual(extension("foo.bar/baz"), "")
     self.assertEqual(extension("foo.bar/baz.blah"), ".blah")
+
+if __name__ == "__main__":
+  suite = unittest.TestLoader().loadTestsFromTestCase(PathTests)
+  runner = unittest.TextTestRunner(verbosity=2)
+  sys.exit(not runner.run(suite).wasSuccessful())

@@ -1,3 +1,6 @@
+"""Cake Initialisation Script.
+"""
+
 import threading
 import sys
 
@@ -13,7 +16,7 @@ sys.modules['cake.builders'] = builders
 
 def overrideOpen():
   """
-  Override the built-in open() and os.open() to set the no-ihherit
+  Override the built-in open() and os.open() to set the no-inherit
   flag on files to prevent processes from inheriting file handles.
   """
   import __builtin__

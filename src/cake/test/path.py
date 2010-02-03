@@ -1,3 +1,6 @@
+"""Path Tests.
+"""
+
 import unittest
 import os.path
 import sys

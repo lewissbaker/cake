@@ -1,3 +1,6 @@
+"""Environment Tool.
+"""
+
 import cake.path
 
 from cake.tools import Tool

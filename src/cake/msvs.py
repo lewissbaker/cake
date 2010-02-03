@@ -1,5 +1,4 @@
-"""
-Utilities for querying Microsoft Visual Studio settings.
+"""Utilities for querying Microsoft Visual Studio settings.
 """
 import _winreg
 
@@ -46,7 +45,6 @@ def getMsvcProductDir(version=r'VisualStudio\8.0'):
     _winreg.CloseKey(key)
 
 def getPlatformSdkDir():
-  
   """Returns the Microsoft Platform SDK directory.
 
   This will be a native path or None if the PlatformSDK could not be found.

@@ -1,3 +1,6 @@
+"""Task Tests.
+"""
+
 import unittest
 import threading
 import sys

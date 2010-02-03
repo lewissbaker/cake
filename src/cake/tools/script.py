@@ -1,3 +1,6 @@
+"""Script Tool.
+"""
+
 from cake.engine import Script
 from cake.tools import Tool
 

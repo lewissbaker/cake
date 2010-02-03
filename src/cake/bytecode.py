@@ -1,5 +1,4 @@
-"""
-Utility functions for loading byte-compiled scripts.
+"""Utilities for loading byte-compiled scripts.
 """
 
 __all__ = ["loadCode"]

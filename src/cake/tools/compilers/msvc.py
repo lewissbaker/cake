@@ -1,3 +1,6 @@
+"""The Microsoft Visual C++ Compiler.
+"""
+
 __all__ = ["MsvcCompiler"]
 
 import os

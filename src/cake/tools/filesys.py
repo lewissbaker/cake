@@ -1,3 +1,6 @@
+"""File System Tool.
+"""
+
 import cake.path
 import cake.filesys
 from cake.tools import Tool, FileTarget, getPathAndTask

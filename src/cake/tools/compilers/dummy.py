@@ -1,3 +1,5 @@
+"""A Dummy Compiler.
+"""
 
 __all__ = ["DummyCompiler"]
 

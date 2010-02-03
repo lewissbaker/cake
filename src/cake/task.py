@@ -1,4 +1,4 @@
-"""Cake Task Utilities
+"""Task Utilities.
 """
 
 import sys

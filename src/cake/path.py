@@ -1,3 +1,6 @@
+"""Path Utilities.
+"""
+
 import os.path
 
 def dirName(path):

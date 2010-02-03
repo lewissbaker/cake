@@ -1,3 +1,6 @@
+"""File System Utilities.
+"""
+
 import shutil
 import os
 import os.path

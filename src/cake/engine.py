@@ -1,3 +1,6 @@
+"""Engine-Level Classes and Utilities.
+"""
+
 import hashlib
 import threading
 import traceback
@@ -5,6 +8,7 @@ import sys
 import os
 import os.path
 import time
+
 import math
 try:
   import cPickle as pickle
@@ -204,7 +208,7 @@ class Engine(object):
     @type path: string
     
     @return: The timestamp in seconds since 1 Jan, 1970 UTC.
-    @type: float 
+    @rtype: float 
     """
     timestamp = self._timestampCache.get(path, None)
     if timestamp is None:
@@ -258,7 +262,8 @@ class Engine(object):
     The dependency info contains information about the parameters and
     dependencies of a target at the time it was last built.
     
-    @param target: The FileInfo object for the specified target. 
+    @param targetPath: The path of the target.
+    @type targetPath: string 
     
     @return: A DependencyInfo object for the target.
     
@@ -350,6 +355,8 @@ class DependencyInfo(object):
     return hasher.digest()
 
 class FileInfo(object):
+  """A container for file information.
+  """
   
   VERSION = 1
   

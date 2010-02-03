@@ -334,7 +334,7 @@ class Compiler(Tool):
     @type engine: cake.engine.Engine
     
     @return: A list of library/object paths.
-    @type: list of string
+    @rtype: list of string
     """
     libraryPaths = []
     for library in self.libraries:

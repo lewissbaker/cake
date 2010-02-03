@@ -1,4 +1,5 @@
-"""
+"""Thread Pooling Utilities.
+
 Provides a simple thread-pool utility for managing execution of multiple jobs
 in parallel on separate threads.
 """
@@ -21,7 +22,7 @@ else:
   def getProcessorCount():
     return 1
 
-class JobQueue(object):
+class _JobQueue(object):
   """A lightweight job queue class, similar to Queue.Queue.
   """
   def __init__(self):
@@ -29,21 +30,21 @@ class JobQueue(object):
     """    
     self._jobSemaphore = threading.Semaphore(0)
     self._jobs = []
-      
+
   def get(self):
     """Get the next job from the back of the queue. Blocks until a job is
     available.
     """
     self._jobSemaphore.acquire() # Wait for next job
     return self._jobs.pop()
-    
+
   def put(self, job, index=0):
     """Put a job on the queue at a given index. Defaults to putting the job
     on the front of the queue.
     """
     self._jobs.insert(index, job)
     self._jobSemaphore.release() # Signal a new job
-           
+
 class ThreadPool(object):
   """Manages a pool of worker threads that it delegates jobs to.
   
@@ -59,7 +60,7 @@ class ThreadPool(object):
     
     @param numWorkers: Initial number of worker threads to start.
     """
-    self._jobQueue = JobQueue()
+    self._jobQueue = _JobQueue()
     self._workers = []
 
     # Create the worker threads
@@ -84,11 +85,14 @@ class ThreadPool(object):
       thread.join()
 
     # Clear any references
-    self._jobQueue = JobQueue()
+    self._jobQueue = _JobQueue()
     self._workers[:] = []
     
   def queueJob(self, callable):
     """Queue a new job to be executed by the thread pool.
+    
+    @param callable: Job to queue
+    @type callable: any callable
     """
     self._jobQueue.put(callable)
   

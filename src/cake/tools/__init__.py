@@ -1,3 +1,5 @@
+"""Cake Tools.
+"""
 
 class Declare(object):
   def __init__(self, default):

@@ -1,4 +1,4 @@
-"""Path Tests.
+"""Path Unit Tests.
 """
 
 import unittest

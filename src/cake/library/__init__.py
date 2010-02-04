@@ -1,4 +1,4 @@
-"""Cake Tools.
+"""Base Class and Utilities for Cake Tools.
 """
 
 class Declare(object):

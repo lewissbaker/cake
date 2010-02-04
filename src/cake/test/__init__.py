@@ -1,4 +1,4 @@
-"""Cake Unit Tests.
+"""Unit Tests.
 """
 
 import unittest

@@ -1,4 +1,4 @@
-"""Cake Initialisation Script.
+"""Cake Build System.
 """
 
 import threading
@@ -12,9 +12,11 @@ __version__ = '.'.join(str(v) for v in __version_info__)
 # Cake scripts can get access to their builders using standard python import
 # statements. 
 builders = threading.local()
+"""The accessor for Cake Tools.
+"""
 sys.modules['cake.builders'] = builders
 
-def overrideOpen():
+def _overrideOpen():
   """
   Override the built-in open() and os.open() to set the no-inherit
   flag on files to prevent processes from inheriting file handles.
@@ -22,12 +24,7 @@ def overrideOpen():
   import __builtin__
   import os
   
-  old_open = __builtin__.open
   def new_open(filename, mode="r", bufsize=0):
-    # Always add no-inherit flag
-#    if "N" not in mode:
-#      mode += "N" 
-    
     if mode.startswith("r"):
       flags = os.O_RDONLY
     elif mode.startswith("w"):
@@ -76,13 +73,8 @@ def overrideOpen():
 
   old_os_open = os.open
   def new_os_open(filename, flag, mode=0777):
-#    if not flag & os.O_NOINHERIT:
-#      sys.stderr.write("opening %s - added O_NOINHERIT\n" % filename)
-#    else:
-#      sys.stderr.write("opening %s\n" % filename)
-
     flag |= os.O_NOINHERIT
     return old_os_open(filename, flag, mode)
   os.open = new_os_open
   
-overrideOpen()
+_overrideOpen()

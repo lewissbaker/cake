@@ -1,5 +1,5 @@
 """
-Defines base class for C/C++ compiler tools.
+Base Class and Utilities for C/C++ Compiler Tools.
 """
 
 __all__ = ["Compiler"]

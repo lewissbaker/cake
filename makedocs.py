@@ -9,6 +9,8 @@ if __name__ == "__main__":
     "--css=white",
     "--html",
     "--output=html/",
+    "--no-private",
+    "--exclude=cake.test",
     "src/cake",
     ]
   epydoc.cli.cli()

@@ -1,4 +1,4 @@
-"""Thread Pooling Utilities.
+"""Thread Pooling Class and Utilities.
 
 Provides a simple thread-pool utility for managing execution of multiple jobs
 in parallel on separate threads.

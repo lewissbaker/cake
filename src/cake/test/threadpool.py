@@ -1,4 +1,4 @@
-"""ThreadPool Tests.
+"""ThreadPool Unit Tests.
 """
 
 import unittest

@@ -31,6 +31,11 @@ class BuildError(Exception):
 
 class Variant(object):
   """A container for build configuration information.
+  
+  @ivar name: The name of this configuration.
+  @type name: string or None
+  @ivar tools: The available tools for this variant.
+  @type tools: dict
   """
   
   def __init__(self, name=None):
@@ -382,6 +387,8 @@ class FileInfo(object):
     return currentTimestamp != self.timestamp
 
 class Script(object):
+  """A class that represents an instance of a Cake script. 
+  """
   
   _current = threading.local()
   

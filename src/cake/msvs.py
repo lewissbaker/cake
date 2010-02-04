@@ -5,9 +5,15 @@ import _winreg
 def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS install directory.
   
-  This will be a native path or None if MSVS is not installed.
+  Typically: 'C:\Program Files\Microsoft Visual Studio 8\Common7\IDE'.
+  
+  @param version: The registry path used to search for MSVS.
+  @type version: string
+  
+  @return: The path to the MSVS install directory.
+  @rtype: string 
 
-  Typically: 'C:\Program Files\Microsoft Visual Studio 8\Common7\IDE'
+  @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s" % version
   key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
@@ -19,9 +25,15 @@ def getMsvsInstallDir(version=r'VisualStudio\8.0'):
 def getMsvsProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS product directory.
   
-  This will be a native path or None if MSVS is not installed.
+  Typically: 'C:\Program Files\Microsoft Visual Studio 8\'.
 
-  Typically: 'C:\Program Files\Microsoft Visual Studio 8\'
+  @param version: The registry path used to search for MSVS.
+  @type version: string
+
+  @return: The path to the MSVS product directory.
+  @rtype: string 
+
+  @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VS" % version
   key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
@@ -33,9 +45,15 @@ def getMsvsProductDir(version=r'VisualStudio\8.0'):
 def getMsvcProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVC product directory as obtained from the registry.
 
-  This will be a native path or None if MSVC is not installed.
+  Typically: 'C:\Program Files\Microsoft Visual Studio 8\VC'.
 
-  Typically: 'C:\Program Files\Microsoft Visual Studio 8\VC'
+  @param version: The registry path used to search for MSVS.
+  @type version: string
+
+  @return: The path to the MSVC product directory.
+  @rtype: string 
+
+  @raise WindowsError: If MSVC is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VC" % version
   key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
@@ -47,7 +65,10 @@ def getMsvcProductDir(version=r'VisualStudio\8.0'):
 def getPlatformSdkDir():
   """Returns the Microsoft Platform SDK directory.
 
-  This will be a native path or None if the PlatformSDK could not be found.
+  @return: The path to the Platform SDK directory.
+  @rtype: string 
+
+  @raise WindowsError: If the Platform SDK is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\Microsoft SDKs\Windows"
   key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)

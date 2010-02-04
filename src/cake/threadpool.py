@@ -16,6 +16,9 @@ if platform.system() == 'Windows':
     """Return the number of processors/cores in the current system.
     
     Useful for determining the maximum parallelism of the current system.
+    
+    @return: The number of processors/cores in the current system.
+    @rtype: int
     """
     return win32api.GetSystemInfo()[5]
 else:
@@ -48,17 +51,18 @@ class _JobQueue(object):
 class ThreadPool(object):
   """Manages a pool of worker threads that it delegates jobs to.
   
-  Usage:
-  | pool = ThreadPool(numWorkers=4)
-  | for i in xrange(50):
-  |   pool.queueJob(lambda i=i: someFunction(i))
+  Usage::
+    pool = ThreadPool(numWorkers=4)
+    for i in xrange(50):
+      pool.queueJob(lambda i=i: someFunction(i))
   """
-  EXIT_JOB = "exit job"
+  _EXIT_JOB = "exit job"
   
   def __init__(self, numWorkers):
     """Initialise the thread pool.
     
     @param numWorkers: Initial number of worker threads to start.
+    @type numWorkers: int
     """
     self._jobQueue = _JobQueue()
     self._workers = []
@@ -70,15 +74,17 @@ class ThreadPool(object):
       self._workers.append(worker)
     
     # Make sure the threads are joined before program exit
-    atexit.register(self.shutdown)
+    atexit.register(self._shutdown)
     
-  def shutdown(self):
-    """On shutdown we complete any currently executing jobs then exit. Jobs
+  def _shutdown(self):
+    """Shutdown the ThreadPool.
+    
+    On shutdown we complete any currently executing jobs then exit. Jobs
     waiting on the queue may not be executed.
     """
     # Submit the exit job directly to the back of the queue
     for _ in xrange(len(self._workers)):
-      self._jobQueue.put(self.EXIT_JOB, -1)
+      self._jobQueue.put(self._EXIT_JOB, -1)
 
     # Wait for the threads to finish      
     for thread in self._workers:
@@ -91,7 +97,7 @@ class ThreadPool(object):
   def queueJob(self, callable):
     """Queue a new job to be executed by the thread pool.
     
-    @param callable: Job to queue
+    @param callable: The job to queue.
     @type callable: any callable
     """
     self._jobQueue.put(callable)
@@ -101,7 +107,7 @@ class ThreadPool(object):
     """
     while True:
       job = self._jobQueue.get()
-      if job is self.EXIT_JOB:
+      if job is self._EXIT_JOB:
         break
 
       try:

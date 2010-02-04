@@ -5,16 +5,34 @@ import os.path
 
 def dirName(path):
   """Get the directory part of the path.
+  
+  @param path: The path to split.
+  @type path: string
+  
+  @return: The directory part of the path.
+  @rtype: string
   """
   return os.path.dirname(path)
 
 def baseName(path):
   """Get the file-name part of the path.
+
+  @param path: The path to split.
+  @type path: string
+  
+  @return: The file-name part of the path.
+  @rtype: string
   """
   return os.path.basename(path)
 
 def split(path):
   """Split the path into directory and base parts.
+
+  @param path: The path to split.
+  @type path: string
+  
+  @return: The directory and base parts of the path.
+  @rtype: tuple(string, string)
   """
   return os.path.split(path)
 
@@ -22,6 +40,12 @@ def hasExtension(path):
   """Query if the last part of a path has a file extension.
   
   A file extension is any part after the last dot inclusively.
+
+  @param path: The path to check.
+  @type path: string
+  
+  @return: True if the path has an extension, otherwise False.
+  @rtype: bool
   """ 
   end = path.rfind("\\")
   end = max(path.rfind("/", end + 1), end) + 1
@@ -35,6 +59,12 @@ def extension(path):
   """Get the file extension of the last part of a path.
   
   A file extension is any part after the last dot inclusively.
+
+  @param path: The path to split.
+  @type path: string
+  
+  @return: The extension part of the path.
+  @rtype: string
   """ 
   end = path.rfind("\\")
   end = max(path.rfind("/", end + 1), end) + 1
@@ -49,6 +79,12 @@ def extension(path):
 
 def stripExtension(path):
   """Return the part of the path before the extension.
+  
+  @param path: The path to split.
+  @type path: string
+  
+  @return: The part of the path before the extension.
+  @rtype: string
   """
   end = path.rfind("\\")
   end = max(path.rfind("/", end + 1), end) + 1
@@ -63,6 +99,12 @@ def stripExtension(path):
 
 def forceExtension(path, ext):
   """Return the path modified if needed to have the specified extension.
+  
+  @param path: The path to force an extension onto.
+  @type path: string
+  
+  @return: The path with the specified extension.
+  @rtype: string
   """
   if os.path.normcase(extension(path)) != os.path.normcase(ext):
     return path + ext
@@ -71,6 +113,12 @@ def forceExtension(path, ext):
 
 def baseNameWithoutExtension(path):
   """Get the file-name part of the path without the extension.
+
+  @param path: The path to split.
+  @type path: string
+  
+  @return: The file-name part of the path without the extension.
+  @rtype: string
   """
   end = path.rfind("\\")
   end = max(path.rfind("/", end + 1), end) + 1
@@ -86,10 +134,16 @@ def baseNameWithoutExtension(path):
 def join(*args):
   """Find the cross product of any amount of input paths or lists of paths.
   
-  Example:
-  join("a", "b", "c") -> "a/b/c"
-  join("a", ["b", "c"], "d") -> ["a/b/d", "a/c/d"]
-  join(["a", "b"], ["c", "d"]) -> ["a/c", "a/d", "b/c", "b/d"]
+  Examples::
+    join("a", "b", "c") -> "a/b/c"
+    join("a", ["b", "c"], "d") -> ["a/b/d", "a/c/d"]
+    join(["a", "b"], ["c", "d"]) -> ["a/c", "a/d", "b/c", "b/d"]
+    
+  @param args: The arguments to cross.
+  @type args: string or list(string)
+  
+  @return: The cross product of the given arguments.
+  @rtype: string or list(string)
   """
   results = []
 
@@ -132,6 +186,14 @@ def expandVars(path, env):
   recursion.
   
   Unknown variables are replaced with {MISSING_SYMBOL_<varname>}.
+  
+  @param path: The path to expand.
+  @type path: string
+  @param env: A dictionary of symbols to their values.
+  @type env: dict
+  
+  @return: The expanded path.
+  @rtype: string
   """
   if '$' not in path:
     return path

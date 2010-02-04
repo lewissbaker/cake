@@ -6,16 +6,11 @@ import threading
 
 from cake.threadpool import ThreadPool, getProcessorCount
 
-NEW = "new"
-WAITING_FOR_START = "waiting for start"
-RUNNING = "running"
-WAITING_FOR_COMPLETE = "waiting for complete"
-SUCCEEDED = "succeeded"
-FAILED = "failed"
-
 _threadPool = ThreadPool(numWorkers=getProcessorCount())
 
 class TaskError(Exception):
+  """An exception type raised by the L{Task} class.
+  """
   pass
   
 def _makeTasks(value):
@@ -27,9 +22,25 @@ def _makeTasks(value):
     return value
 
 class Task(object):
-  """A task is an operation that is performed on a background thread.
+  """An operation that is performed on a background thread.
   """
-  
+
+  class State(object):
+    """A class that represents the state of a L{Task}.
+    """
+    NEW = "new"
+    """The task is in an uninitialised state."""
+    WAITING_FOR_START = "waiting for start"
+    """The task is waiting to be started."""
+    RUNNING = "running"
+    """The task is running."""
+    WAITING_FOR_COMPLETE = "waiting for complete"
+    """The task is waiting to complete."""
+    SUCCEEDED = "succeeded"
+    """The task has succeeded."""
+    FAILED = "failed"
+    """The task has failed."""
+    
   _current = threading.local()
   
   def __init__(self, func=None):
@@ -40,7 +51,7 @@ class Task(object):
     """
     self._func = func
     self._parent = Task.getCurrent()
-    self._state = NEW
+    self._state = Task.State.NEW
     self._lock = threading.Lock()
     self._startAfterCount = 0
     self._startAfterFailures = False
@@ -56,6 +67,7 @@ class Task(object):
     """Get the currently executing task.
     
     @return: The currently executing Task or None if no current task.
+    @rtype: Task or None
     """
     return getattr(Task._current, "value", None)
 
@@ -75,46 +87,46 @@ class Task(object):
   def started(self):
     """True if this task has been started.
     
-    A task is started if either start(), startAfter() or cancel() has been
+    A task is started if start(), startAfter() or cancel() has been
     called on it.
     """
-    return self._state is not NEW
+    return self._state is not Task.State.NEW
         
   @property
   def completed(self):
     """True if this task has finished execution or has been cancelled.
     """
     s = self._state
-    return s is SUCCEEDED or s is FAILED
+    return s is Task.State.SUCCEEDED or s is Task.State.FAILED
   
   @property
   def succeeded(self):
     """True if this task successfully finished execution.
     """
-    return self._state is SUCCEEDED
+    return self._state is Task.State.SUCCEEDED
   
   @property
   def failed(self):
-    """True if this task terminated execution with an exception.
+    """True if this task failed or was cancelled.
     """
-    return self._state is FAILED
+    return self._state is Task.State.FAILED
         
   def start(self):
     """Start this task now.
     
-    Fails if the task has already been started or has been cancelled.
+    @raise TaskError: If this task has already been started or
+    cancelled.
     """
     self.startAfter(None)
 
   def startAfter(self, other):
     """Start this task after other tasks have completed.
     
-    This task is cancelled (transition to FAILED state) if any of the
+    This task is cancelled (transition to Task.State.FAILED state) if any of the
     other tasks fail.
     
-    @param other: the other task or a list of other tasks to start
-    after.
-    @type other: L{Task} or C{list} of L{Task}
+    @param other: The task or a list of tasks to start after.
+    @type other: L{Task} or C{list}(L{Task})
     
     @raise TaskError: If this task has already been started or
     cancelled.
@@ -122,9 +134,9 @@ class Task(object):
     otherTasks = _makeTasks(other)
     
     with self._lock:
-      if self._state is not NEW:
+      if self._state is not Task.State.NEW:
         raise TaskError("task already started")
-      self._state = WAITING_FOR_START
+      self._state = Task.State.WAITING_FOR_START
       self._startAfterCount = len(otherTasks) + 1
     
     for t in otherTasks:
@@ -148,15 +160,15 @@ class Task(object):
         return
       
       # Someone may have eg. cancelled us already
-      if self._state is not WAITING_FOR_START:
+      if self._state is not Task.State.WAITING_FOR_START:
         return
       
       if self._startAfterFailures:
-        self._state = FAILED
+        self._state = Task.State.FAILED
         callbacks = self._callbacks
         self._callbacks = None
       else:
-        self._state = RUNNING
+        self._state = Task.State.RUNNING
 
     if callbacks is None:
       # TODO: Put call to self._execute() on thread-pool
@@ -174,8 +186,8 @@ class Task(object):
     
     This should typically be run on a background thread.
     """
-    if self._state is not RUNNING:
-      assert self._state is FAILED, "should have been cancelled"
+    if self._state is not Task.State.RUNNING:
+      assert self._state is Task.State.FAILED, "should have been cancelled"
       return
     
     callbacks = None
@@ -193,33 +205,33 @@ class Task(object):
         
       with self._lock:
         self._result = result
-        if self._state is RUNNING:
+        if self._state is Task.State.RUNNING:
           if not self._completeAfterCount:
             callbacks = self._callbacks
             self._callbacks = None
             if not self._completeAfterFailures:
-              self._state = SUCCEEDED
+              self._state = Task.State.SUCCEEDED
             else:
-              self._state = FAILED
+              self._state = Task.State.FAILED
           else:
-            self._state = WAITING_FOR_COMPLETE
+            self._state = Task.State.WAITING_FOR_COMPLETE
         else:
-          assert self._state is FAILED, "should have been cancelled"
+          assert self._state is Task.State.FAILED, "should have been cancelled"
         
     except Exception, e:
       trace = sys.exc_info()[2]
       with self._lock:
         self._exception = e
         self._trace = trace
-        if self._state is RUNNING:
+        if self._state is Task.State.RUNNING:
           if not self._completeAfterCount:
             callbacks = self._callbacks
             self._callbacks = None
-            self._state = FAILED
+            self._state = Task.State.FAILED
           else:
-            self._state = WAITING_FOR_COMPLETE
+            self._state = Task.State.WAITING_FOR_COMPLETE
         else:
-          assert self._state is FAILED, "should have been cancelled"
+          assert self._state is Task.State.FAILED, "should have been cancelled"
      
     if callbacks:
       for callback in callbacks:
@@ -233,6 +245,9 @@ class Task(object):
     """Make sure this task doesn't complete until other tasks have completed.
     
     @param other: The Task or list of Tasks to wait for.
+    @type other: L{Task} or C{list}(L{Task})
+    
+    @raise TaskError: If this task has already finished executing.
     """
     otherTasks = _makeTasks(other)
 
@@ -254,11 +269,11 @@ class Task(object):
       if task.failed:
         self._completeAfterFailures = True
         
-      if self._state is WAITING_FOR_COMPLETE and self._completeAfterCount == 0:
+      if self._state is Task.State.WAITING_FOR_COMPLETE and self._completeAfterCount == 0:
         if hasattr(self, "_result") and not self._completeAfterFailures:
-          self._state = SUCCEEDED
+          self._state = Task.State.SUCCEEDED
         else:
-          self._state = FAILED
+          self._state = Task.State.FAILED
         callbacks = self._callbacks
         self._callbacks = None
         
@@ -273,7 +288,7 @@ class Task(object):
   def cancel(self):
     """Cancel this task if it hasn't already started.
     
-    Completes the task, setting its state to FAILED.
+    Completes the task, setting its state to Task.State.FAILED.
     
     @raise TaskError: if the task has already completed.
     """
@@ -281,7 +296,7 @@ class Task(object):
       if self.completed:
         raise TaskError("Task already completed")
       
-      self._state = FAILED
+      self._state = Task.State.FAILED
       callbacks = self._callbacks
       self._callbacks = None
     
@@ -293,6 +308,9 @@ class Task(object):
   
   def addCallback(self, callback):
     """Register a callback to be run when this task is complete.
+    
+    @param callback: The callback to add.
+    @type callback: any callable
     """
     with self._lock:
       if self._callbacks is not None:

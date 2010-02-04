@@ -8,7 +8,7 @@ if __name__ == "__main__":
     "--inheritance=listed",
     "--css=white",
     "--html",
-    "--output=html/",
+    "--output=docs/",
     "--no-private",
     "--exclude=cake.test",
     "src/cake",

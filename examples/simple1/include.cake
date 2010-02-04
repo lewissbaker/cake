@@ -1,3 +1,3 @@
-from cake.builders import compiler, script
+from cake.tools import compiler, script
 
 compiler.addIncludePath("include")

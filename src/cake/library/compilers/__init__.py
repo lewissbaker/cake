@@ -9,9 +9,8 @@ import os.path
 
 import cake.path
 import cake.filesys
-import cake.tools
 from cake.engine import Script, DependencyInfo, FileInfo, BuildError
-from cake.tools import Tool, FileTarget, getPathsAndTasks, getPathAndTask
+from cake.library import Tool, FileTarget, getPathsAndTasks, getPathAndTask
 from cake.task import Task
 
 class Command(object):

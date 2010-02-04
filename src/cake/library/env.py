@@ -3,7 +3,7 @@
 
 import cake.path
 
-from cake.tools import Tool
+from cake.library import Tool
 
 class Environment(Tool):
   """A dictionary of key/value pairs used for path substitution.

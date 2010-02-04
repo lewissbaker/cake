@@ -5,7 +5,7 @@ __all__ = ["DummyCompiler"]
 
 import cake.filesys
 import cake.path
-from cake.tools.compilers import Compiler, makeCommand
+from cake.library.compilers import Compiler, makeCommand
 
 class DummyCompiler(Compiler):
   

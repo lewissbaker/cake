@@ -1,4 +1,4 @@
-from cake.builders import compiler, script, filesys, env
+from cake.tools import compiler, script, filesys, env
 
 script.include(filesys.cwd("include.cake"))
 

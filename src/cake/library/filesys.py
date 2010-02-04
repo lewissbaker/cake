@@ -3,7 +3,7 @@
 
 import cake.path
 import cake.filesys
-from cake.tools import Tool, FileTarget, getPathAndTask
+from cake.library import Tool, FileTarget, getPathAndTask
 from cake.engine import Script
 
 class FileSystemTool(Tool):

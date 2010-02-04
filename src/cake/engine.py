@@ -17,7 +17,7 @@ except ImportError:
 
 import cake.logging
 import cake.bytecode
-import cake.builders
+import cake.tools
 import cake.task
 import cake.path
 
@@ -158,9 +158,9 @@ class Engine(object):
       script = self._executed[key]
     else:
       def execute():
-        cake.builders.__dict__.clear()
+        cake.tools.__dict__.clear()
         for name, tool in variant.tools.items():
-          setattr(cake.builders, name, tool.clone())
+          setattr(cake.tools, name, tool.clone())
         script.execute()
       task = self.createTask(execute)
       script = Script(

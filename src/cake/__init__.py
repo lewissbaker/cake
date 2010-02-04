@@ -8,13 +8,13 @@ import sys
 __version_info__ = (0, 1, 0)
 __version__ = '.'.join(str(v) for v in __version_info__)
 
-# We want the 'cake.builders' module to have thread-local contents so that
-# Cake scripts can get access to their builders using standard python import
+# We want the 'cake.tools' module to have thread-local contents so that
+# Cake scripts can get access to their tools using standard python import
 # statements. 
-builders = threading.local()
+tools = threading.local()
 """The accessor for Cake Tools.
 """
-sys.modules['cake.builders'] = builders
+sys.modules['cake.tools'] = tools
 
 def _overrideOpen():
   """

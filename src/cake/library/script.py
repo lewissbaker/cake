@@ -2,7 +2,7 @@
 """
 
 from cake.engine import Script
-from cake.tools import Tool
+from cake.library import Tool
 
 class ScriptTool(Tool):
   """Builder that provides utilities for performing Script operations.

@@ -25,6 +25,7 @@ def searchUpForFile(path, file):
   
   @return: The path of the file found or None if the file was not
   found.
+  @rtype: string
   """
   
   while True:
@@ -41,8 +42,12 @@ def searchUpForFile(path, file):
 def run(args=None, cwd=None):
   """Run a cake build with the specified command-line args.
   
-  @param args: A list of command-line args for cake.
-  @type args: list of string
+  @param args: A list of command-line args for cake. If this is None 
+  sys.argv is used instead.
+  @type args: list of string, or None
+  @param cwd: The working directory to use. If this is None os.getcwd()
+  is used instead.
+  @type cwd: string or None
   
   @return: The exit code of cake. Non-zero if exited with errors, zero
   if exited with success.

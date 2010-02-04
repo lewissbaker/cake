@@ -13,12 +13,19 @@ class ScriptTool(Tool):
     executing script.
     
     A given script will only be included once.
+    
+    @param path: The path of the script to include.
+    @type path: string
     """
     script = Script.getCurrent()
     return script.include(path)
     
   def execute(self, path):
     """Execute another script as a background task.
+
+    @return: A task that can be used to determine when all tasks created
+    by the script have finished executing.
+    @rtype: L{Task}  
     """
     script = Script.getCurrent()
     return script.engine.execute(path)

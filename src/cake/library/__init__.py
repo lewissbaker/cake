@@ -1,10 +1,6 @@
 """Base Class and Utilities for Cake Tools.
 """
 
-class Declare(object):
-  def __init__(self, default):
-    self.default = default
-
 class ToolMetaclass(type):
   """This metaclass ensures that new instance variables can only be added to
   an instance during its __init__.
@@ -34,6 +30,9 @@ def memoise(func):
   
   The result cache is invalidated whenever an attribute is set on the
   instance.
+  
+  @param func: The function to memoise.
+  @type func: function
   """
   
   undefined = object()
@@ -89,7 +88,7 @@ class FileTarget(object):
   @ivar path: The path to the target file.
   @type path: string
   @ivar task: A task that completes when the target file has been written. 
-  @type task: C{FileTarget}
+  @type task: L{FileTarget}
   """
   
   def __init__(self, path, task):
@@ -102,8 +101,9 @@ def getPathAndTask(file):
   """Returns a path and task given a file.
   
   @param file: The path or FileTarget to split.
-  @type file: string or C{FileTarget} 
+  @type file: string or L{FileTarget} 
   @return: A file path and task (or None). 
+  @rtype: tuple of string, L{Task}
   """
   if isinstance(file, FileTarget):
     return file.path, file.task
@@ -114,8 +114,9 @@ def getPathsAndTasks(files):
   """Returns a list of paths and tasks for given files.
 
   @param files: The paths or FileTarget's to split.
-  @type files: list of string or C{FileTarget} 
-  @return: Lists of paths and tasks. 
+  @type files: list of string's or L{FileTarget}'s 
+  @return: Lists of paths and tasks.
+  @rtype: tuple of (list of string), (list of L{Task}) 
   """
   paths = []
   tasks = []
@@ -131,8 +132,8 @@ def deepCopyBuiltins(obj):
   """Returns a deep copy of only builtin types.
   
   @param obj: The given object to copy.
-  @return: A copy of the given object for builtin types, or the same object
-  for non-builtin types.
+  @return: A copy of the given object for builtin types, and references to
+  the same object for user-defined types.
   """
   if isinstance(obj, dict):
     return dict((deepCopyBuiltins(k), deepCopyBuiltins(v)) for k, v in obj.iteritems())

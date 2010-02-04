@@ -1,4 +1,3 @@
-import os
 import cake.path
 from cake.library.compilers.dummy import DummyCompiler
 from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
@@ -13,9 +12,6 @@ base.tools["filesys"] = FileSystemTool()
 env = base.tools["env"] = Environment()
 env["ROOT"] = cake.path.dirName(__file__)
 env["BUILD"] = "${ROOT}/build/${PLATFORM}_${COMPILER}_${RELEASE}"
-
-programFiles = os.environ['PROGRAMFILES']
-msvsInstall = cake.path.join(programFiles, "Microsoft Visual Studio 8") 
 
 windows = base.clone()
 compiler = windows.tools["compiler"] = findMsvcCompiler() 

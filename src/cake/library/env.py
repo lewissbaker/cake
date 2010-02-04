@@ -107,3 +107,19 @@ class Environment(Tool):
     @rtype: string
     """
     return cake.path.expandVars(value, self.__vars)
+
+  def choose(self, key, default=None, **kwargs):
+    """Choose and return an argument depending on the key given.
+    
+    Example::
+    sources += env.choose("platform",
+      windows=["Win32.cpp"],
+      ps2=["PS2.cpp"],
+      )
+    
+    @param key: The environment variable to choose.
+    @type key: string
+    @return: The argument whose key matches the environment variables value
+    or default if there was no match.
+    """
+    return kwargs.get(self.__vars[key], default)

@@ -137,6 +137,15 @@ class Compiler(Tool):
     if script is not None:
       self.libraryScripts.append(script)
 
+  def addLibraryScript(self, path):
+    """Add a library script to be built before linking.
+    
+    @param path: Path of the cake script that builds the specified
+    library.
+    @type path: string
+    """
+    self.libraryScripts.append(path)
+
   def addLibraryPath(self, path):
     """Add a path to the library search path.
     """

@@ -358,7 +358,8 @@ class Compiler(Tool):
         else:
           engine.raiseError(
             "cake: failed to find library '%s' in libraryPaths:\n%s" % (
-              "".join("- %s\n" % path for path in self.libraryPaths)
+              library,
+              "".join("- %s\n" % path for path in self.libraryPaths),
               ))
       else:
         if not cake.filesys.isFile(library):

@@ -1,5 +1,9 @@
+"""Task Unit Tests.
+"""
+
 import unittest
 import threading
+import sys
 
 import cake.task
 
@@ -398,7 +402,7 @@ class TaskTests(unittest.TestCase):
 
     self.assertTrue(ta.completed)
     self.assertRaises(cake.task.TaskError, ta.cancel)
-            
+
   def testCancelWhileExecutingFailsTask(self):
     
     def a():
@@ -417,4 +421,8 @@ class TaskTests(unittest.TestCase):
     self.assertTrue(ta.completed)
     self.assertFalse(ta.succeeded)
     self.assertTrue(ta.failed)
-  
+
+if __name__ == "__main__":
+  suite = unittest.TestLoader().loadTestsFromTestCase(TaskTests)
+  runner = unittest.TextTestRunner(verbosity=2)
+  sys.exit(not runner.run(suite).wasSuccessful())

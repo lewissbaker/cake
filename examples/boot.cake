@@ -1,10 +1,10 @@
 import os
 import cake.path
-from cake.tools.compilers.dummy import DummyCompiler
-from cake.tools.compilers.msvc import findCompiler as findMsvcCompiler
-from cake.tools.script import ScriptTool
-from cake.tools.filesys import FileSystemTool
-from cake.tools.env import Environment
+from cake.library.compilers.dummy import DummyCompiler
+from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
+from cake.library.script import ScriptTool
+from cake.library.filesys import FileSystemTool
+from cake.library.env import Environment
 from cake.engine import Variant
 
 base = Variant()

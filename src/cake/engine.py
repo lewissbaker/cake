@@ -1,3 +1,6 @@
+"""Engine-Level Classes and Utilities.
+"""
+
 import hashlib
 import threading
 import traceback
@@ -5,6 +8,7 @@ import sys
 import os
 import os.path
 import time
+
 import math
 try:
   import cPickle as pickle
@@ -13,7 +17,7 @@ except ImportError:
 
 import cake.logging
 import cake.bytecode
-import cake.builders
+import cake.tools
 import cake.task
 import cake.path
 
@@ -27,6 +31,11 @@ class BuildError(Exception):
 
 class Variant(object):
   """A container for build configuration information.
+  
+  @ivar name: The name of this configuration.
+  @type name: string or None
+  @ivar tools: The available tools for this variant.
+  @type tools: dict
   """
   
   def __init__(self, name=None):
@@ -154,9 +163,9 @@ class Engine(object):
       script = self._executed[key]
     else:
       def execute():
-        cake.builders.__dict__.clear()
+        cake.tools.__dict__.clear()
         for name, tool in variant.tools.items():
-          setattr(cake.builders, name, tool.clone())
+          setattr(cake.tools, name, tool.clone())
         script.execute()
       task = self.createTask(execute)
       script = Script(
@@ -204,7 +213,7 @@ class Engine(object):
     @type path: string
     
     @return: The timestamp in seconds since 1 Jan, 1970 UTC.
-    @type: float 
+    @rtype: float 
     """
     timestamp = self._timestampCache.get(path, None)
     if timestamp is None:
@@ -258,7 +267,8 @@ class Engine(object):
     The dependency info contains information about the parameters and
     dependencies of a target at the time it was last built.
     
-    @param target: The FileInfo object for the specified target. 
+    @param targetPath: The path of the target.
+    @type targetPath: string 
     
     @return: A DependencyInfo object for the target.
     
@@ -350,6 +360,8 @@ class DependencyInfo(object):
     return hasher.digest()
 
 class FileInfo(object):
+  """A container for file information.
+  """
   
   VERSION = 1
   
@@ -375,6 +387,8 @@ class FileInfo(object):
     return currentTimestamp != self.timestamp
 
 class Script(object):
+  """A class that represents an instance of a Cake script. 
+  """
   
   _current = threading.local()
   

@@ -1,3 +1,6 @@
+"""The Microsoft Visual C++ Compiler.
+"""
+
 __all__ = ["MsvcCompiler"]
 
 import os
@@ -10,8 +13,8 @@ import weakref
 
 import cake.filesys
 import cake.path
-from cake.tools.compilers import Compiler, makeCommand
-from cake.tools import memoise
+from cake.library.compilers import Compiler, makeCommand
+from cake.library import memoise
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
 

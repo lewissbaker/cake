@@ -1,30 +1,40 @@
+"""Cake Build System.
+"""
+
 import threading
 import sys
 
-# Note: Use semantic versioning (http://semver.org) when changing version.
 __version_info__ = (0, 1, 0)
+"""Current version number tuple.
+
+The number uses semantic versioning (see U{http://semver.org}).
+"""
 __version__ = '.'.join(str(v) for v in __version_info__)
 
-# We want the 'cake.builders' module to have thread-local contents so that
-# Cake scripts can get access to their builders using standard python import
+# We want the 'cake.tools' module to have thread-local contents so that
+# Cake scripts can get access to their tools using standard python import
 # statements. 
-builders = threading.local()
-sys.modules['cake.builders'] = builders
+tools = threading.local()
+"""Cake tools module.
 
-def overrideOpen():
+This is the main module for Cake tools. It allows users to import tools
+using the standard Python import statement, eg::
+
+  from cake.tools import compiler
+  
+  compiler.library(target="myLibrary", sources=myObjects) 
+"""
+sys.modules['cake.tools'] = tools
+
+def _overrideOpen():
   """
-  Override the built-in open() and os.open() to set the no-ihherit
+  Override the built-in open() and os.open() to set the no-inherit
   flag on files to prevent processes from inheriting file handles.
   """
   import __builtin__
   import os
   
-  old_open = __builtin__.open
   def new_open(filename, mode="r", bufsize=0):
-    # Always add no-inherit flag
-#    if "N" not in mode:
-#      mode += "N" 
-    
     if mode.startswith("r"):
       flags = os.O_RDONLY
     elif mode.startswith("w"):
@@ -73,13 +83,8 @@ def overrideOpen():
 
   old_os_open = os.open
   def new_os_open(filename, flag, mode=0777):
-#    if not flag & os.O_NOINHERIT:
-#      sys.stderr.write("opening %s - added O_NOINHERIT\n" % filename)
-#    else:
-#      sys.stderr.write("opening %s\n" % filename)
-
     flag |= os.O_NOINHERIT
     return old_os_open(filename, flag, mode)
   os.open = new_os_open
   
-overrideOpen()
+_overrideOpen()

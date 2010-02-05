@@ -1,5 +1,5 @@
 """
-Defines base class for C/C++ compiler tools.
+Base Class and Utilities for C/C++ Compiler Tools.
 """
 
 __all__ = ["Compiler"]
@@ -9,9 +9,8 @@ import os.path
 
 import cake.path
 import cake.filesys
-import cake.tools
 from cake.engine import Script, DependencyInfo, FileInfo, BuildError
-from cake.tools import Tool, FileTarget, getPathsAndTasks, getPathAndTask
+from cake.library import Tool, FileTarget, getPathsAndTasks, getPathAndTask
 from cake.task import Task
 
 class Command(object):
@@ -334,7 +333,7 @@ class Compiler(Tool):
     @type engine: cake.engine.Engine
     
     @return: A list of library/object paths.
-    @type: list of string
+    @rtype: list of string
     """
     libraryPaths = []
     for library in self.libraries:

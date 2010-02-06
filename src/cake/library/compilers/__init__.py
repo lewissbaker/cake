@@ -118,6 +118,17 @@ class Compiler(Tool):
     """
     self.includePaths.append(path)
     
+  def addLibraryScript(self, path):
+    """Add a script to be executed before performing a link.
+    
+    The script will be executed prior to any subsequent
+    program() or module() targets being built.
+    
+    @param path: Path of the script to execute.
+    @type path: string
+    """
+    self.libraryScripts.append(path)
+    
   def addDefine(self, define, value=None):
     """Add a define to the preprocessor command-line.
     """
@@ -135,7 +146,7 @@ class Compiler(Tool):
     """
     self.libraries.append(name)
     if script is not None:
-      self.libraryScripts.append(script)
+      self.addLibraryScript(script)
 
   def addLibraryPath(self, path):
     """Add a path to the library search path.

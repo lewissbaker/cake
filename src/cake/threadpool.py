@@ -35,18 +35,24 @@ class _JobQueue(object):
     self._jobs = []
 
   def get(self):
-    """Get the next job from the back of the queue. Blocks until a job is
-    available.
+    """Get the next job from the front of the queue.
+    
+    Blocks until a job is available.
     """
     self._jobSemaphore.acquire() # Wait for next job
-    return self._jobs.pop()
+    return self._jobs.pop(0)
 
-  def put(self, job, index=0):
-    """Put a job on the queue at a given index. Defaults to putting the job
-    on the front of the queue.
+  def putBack(self, job):
+    """Put a job on the end of the queue.
     """
-    self._jobs.insert(index, job)
+    self._jobs.append(job)
     self._jobSemaphore.release() # Signal a new job
+    
+  def putFront(self, job):
+    """Put a job on the front of the queue.
+    """
+    self._jobs.insert(0, job)
+    self._jobSemaphore.release() # Signal a new job 
 
 class ThreadPool(object):
   """Manages a pool of worker threads that it delegates jobs to.
@@ -84,7 +90,7 @@ class ThreadPool(object):
     """
     # Submit the exit job directly to the back of the queue
     for _ in xrange(len(self._workers)):
-      self._jobQueue.put(self._EXIT_JOB, -1)
+      self._jobQueue.putBack(self._EXIT_JOB)
 
     # Wait for the threads to finish      
     for thread in self._workers:
@@ -94,13 +100,21 @@ class ThreadPool(object):
     self._jobQueue = _JobQueue()
     self._workers[:] = []
     
-  def queueJob(self, callable):
+  def queueJob(self, callable, front=False):
     """Queue a new job to be executed by the thread pool.
     
     @param callable: The job to queue.
     @type callable: any callable
+    
+    @param front: If True then put the job at the front of the
+    thread pool's job queue, otherwise append it to the end of
+    the job queue.
+    @type front: boolean
     """
-    self._jobQueue.put(callable)
+    if front:
+      self._jobQueue.putFront(callable)
+    else:
+      self._jobQueue.putBack(callable)
   
   def _runThread(self):
     """Process jobs continuously until dismissed.

@@ -171,9 +171,7 @@ class Task(object):
         self._state = Task.State.RUNNING
 
     if callbacks is None:
-      # TODO: Put call to self._execute() on thread-pool
-      _threadPool.queueJob(self._execute)          
-      #self._execute()
+      _threadPool.queueJob(self._execute, front=True)          
     else:
       for callback in callbacks:
         try:

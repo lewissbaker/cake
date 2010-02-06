@@ -166,6 +166,7 @@ class Engine(object):
         cake.tools.__dict__.clear()
         for name, tool in variant.tools.items():
           setattr(cake.tools, name, tool.clone())
+        self.logger.outputInfo("Executing %s\n" % script.path)
         script.execute()
       task = self.createTask(execute)
       script = Script(
@@ -175,6 +176,9 @@ class Engine(object):
         engine=self,
         )
       self._executed[key] = script
+      task.addCallback(
+        lambda: self.logger.outputInfo("Finished %s\n" % script.path)
+        )
       task.start()
 
     return task

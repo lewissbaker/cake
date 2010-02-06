@@ -107,3 +107,24 @@ class Environment(Tool):
     @rtype: string
     """
     return cake.path.expandVars(value, self.__vars)
+
+  def choose(self, select, **keywords):
+    """Select one of the options based on the current value of the env variable.
+
+    Example:
+    | env.choose("platform",
+    |            win32="socket_win32.cpp",
+    |            linux="socket_posix.cpp",
+    |            osx="socket_mac.cpp",
+    |            )
+    | # "socket_posix.cpp" if env["platform"] == "linux"
+
+    @param select: The name of the environment variable.
+    @type select: string
+
+    @return: The value of the keyword arg that matches the value of the
+    environment variable. If the variable doesn't exist or none of the
+    values match then returns None.
+    """
+    return keywords.get(self.get(select, None), None)
+  

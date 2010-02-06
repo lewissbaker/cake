@@ -151,6 +151,7 @@ class MsvcCompiler(Compiler):
   
   pdbFile = None
   strippedPdbFile = None
+  importLibrary = None
   
   def __init__(
     self,
@@ -524,18 +525,21 @@ class MsvcCompiler(Compiler):
     return archive, scan
 
   @memoise
-  def _getLinkCommonArgs(self):
+  def _getLinkCommonArgs(self, dll):
     
     args = [cake.path.baseName(self.__linkExe), '/NOLOGO']
 
     # XXX: MSVC8 linker complains about /errorReport being unrecognised.
-    if self.errorReport:
-      args.append('/ERRORREPORT:%s' % self.errorReport.upper())
+    #if self.errorReport:
+    #  args.append('/ERRORREPORT:%s' % self.errorReport.upper())
       
     if self.useIncrementalLinking:
       args.append('/INCREMENTAL')
     else:
       args.append('/INCREMENTAL:NO')
+      
+    if dll:
+      args.append('/DLL')
       
     if self.useFunctionLevelLinking:
       args.append('/OPT:REF') # Eliminate unused functions (COMDATs)
@@ -591,11 +595,17 @@ class MsvcCompiler(Compiler):
     return args
 
   def getProgramCommands(self, target, sources, engine):
+    return self._getLinkCommands(target, sources, engine, dll=False)
+  
+  def getModuleCommands(self, target, sources, engine):
+    return self._getLinkCommands(target, sources, engine, dll=True)
+
+  def _getLinkCommands(self, target, sources, engine, dll):
     
     libraryPaths = self._resolveLibraries(engine)
     sources = sources + libraryPaths
     
-    args = self._getLinkCommonArgs()
+    args = list(self._getLinkCommonArgs(dll))
 
     if self.subSystem is not None:
       args.append('/SUBSYSTEM:' + self.subSystem)
@@ -603,11 +613,14 @@ class MsvcCompiler(Compiler):
     if self.debugSymbols and self.pdbFile is None:
       args.append('/PDB:%s.pdb' % target)
     
+    if dll and self.importLibrary is not None:
+      args.append('/IMPLIB:' + self.importLibrary)
+    
     if self.embedManifest:
       if not self.__mtExe:
         engine.raiseError("You must set path to mt.exe with embedManifest=True\n")
       
-      manifestResourceId = 1 # 2 for dll
+      manifestResourceId = 2 if dll else 1
       embeddedManifest = target + '.embed.manifest'
       if self.useIncrementalLinking:
         if not self.__rcExe:

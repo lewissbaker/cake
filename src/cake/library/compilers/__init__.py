@@ -554,7 +554,7 @@ class Compiler(Tool):
   def getLibraryCommand(self, target, sources, engine):
     """Get the command for constructing a library.
     """
-    engine.raiseError("Don't know how to archive %s" % target)
+    engine.raiseError("Don't know how to archive %s\n" % target)
   
   def buildModule(self, target, sources, engine):
     """Perform the actual build of a module.
@@ -569,7 +569,9 @@ class Compiler(Tool):
     @param engine: The Engine object to use for dependency checking
     etc.
     """
-    args = sources
+    link, scan = self.getModuleCommands(target, sources, engine)
+
+    args = [repr(link), repr(scan)]
     
     if cake.filesys.isFile(target):
       try:
@@ -579,21 +581,39 @@ class Compiler(Tool):
       except EnvironmentError:
         pass
   
-    print "Linking %s" % target
-    cake.filesys.makeDirs(cake.path.dirName(target))
-    with open(target, 'wb'):
-      pass
+    link()
+  
+    dependencies = scan()
     
     newDependencyInfo = DependencyInfo(
       targets=[FileInfo(target)],
       args=args,
       dependencies=[
         FileInfo(path=path, timestamp=engine.getTimestamp(path))
-        for path in sources
+        for path in dependencies
         ],
       )
     
     engine.storeDependencyInfo(newDependencyInfo)
+  
+  def getModuleCommands(self, target, sources, engine):
+    """Get the commands for linking a module.
+    
+    @param target: path to the target file
+    @type target: string
+    
+    @param sources: list of the object/library file paths to link into the
+    module.
+    @type sources: list of string
+    
+    @param engine: The cake Engine being used for the build.
+    @type engine: cake.engine.Engine
+    
+    @return: A tuple (link, scan) representing the commands that perform
+    the link and scan for dependencies respectively. The scan command
+    returns the list of dependencies. 
+    """
+    engine.raiseError("Don't know how to link %s\n" % target)
   
   def buildProgram(self, target, sources, engine):
     """Perform the actual build of a module.
@@ -635,3 +655,22 @@ class Compiler(Tool):
       )
     
     engine.storeDependencyInfo(newDependencyInfo)
+
+  def getProgramCommands(self, target, sources, engine):
+    """Get the commands for linking a program.
+    
+    @param target: path to the target file
+    @type target: string
+    
+    @param sources: list of the object/library file paths to link into the
+    program.
+    @type sources: list of string
+    
+    @param engine: The cake Engine being used for the build.
+    @type engine: cake.engine.Engine
+    
+    @return: A tuple (link, scan) representing the commands that perform
+    the link and scan for dependencies respectively. The scan command
+    returns the list of dependencies. 
+    """
+    engine.raiseError("Don't know how to link %s\n" % target)

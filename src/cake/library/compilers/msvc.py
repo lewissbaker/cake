@@ -396,7 +396,7 @@ class MsvcCompiler(Compiler):
             stderr=subprocess.STDOUT,
             )
         except EnvironmentError, e:
-          engine.raiseError("cake: failed to run %s: %s" % (self.__clExe, str(e)))
+          engine.raiseError("cake: failed to run %s: %s\n" % (self.__clExe, str(e)))
           
         p.stdin.close()
         
@@ -410,14 +410,14 @@ class MsvcCompiler(Compiler):
           if not line or line == sourceName:
             continue
           if 'error' in line:
-            engine.logger.outputError(line)
+            engine.logger.outputError(line + '\n')
           elif 'warning' in line:
-            engine.logger.outputError(line)
+            engine.logger.outputError(line + '\n')
           else: 
-            engine.logger.outputInfo(line)
+            engine.logger.outputInfo(line + '\n')
         
       if exitCode != 0:
-        engine.raiseError("cl: failed with code %i" % exitCode)
+        engine.raiseError("cl: failed with code %i\n" % exitCode)
       
     @makeCommand(compileArgs)
     def compileWhenPdbIsFree():
@@ -498,7 +498,7 @@ class MsvcCompiler(Compiler):
           stderr=subprocess.STDOUT,
           )
       except EnvironmentError, e:
-        engine.raiseError("cake: failed to launch %s: %s" % (self.__libExe, str(e)))
+        engine.raiseError("cake: failed to launch %s: %s\n" % (self.__libExe, str(e)))
     
       p.stdin.close()
       output = p.stdout.readlines()
@@ -515,7 +515,7 @@ class MsvcCompiler(Compiler):
           engine.logger.outputInfo(line)
           
       if exitCode != 0:
-        engine.raiseError("lib: failed with exit code %i" % exitCode)
+        engine.raiseError("lib: failed with exit code %i\n" % exitCode)
 
     @makeCommand("lib-scan")
     def scan():
@@ -658,7 +658,7 @@ class MsvcCompiler(Compiler):
           )
       except EnvironmentError, e:
         engine.raiseError(
-          "cake: failed to launch %s: %s" % (self.__linkExe, str(e))
+          "cake: failed to launch %s: %s\n" % (self.__linkExe, str(e))
           )
 
       p.stdin.close()
@@ -696,7 +696,7 @@ class MsvcCompiler(Compiler):
             stderr=subprocess.STDOUT,
             )
         except EnvironmentError, e:
-          engine.raiseError("cake: failed to launch %s: %s" % (
+          engine.raiseError("cake: failed to launch %s: %s\n" % (
             self.__rcExe,
             str(e),
             ))
@@ -745,7 +745,7 @@ class MsvcCompiler(Compiler):
             stderr=subprocess.STDOUT,
             )
         except EnvironmentError, e:
-          engine.raiseError("cake: failed to launch %s: %s" % (
+          engine.raiseError("cake: failed to launch %s: %s\n" % (
             self.__mtExe,
             str(e),
             ))

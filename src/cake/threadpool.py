@@ -129,4 +129,45 @@ class ThreadPool(object):
       except Exception:
         sys.stderr.write("Uncaught Exception:\n")
         sys.stderr.write(traceback.format_exc())
+
+class DummyThreadPool(object):
+  """A class like ThreadPool that performs all operations in
+  the one thread.
+  """
+  
+  def __init__(self):
+    self._queue = []
+    self._quit = False
+  
+  def queueJob(self, callable, front=False):
+    """Add a job to the queue.
+    
+    @param callable: A job to queue up. Must be callable with
+    no arguments.
+    @param front: If true then the job is put on the front of
+    the queue, otherwise it is put on the end of the queue.
+    """
+    if front:
+      self._queue.insert(0, callable)
+    else:
+      self._queue.append(callable)
+
+  def run(self):
+    """Start processing jobs in the queue one at a time
+    in the calling thread until either no jobs are left
+    or someone calls quit().
+    """
+    while self._queue and not self._quit:
+      job = self._queue.pop(0)
+      try:
+        job()
+      except Exception:
+        sys.stderr.write("Uncaught Exception:\n")
+        sys.stderr.write(traceback.format_exc())
         
+    self._quit = False
+    
+  def quit(self):
+    """Causes the call to run() to quit processing jobs and return.
+    """
+    self._quit = True

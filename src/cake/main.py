@@ -89,6 +89,9 @@ def run(args=None, cwd=None):
     import cProfile
     p = cProfile.Profile()
     p.enable()
+    threadPool = cake.threadpool.DummyThreadPool()
+    oldThreadPool = cake.task._threadPool
+    cake.task._threadPool = threadPool
     
   if options.boot is None:
     options.boot = searchUpForFile(cwd, 'boot.cake')
@@ -134,14 +137,19 @@ def run(args=None, cwd=None):
   mainTask = cake.task.Task()
   mainTask.addCallback(onFinish)
   mainTask.startAfter(tasks)
+
+  if options.profileOutput:
+    mainTask.addCallback(threadPool.quit)
+    threadPool.run()
+    cake.task._threadPool = oldThreadPool
+  else:
+    finished.wait()
   
-  finished.wait()
+  endTime = datetime.datetime.utcnow()
 
   if options.profileOutput:
     p.disable()
     p.dump_stats(options.profileOutput)
-  
-  endTime = datetime.datetime.utcnow()
   
   engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
   

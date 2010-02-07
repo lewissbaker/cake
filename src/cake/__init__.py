@@ -88,3 +88,17 @@ def _overrideOpen():
   os.open = new_os_open
   
 _overrideOpen()
+
+def _speedUp():
+  try:
+    import psyco
+    #psyco.bind(engine.path.expandPath)
+    psyco.full()
+    #psyco.profile()
+    #psyco.log()
+  except ImportError:
+    sys.stderr.write(
+      "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
+      )
+
+#_speedUp()

@@ -148,6 +148,15 @@ class Compiler(Tool):
     if script is not None:
       self.addLibraryScript(script)
 
+  def addLibraryScript(self, path):
+    """Add a library script to be built before linking.
+    
+    @param path: Path of the cake script that builds the specified
+    library.
+    @type path: string
+    """
+    self.libraryScripts.append(path)
+
   def addLibraryPath(self, path):
     """Add a path to the library search path.
     """
@@ -361,7 +370,7 @@ class Compiler(Tool):
           engine.raiseError(
             "cake: failed to find library '%s' in libraryPaths:\n%s" % (
               library,
-              "".join("- %s\n" % path for path in self.libraryPaths)
+              "".join("- %s\n" % path for path in self.libraryPaths),
               ))
       else:
         if not cake.filesys.isFile(library):

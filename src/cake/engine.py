@@ -64,6 +64,8 @@ class Engine(object):
   """
   
   def __init__(self):
+    """Default Constructor.
+    """
     self._variants = set()
     self._defaultVariant = None
     self._byteCodeCache = {}
@@ -99,7 +101,7 @@ class Engine(object):
     @type func: any callable
     
     @return: The newly created Task.
-    @rtype: L{cake.task.Task}
+    @rtype: L{Task}
     """
     def _wrapper():
       try:
@@ -135,6 +137,12 @@ class Engine(object):
     
   def raiseError(self, message):
     """Log an error and raise the BuildError exception.
+    
+    @param message: The error message to output.
+    @type message: string
+    
+    @raise BuildError: Raises a build error that should cause the current
+    task to fail.
     """
     self.logger.outputError(message)
     raise BuildError(message)
@@ -275,6 +283,7 @@ class Engine(object):
     @type targetPath: string 
     
     @return: A DependencyInfo object for the target.
+    @rtype: L{DependencyInfo}
     
     @raise EnvironmentError: if the dependency info could not be retrieved.
     """
@@ -298,6 +307,9 @@ class Engine(object):
   def storeDependencyInfo(self, dependencyInfo):
     """Call this method after a target was built to save the
     dependencies of the target.
+    
+    @param dependencyInfo: The dependency info object to be stored.
+    @type dependencyInfo: L{DependencyInfo}  
     """
     depPath = dependencyInfo.targets[0].path + '.dep'
     for target in dependencyInfo.targets:
@@ -310,10 +322,18 @@ class Engine(object):
 class DependencyInfo(object):
   """Object that holds the dependency info for a target.
   
-  @ivar version: The current version of the dependency info.
+  @ivar version: The version of this dependency info.
+  @type version: int
+  @ivar targets: A list of target files.
+  @type targets: usually a list of L{FileInfo}'s
+  @ivar args: The arguments used for the build.
+  @type args: usually a list of string's
+  @ivar dependencies: A list of files the targets depend on.
+  @type dependencies: usually a list of L{FileInfo}'s
   """
   
   VERSION = 1
+  """The most recent DependencyInfo version."""
   
   def __init__(self, targets, args, dependencies):
     self.version = self.VERSION
@@ -323,6 +343,13 @@ class DependencyInfo(object):
 
   def isUpToDate(self, engine, args):
     """Query if the targets are up to date.
+    
+    @param engine: The engine instance.
+    @type engine: L{Engine}
+    @param args: The current args.
+    @type args: usually a list of string's
+    @return: True if the targets are up to date, otherwise False.
+    @rtype: bool
     """
     if args != self.args:
       return False
@@ -339,6 +366,11 @@ class DependencyInfo(object):
 
   def calculateDigest(self, engine):
     """Calculate the digest of the sources/dependencies.
+
+    @param engine: The engine instance.
+    @type engine: L{Engine}
+    @return: The current digest of the dependency info.
+    @rtype: string of 20 bytes
     """
     hasher = hashlib.sha1()
     
@@ -368,6 +400,7 @@ class FileInfo(object):
   """
   
   VERSION = 1
+  """The most recent FileInfo version."""
   
   def __init__(self, path, timestamp=None, digest=None):
     self.version = self.VERSION
@@ -376,9 +409,19 @@ class FileInfo(object):
     self.digest = digest
     
   def exists(self, engine):
+    """Determine whether the file exists.
+    
+    @return: True if the file exists, otherwise false.
+    @rtype: bool
+    """
     return os.path.isfile(self.path)
     
   def hasChanged(self, engine):
+    """Determine whether the file has changed.
+    
+    @return: True if the file has changed, otherwise false.
+    @rtype: bool
+    """
     if self.version != FileInfo.VERSION:
       return True
     
@@ -397,6 +440,15 @@ class Script(object):
   _current = threading.local()
   
   def __init__(self, path, variant, engine, task, parent=None):
+    """Constructor.
+    
+    @param path: The path to the script file.
+    @param variant: The variant to build.
+    @param engine: The engine instance.
+    @param task: A task that should complete when all tasks within
+    the script have completed.
+    @param parent: The parent script or None if this is the root script. 
+    """
     self.path = path
     self.dir = os.path.dirname(path)
     self.variant = variant
@@ -412,6 +464,9 @@ class Script(object):
   @staticmethod
   def getCurrent():
     """Get the current thread's currently executing script.
+    
+    @return: The currently executing script.
+    @rtype: L{Script}
     """
     return getattr(Script._current, "value", None)
   
@@ -438,6 +493,9 @@ class Script(object):
     """Include another script for execution within this script's context.
     
     A script will only be included once within a given context.
+    
+    @param path: The path of the file to include.
+    @type path: string
     """
     if path in self._included:
       return

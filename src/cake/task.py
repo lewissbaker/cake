@@ -193,9 +193,13 @@ class Task(object):
     try:
       old = self.getCurrent()
       self._current.value = self
+      # Don't hold onto the func after it has been executed so it can
+      # be garbage collected.
+      func = self._func
+      self._func = None
       try:
-        if self._func is not None:
-          result = self._func()
+        if func is not None:
+          result = func()
         else:
           result = None
       finally:

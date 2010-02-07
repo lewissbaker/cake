@@ -68,6 +68,12 @@ def run(args=None, cwd=None):
     help="Path to the boot.cake configuration file to use.",
     default=None
     )
+  parser.add_option(
+    "-p", "--profile", metavar="FILE",
+    dest="profileOutput",
+    help="Path to output profiling information to.",
+    default=None,
+    )
   
   options, args = parser.parse_args(args)
   
@@ -79,6 +85,11 @@ def run(args=None, cwd=None):
   if not args:
     args = [cwd]
   
+  if options.profileOutput:
+    import cProfile
+    p = cProfile.Profile()
+    p.enable()
+    
   if options.boot is None:
     options.boot = searchUpForFile(cwd, 'boot.cake')
     if options.boot is None:
@@ -125,6 +136,10 @@ def run(args=None, cwd=None):
   mainTask.startAfter(tasks)
   
   finished.wait()
+
+  if options.profileOutput:
+    p.disable()
+    p.dump_stats(options.profileOutput)
   
   endTime = datetime.datetime.utcnow()
   

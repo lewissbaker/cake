@@ -126,5 +126,7 @@ class Environment(Tool):
     environment variable. If the variable doesn't exist or none of the
     values match then returns None.
     """
-    return keywords.get(self.get(select, None), None)
-  
+    return keywords.get(
+      self.get(select, None),
+      keywords.get('default', None)
+      )

@@ -50,6 +50,7 @@ class Task(object):
     @type func: any callable
     """
     self._func = func
+    self._immediate = None
     self._parent = Task.getCurrent()
     self._state = Task.State.NEW
     self._lock = threading.Lock()
@@ -111,15 +112,15 @@ class Task(object):
     """
     return self._state is Task.State.FAILED
         
-  def start(self):
+  def start(self, immediate=False):
     """Start this task now.
     
     @raise TaskError: If this task has already been started or
     cancelled.
     """
-    self.startAfter(None)
+    self.startAfter(None, immediate)
 
-  def startAfter(self, other):
+  def startAfter(self, other, immediate=False):
     """Start this task after other tasks have completed.
     
     This task is cancelled (transition to Task.State.FAILED state) if any of the
@@ -138,6 +139,7 @@ class Task(object):
         raise TaskError("task already started")
       self._state = Task.State.WAITING_FOR_START
       self._startAfterCount = len(otherTasks) + 1
+      self._immediate = immediate
     
     for t in otherTasks:
       t.addCallback(lambda t=t: self._startAfterCallback(t))
@@ -146,7 +148,7 @@ class Task(object):
 
   def _startAfterCallback(self, task):
     """Callback that is called by each task we must start after.
-    """    
+    """
     callbacks = None
     
     with self._lock:
@@ -171,7 +173,7 @@ class Task(object):
         self._state = Task.State.RUNNING
 
     if callbacks is None:
-      _threadPool.queueJob(self._execute, front=True)          
+      _threadPool.queueJob(self._execute, front=self._immediate)          
     else:
       for callback in callbacks:
         try:

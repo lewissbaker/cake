@@ -73,6 +73,7 @@ class Engine(object):
     self._digestCache = {}
     self._dependencyInfoCache = {}
     self._executed = {}
+    self._executedLock = threading.Lock()
     self.logger = cake.logging.Logger()
       
   def addVariant(self, variant, default=False):
@@ -163,31 +164,30 @@ class Engine(object):
     if variant is None:
       variant = self._defaultVariant
     
-    # TODO: Locks in here
-    
     key = (path, variant)
     
-    if key in self._executed:
-      script = self._executed[key]
-    else:
-      def execute():
-        cake.tools.__dict__.clear()
-        for name, tool in variant.tools.items():
-          setattr(cake.tools, name, tool.clone())
-        self.logger.outputInfo("Executing %s\n" % script.path)
-        script.execute()
-      task = self.createTask(execute)
-      script = Script(
-        path=path,
-        variant=variant,
-        task=task,
-        engine=self,
-        )
-      self._executed[key] = script
-      task.addCallback(
-        lambda: self.logger.outputInfo("Finished %s\n" % script.path)
-        )
-      task.start()
+    with self._executedLock:
+      if key in self._executed:
+        script = self._executed[key]
+      else:
+        def execute():
+          cake.tools.__dict__.clear()
+          for name, tool in variant.tools.items():
+            setattr(cake.tools, name, tool.clone())
+          self.logger.outputInfo("Executing %s\n" % script.path)
+          script.execute()
+        task = self.createTask(execute)
+        script = Script(
+          path=path,
+          variant=variant,
+          task=task,
+          engine=self,
+          )
+        self._executed[key] = script
+        task.addCallback(
+          lambda: self.logger.outputInfo("Finished %s\n" % script.path)
+          )
+        task.start()
 
     return task
 

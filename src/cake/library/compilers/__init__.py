@@ -493,13 +493,16 @@ class Compiler(Tool):
         engine.storeDependencyInfo(newDependencyInfo)
       
       scanTask = engine.createTask(lambda: newDependencies.extend(scan()))
-      scanTask.start()
+      scanTask.start(immediate=True)
       
       compileTask = engine.createTask(compile)
-      compileTask.start()
+      compileTask.start(immediate=True)
       
       storeDependencyInfoTask = engine.createTask(storeDependencyInfo)
-      storeDependencyInfoTask.startAfter([scanTask, compileTask])
+      storeDependencyInfoTask.startAfter(
+        [scanTask, compileTask],
+        immediate=True,
+        )
   
   def getObjectCommands(self, target, source, engine):
     """Get the command-lines for compiling a source to a target.

@@ -92,8 +92,9 @@ _overrideOpen()
 def _speedUp():
   try:
     import psyco
-    #psyco.bind(engine.path.expandPath)
-    psyco.full()
+    import engine
+    psyco.bind(engine.DependencyInfo.isUpToDate)
+    #psyco.full()
     #psyco.profile()
     #psyco.log()
   except ImportError:
@@ -101,4 +102,4 @@ def _speedUp():
       "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
       )
 
-#_speedUp()
+_speedUp()

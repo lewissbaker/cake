@@ -291,8 +291,12 @@ class Engine(object):
     if dependencyInfo is None:
       depPath = targetPath + '.dep'
       
+      # Read entire file at once otherwise thread-switching will kill
+      # performance
       with open(depPath, 'rb') as f:
-        dependencyInfo = pickle.load(f)
+        dependencyString = f.read()
+        
+      dependencyInfo = pickle.loads(dependencyString) 
       
       # Check that the dependency info is valid  
       if not isinstance(dependencyInfo, DependencyInfo):
@@ -315,9 +319,11 @@ class Engine(object):
     for target in dependencyInfo.targets:
       self._dependencyInfoCache[target.path] = dependencyInfo
     
+    dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
+    
     cake.filesys.makeDirs(cake.path.dirName(depPath))
     with open(depPath, 'wb') as f:
-      pickle.dump(dependencyInfo, f, pickle.HIGHEST_PROTOCOL)
+      f.write(dependencyString)
     
 class DependencyInfo(object):
   """Object that holds the dependency info for a target.

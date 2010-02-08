@@ -164,6 +164,11 @@ class Engine(object):
     if variant is None:
       variant = self._defaultVariant
     
+    # Only standardise slashes, everything else is up to the user as eg.
+    # a case sensitive OS may allow two scripts with the same names but
+    # different casing.
+    path = os.path.normpath(path)
+    
     key = (path, variant)
     
     with self._executedLock:

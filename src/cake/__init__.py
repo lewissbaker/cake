@@ -90,6 +90,10 @@ def _overrideOpen():
 _overrideOpen()
 
 def _speedUp():
+  """
+  Speed up execution by importing Psyco and binding the slowest functions
+  with it.
+  """
   try:
     import psyco
     import engine

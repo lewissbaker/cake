@@ -65,13 +65,10 @@ class Environment(Tool):
   def delete(self, *arguments):    
     """Delete values given their keys.
     
-    Note that this means keys must conform to Python argument naming
-    conventions (eg. no spaces).
-
     Example::
       env.delete(
-        CODE_PATH,
-        ART_PATH
+        "CODE_PATH",
+        "ART_PATH"
         )
     """
     for a in arguments:
@@ -98,7 +95,6 @@ class Environment(Tool):
 
     Example::
       env["CODE_PATH"] = "c:/code"
-      
       env.expand("${CODE_PATH}/a") -> "C:/code/a"
       
     @param value: The string to expand.
@@ -112,15 +108,18 @@ class Environment(Tool):
     """Choose and return an argument depending on the key given.
     
     Example::
-    sources += env.choose("platform",
-      windows=["Win32.cpp"],
-      ps2=["PS2.cpp"],
-      )
+      sources += env.choose("platform",
+        windows=["Win32.cpp"],
+        ps2=["PS2.cpp"],
+        )
     
-    @param key: The environment variable to choose.
+    @param key: The environment variable to base the choice on.
     @type key: string
+    
+    @param default: The value to return if the value of the environment
+    variable does not match one of the provided choices. 
+    
     @return: The argument whose key matches the environment variables value
     or default if there was no match.
     """
     return kwargs.get(self.__vars[key], default)
-

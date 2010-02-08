@@ -8,27 +8,34 @@ class ScriptTool(Tool):
   """Builder that provides utilities for performing Script operations.
   """
   
-  def include(self, path=None, scripts=None):
+  def include(self, scripts):
     """Include another script within the context of the currently
     executing script.
     
     A given script will only be included once.
     
-    @param path: The path of the script to include.
-    @type path: string
+    @param scripts: A path or sequence of paths of scripts to include.
+    @type path: string or sequence of string
     """
-    script = Script.getCurrent()
-    if path:
-      return script.include(path)
-    elif scripts:
-      return [script.include(p) for p in scripts]
+    include = Script.getCurrent().include
+    if isinstance(scripts, basestring):
+      include(scripts)
+    else:
+      for path in scripts:
+        include(path)
     
-  def execute(self, path):
+  def execute(self, scripts):
     """Execute another script as a background task.
 
-    @return: A task that can be used to determine when all tasks created
-    by the script have finished executing.
-    @rtype: L{Task}  
+    @param scripts: A path or sequence of paths of scripts to execute.
+    @type scripts: string or sequence of string
+
+    @return: A task or sequence of tasks that can be used to determine
+      when all tasks created by the script have finished executing.
+    @rtype: L{Task} or C{list} of L{Task}
     """
-    script = Script.getCurrent()
-    return script.engine.execute(path)
+    execute = Script.getCurrent().engine.execute
+    if isinstance(scripts, basestring):
+      return execute(scripts)
+    else:
+      return [execute(path) for path in scripts]

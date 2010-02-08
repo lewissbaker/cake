@@ -265,6 +265,7 @@ class MsvcCompiler(Compiler):
       args.append("/Gm") # Enable minimal rebuild
     
     args.append("/c")
+    args.append("/u")
     return args
     
   @memoise

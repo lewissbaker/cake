@@ -66,6 +66,8 @@ class Compiler(Tool):
   
   objectCachePath = None
   
+  language = None
+  
   def __init__(self):
     super(Compiler, self).__init__()
     self.includePaths = []

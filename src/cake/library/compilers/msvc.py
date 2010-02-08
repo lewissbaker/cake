@@ -294,18 +294,21 @@ class MsvcCompiler(Compiler):
     
   def getObjectCommands(self, target, source, engine):
     
-    if source.lower().endswith('.c'):
-      language = 'C'
-    else:
-      language = 'C++'
-    
+    language = self.language
+    if language is None:
+      # Try to auto-detect
+      if source.lower().endswith('.c'):
+        language = 'c'
+      else:
+        language = 'c++'
+
     preprocessTarget = target + '.i'
 
     processEnv = dict(self._getProcessEnv())    
     compileArgs = list(self._getCompileCommonArgs(language))
     preprocessArgs = list(self._getPreprocessorCommonArgs(language))
     
-    if language == 'C':
+    if language == 'c':
       preprocessArgs.append('/Tc' + source)
       compileArgs.append('/Tc' + preprocessTarget)
     else:

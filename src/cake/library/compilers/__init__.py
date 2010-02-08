@@ -117,6 +117,36 @@ class Compiler(Tool):
     by the preprocessor.
     """
     self.includePaths.append(path)
+    self._clearCache()
+    
+  def addDefine(self, define, value=None):
+    """Add a define to the preprocessor command-line.
+    """
+    if value is None:
+      self.defines.append(define)
+    else:
+      self.defines.append("{0}={1}".format(define, value))
+    self._clearCache()
+    
+  def addForceInclude(self, path):
+    """Add a file to be forcibly included on the command-line.
+    """
+    self.forceIncludes.append(path)
+    self._clearCache()
+    
+  def addLibrary(self, name):
+    """Add a library to the list of libraries to link with.
+    
+    @param name: Name/path of the library to link with.
+    """
+    self.libraries.append(name)
+    self._clearCache()
+
+  def addLibraryPath(self, path):
+    """Add a path to the library search path.
+    """
+    self.libraryPaths.append(path)
+    self._clearCache()
     
   def addLibraryScript(self, path):
     """Add a script to be executed before performing a link.
@@ -128,39 +158,7 @@ class Compiler(Tool):
     @type path: string
     """
     self.libraryScripts.append(path)
-    
-  def addDefine(self, define, value=None):
-    """Add a define to the preprocessor command-line.
-    """
-    if value is None:
-      self.defines.append(define)
-    else:
-      self.defines.append("{0}={1}".format(define, value))
-    
-  def addLibrary(self, name, script=None):
-    """Add a library to the list of libraries to link with.
-    
-    @param name: Name/path of the library to link with.
-    @param script: If specified, path of the cake script that
-    builds the specified library.
-    """
-    self.libraries.append(name)
-    if script is not None:
-      self.addLibraryScript(script)
-
-  def addLibraryScript(self, path):
-    """Add a library script to be built before linking.
-    
-    @param path: Path of the cake script that builds the specified
-    library.
-    @type path: string
-    """
-    self.libraryScripts.append(path)
-
-  def addLibraryPath(self, path):
-    """Add a path to the library search path.
-    """
-    self.libraryPaths.append(path)
+    self._clearCache()
     
   def object(self, target, source, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.

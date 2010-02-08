@@ -233,7 +233,7 @@ class MsvcCompiler(Compiler):
     args = list(self._getCommonArgs(language))
    
     args.extend("/D" + define for define in self.defines)
-    args.extend("/I" + path for path in self.includePaths)
+    args.extend("/I" + path for path in reversed(self.includePaths))
     args.extend("/FI" + path for path in self.forceIncludes)
 
     args.append("/E")

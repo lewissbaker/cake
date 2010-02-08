@@ -289,6 +289,11 @@ class Compiler(Tool):
     
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.moduleSuffix)
+      if compiler.importLibrary:
+        compiler.importLibrary = cake.path.forceExtension(
+          compiler.importLibrary,
+          compiler.librarySuffix,
+          )
     
     moduleTask = engine.createTask(
       lambda t=target, s=paths, e=engine, c=compiler:

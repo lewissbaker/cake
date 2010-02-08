@@ -204,7 +204,7 @@ class MsvcCompiler(Compiler):
     if self.useStringPooling:
       args.append('/GF') # Eliminate duplicate strings
  
-    if language == 'C++':
+    if language == 'c++':
       if self.enableRtti:
         args.append('/GR') # Enable RTTI
       else:
@@ -487,7 +487,8 @@ class MsvcCompiler(Compiler):
 
       engine.logger.outputInfo("run: %s\n" % " ".join(args))
       
-      argsFile = target + '.args' 
+      argsFile = target + '.args'
+      cake.filesys.makeDirs(cake.path.dirName(argsFile))
       with open(argsFile, 'wt') as f:
         for arg in args[2:]:
           f.write(arg + '\n')
@@ -646,10 +647,13 @@ class MsvcCompiler(Compiler):
       engine.logger.outputInfo("run: %s\n" % " ".join(args))
       
       argFile = target + '.args'
-      
+      cake.filesys.makeDirs(cake.path.dirName(argFile))
       with open(argFile, 'wt') as f:
         for arg in args[1:]:
           f.write(_escapeArg(arg) + '\n')
+
+      if self.importLibrary:
+        cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
       
       try:
         p = subprocess.Popen(

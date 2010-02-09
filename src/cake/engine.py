@@ -163,12 +163,15 @@ class Engine(object):
     """
     if variant is None:
       variant = self._defaultVariant
-    
-    key = (path, variant)
+
+    path = os.path.normpath(path)
+
+    key = (os.path.normcase(path), variant)
     
     with self._executedLock:
       if key in self._executed:
         script = self._executed[key]
+        task = script.task
       else:
         def execute():
           cake.tools.__dict__.clear()

@@ -444,9 +444,16 @@ class Compiler(Tool):
         
         cacheEntryPath = getCacheEntryPath(newDigest)
         if cake.filesys.isFile(cacheEntryPath):
+          engine.logger.outputInfo("from cache: %s\n" % target)
           cake.filesys.copyFile(cacheEntryPath, target)
           engine.storeDependencyInfo(newDependencyInfo)
           return
+      else:
+        newDependencyInfo = DependencyInfo(
+          targets=[FileInfo(path=target)],
+          args=args,
+          dependencies=None,
+          )
 
       # Need to preprocess and scan the source file to get the new
       # list of dependencies.
@@ -467,6 +474,7 @@ class Compiler(Tool):
       # list has a cache entry.
       cacheEntryPath = getCacheEntryPath(newDigest)
       if cake.filesys.isFile(cacheEntryPath):
+        engine.logger.outputInfo("from cache: %s\n" % target)
         cake.filesys.copyFile(cacheEntryPath, target)
         engine.storeDependencyInfo(newDependencyInfo)
         return

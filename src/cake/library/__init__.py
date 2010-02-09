@@ -68,8 +68,13 @@ class Tool(object):
   
   def __setattr__(self, name, value):
     if name != '_Tool__memoise' and hasattr(self, '_Tool__memoise'):
-      self.__memoise.clear()
+      self._clearCache()
     super(Tool, self).__setattr__(name, value)
+  
+  def _clearCache(self):
+    """Clear the memoise cache due to some change.
+    """
+    self.__memoise.clear()
   
   def clone(self):
     """Return an independent clone of this tool.

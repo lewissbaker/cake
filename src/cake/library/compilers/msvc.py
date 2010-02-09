@@ -204,7 +204,7 @@ class MsvcCompiler(Compiler):
     if self.useStringPooling:
       args.append('/GF') # Eliminate duplicate strings
  
-    if language == 'C++':
+    if language == 'c++':
       if self.enableRtti:
         args.append('/GR') # Enable RTTI
       else:
@@ -233,7 +233,7 @@ class MsvcCompiler(Compiler):
     args = list(self._getCommonArgs(language))
    
     args.extend("/D" + define for define in self.defines)
-    args.extend("/I" + path for path in self.includePaths)
+    args.extend("/I" + path for path in reversed(self.includePaths))
     args.extend("/FI" + path for path in self.forceIncludes)
 
     args.append("/E")
@@ -265,6 +265,7 @@ class MsvcCompiler(Compiler):
       args.append("/Gm") # Enable minimal rebuild
     
     args.append("/c")
+    args.append("/u")
     return args
     
   @memoise
@@ -294,18 +295,21 @@ class MsvcCompiler(Compiler):
     
   def getObjectCommands(self, target, source, engine):
     
-    if source.lower().endswith('.c'):
-      language = 'C'
-    else:
-      language = 'C++'
-    
+    language = self.language
+    if language is None:
+      # Try to auto-detect
+      if source.lower().endswith('.c'):
+        language = 'c'
+      else:
+        language = 'c++'
+
     preprocessTarget = target + '.i'
 
     processEnv = dict(self._getProcessEnv())    
     compileArgs = list(self._getCompileCommonArgs(language))
     preprocessArgs = list(self._getPreprocessorCommonArgs(language))
     
-    if language == 'C':
+    if language == 'c':
       preprocessArgs.append('/Tc' + source)
       compileArgs.append('/Tc' + preprocessTarget)
     else:
@@ -483,7 +487,8 @@ class MsvcCompiler(Compiler):
 
       engine.logger.outputInfo("run: %s\n" % " ".join(args))
       
-      argsFile = target + '.args' 
+      argsFile = target + '.args'
+      cake.filesys.makeDirs(cake.path.dirName(argsFile))
       with open(argsFile, 'wt') as f:
         for arg in args[2:]:
           f.write(arg + '\n')
@@ -642,10 +647,13 @@ class MsvcCompiler(Compiler):
       engine.logger.outputInfo("run: %s\n" % " ".join(args))
       
       argFile = target + '.args'
-      
+      cake.filesys.makeDirs(cake.path.dirName(argFile))
       with open(argFile, 'wt') as f:
         for arg in args[1:]:
           f.write(_escapeArg(arg) + '\n')
+
+      if self.importLibrary:
+        cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
       
       try:
         p = subprocess.Popen(

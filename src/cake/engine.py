@@ -163,17 +163,15 @@ class Engine(object):
     """
     if variant is None:
       variant = self._defaultVariant
-    
-    # Only standardise slashes, everything else is up to the user as eg.
-    # a case sensitive OS may allow two scripts with the same names but
-    # different casing.
+
     path = os.path.normpath(path)
-    
-    key = (path, variant)
+
+    key = (os.path.normcase(path), variant)
     
     with self._executedLock:
       if key in self._executed:
         script = self._executed[key]
+        task = script.task
       else:
         def execute():
           cake.tools.__dict__.clear()

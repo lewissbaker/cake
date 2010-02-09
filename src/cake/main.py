@@ -100,7 +100,15 @@ def run(args=None, cwd=None):
       return -1
   elif not os.path.isabs(options.boot):
     options.boot = os.path.join(cwd, options.boot)
-  
+
+  # Make the boot file path the cwd as we'll be making the args
+  # relative to it later  
+  # Ideally this would go in the boot.cake but then it would also
+  # need the ability to modify the scripts path to be relative to this
+  bootDir = os.path.dirname(options.boot)
+  bootDir = cake.path.fileSystemPath(bootDir) 
+  os.chdir(bootDir)
+
   engine = cake.engine.Engine()
   bootCode = engine.getByteCode(options.boot)
   exec bootCode in {"engine" : engine, "__file__" : options.boot}
@@ -112,6 +120,14 @@ def run(args=None, cwd=None):
     if cake.filesys.isDir(arg):
       arg = cake.path.join(arg, 'build.cake')
 
+    # Find the common parts of the boot dir and arg and strip them off
+    arg = cake.path.fileSystemPath(arg) 
+    index = len(os.path.commonprefix([arg, bootDir]))
+    # If stripping a directory, make sure to strip off the separator too 
+    if index and (arg[index] == os.path.sep or arg[index] == os.path.altsep):
+      index += 1
+    arg = arg[index:]
+    
     task = engine.execute(arg)
     tasks.append(task)
 

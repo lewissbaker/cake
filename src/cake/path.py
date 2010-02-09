@@ -2,6 +2,7 @@
 """
 
 import os.path
+import win32file
 
 def dirName(path):
   """Get the directory part of the path.
@@ -130,6 +131,46 @@ def baseNameWithoutExtension(path):
     return path[end:extStart]
   else:
     return path[end:]
+
+def fileSystemPath(path):
+  """Look up the correctly cased, normalised path from the file system.
+
+  @param path: The path to look up.
+  @type path: string
+  
+  @return: The correctly cased, normalised file system path.
+  @rtype: string
+  """
+  def fileSystemName(path):
+    try:
+      findData = win32file.FindFilesIterator(path).next()
+      return str(findData[8])
+    except Exception:
+      # Find may fail if eg. checking the drive, but this should still
+      # be a valid path
+      if os.path.exists(path):
+        return os.path.basename(path)
+      raise EnvironmentError(
+        "Failed to find file or directory '%s'." % path
+        )      
+    
+  parts = list()
+  while path:
+    name = fileSystemName(path)
+    path, tail = os.path.split(path)
+
+    # Keep '.' and '..' as is
+    if tail == '.' or tail == '..':
+      parts.insert(0, tail)
+    else:
+      parts.insert(0, name)
+    
+    if not tail:
+      break # Must have hit the drive
+    
+  if path:
+    parts.insert(0, path)
+  return os.path.join(*parts)
 
 def join(*args):
   """Find the cross product of any amount of input paths or lists of paths.

@@ -10,8 +10,7 @@ base = Variant()
 base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
 env = base.tools["env"] = Environment()
-env["ROOT"] = cake.path.dirName(__file__)
-env["BUILD"] = "${ROOT}/build/${PLATFORM}_${COMPILER}_${RELEASE}"
+env["BUILD"] = "build/${PLATFORM}_${COMPILER}_${RELEASE}"
 
 windows = base.clone()
 compiler = windows.tools["compiler"] = findMsvcCompiler() 

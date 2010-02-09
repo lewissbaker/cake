@@ -286,6 +286,9 @@ class Compiler(Tool):
     engine = Script.getCurrent().engine
 
     paths, tasks = getPathsAndTasks(sources)
+
+    for script in compiler.libraryScripts:
+      tasks.append(engine.execute(script))
     
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.moduleSuffix)

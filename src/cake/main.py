@@ -7,6 +7,7 @@ import sys
 import optparse
 import threading
 import datetime
+import time
 
 import cake.engine
 import cake.task
@@ -167,7 +168,9 @@ def run(args=None, cwd=None):
     threadPool.run()
     cake.task._threadPool = oldThreadPool
   else:
-    finished.wait()
+    # We must wait in a loop in case a KeyboardInterrupt comes.
+    while not finished.isSet():
+      time.sleep(0.1)
   
   endTime = datetime.datetime.utcnow()
 

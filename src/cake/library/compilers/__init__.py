@@ -423,6 +423,8 @@ class Compiler(Tool):
       level=1,
       )
 
+    engine.logger.outputInfo("Compiling %s\n" % source)
+      
     if canBeCached and self.objectCachePath is not None:
       #
       # Building the object using the object cache
@@ -478,7 +480,7 @@ class Compiler(Tool):
         cake.filesys.copyFile(cacheEntryPath, target)
         engine.storeDependencyInfo(newDependencyInfo)
         return
-      
+
       # Finally, we need to do the compilation
       compile()
       
@@ -565,6 +567,8 @@ class Compiler(Tool):
       level=1,
       )
 
+    engine.logger.outputInfo("Archiving %s\n" % target)
+    
     cake.filesys.makeDirs(cake.path.dirName(target))
     
     archive()
@@ -612,6 +616,8 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       level=1,
       )
+
+    engine.logger.outputInfo("Linking %s\n" % target)
   
     link()
   
@@ -673,6 +679,8 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       level=1,
       )
+
+    engine.logger.outputInfo("Linking %s\n" % target)
   
     link()
   

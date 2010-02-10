@@ -1,8 +1,8 @@
 """Script Tool.
 """
 
-from cake.engine import Script
-from cake.library import Tool
+from cake.engine import Script, DependencyInfo, FileInfo
+from cake.library import Tool, FileTarget, getPathsAndTasks
 
 class ScriptTool(Tool):
   """Builder that provides utilities for performing Script operations.
@@ -39,3 +39,53 @@ class ScriptTool(Tool):
       return execute(scripts)
     else:
       return [execute(path) for path in scripts]
+
+  def run(self, func, args=None, targets=None, sources=[]):
+    """Execute the specified python function as a task.
+
+    Only executes the function after the sources have been built and only
+    if the target exists, args is the same as last run and the sources
+    havent changed.
+
+    @note: I couldn't think of a better class to put this function in so
+    for now it's here although it doesn't really belong.
+    """
+    script = Script.getCurrent()
+    engine = script.engine
+
+    sourcePaths, sourceTasks = getPathsAndTasks(sources)
+
+    def _run():
+
+      if targets:
+        buildArgs = (args, sourcePaths)
+        try:
+          oldDependencyInfo = engine.getDependencyInfo(targets[0])
+          if oldDependencyInfo.isUpToDate(engine, buildArgs):
+            return
+        except EnvironmentError:
+          pass
+
+      func()
+
+      if targets:
+        newDependencyInfo = DependencyInfo(
+          targets=[FileInfo(path=t) for t in targets],
+          args=buildArgs,
+          dependencies=[
+            FileInfo(
+              path=s,
+              timestamp=engine.getTimestamp(s),
+              )
+            for s in sourcePaths
+            ],
+          )
+        engine.storeDependencyInfo(newDependencyInfo)
+
+    task = engine.createTask(_run)
+    task.startAfter(sourceTasks)
+
+    if targets is not None:
+      return [FileTarget(path=t, task=task) for t in targets]
+    else:
+      return task

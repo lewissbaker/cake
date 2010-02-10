@@ -122,7 +122,7 @@ def run(args=None, cwd=None):
 
     # Find the common parts of the boot dir and arg and strip them off
     arg = cake.path.fileSystemPath(arg) 
-    index = len(os.path.commonprefix([arg, bootDir]))
+    index = len(cake.path.commonPath(arg, bootDir))
     # If stripping a directory, make sure to strip off the separator too 
     if index and (arg[index] == os.path.sep or arg[index] == os.path.altsep):
       index += 1

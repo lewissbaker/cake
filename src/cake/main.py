@@ -172,4 +172,7 @@ def run(args=None, cwd=None):
   return engine.logger.errorCount
 
 if __name__ == '__main__':
-  sys.exit(run())
+  try:
+    sys.exit(run())
+  except KeyboardInterrupt:
+    sys.exit(-1)

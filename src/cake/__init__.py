@@ -42,7 +42,8 @@ def _overrideOpen():
     elif mode.startswith("a"):
       flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
     else:
-      raise ValueError("mode must start with 'r', 'w' or 'a'")
+      flags = os.O_RDONLY
+      mode = 'r' + mode
     
     for ch in mode[1:]:
       if ch == "+":

@@ -90,9 +90,9 @@ class ThreadPool(object):
     """
     # Submit the exit job directly to the back of the queue
     for _ in xrange(len(self._workers)):
-      self._jobQueue.putBack(self._EXIT_JOB)
+      self._jobQueue.putFront(self._EXIT_JOB)
 
-    # Wait for the threads to finish      
+    # Wait for the threads to finish
     for thread in self._workers:
       thread.join()
 

@@ -7,6 +7,7 @@ import sys
 import optparse
 import threading
 import datetime
+import time
 
 import cake.engine
 import cake.task
@@ -74,6 +75,13 @@ def run(args=None, cwd=None):
     help="Path to output profiling information to.",
     default=None,
     )
+  parser.add_option(
+    "-d", "--debug",
+    type="int",
+    dest="debugLevel",
+    help="Set debug message level in the range [0=Default, 2].",
+    default=0,
+    )
   
   options, args = parser.parse_args(args)
   
@@ -109,7 +117,8 @@ def run(args=None, cwd=None):
   bootDir = cake.path.fileSystemPath(bootDir) 
   os.chdir(bootDir)
 
-  engine = cake.engine.Engine()
+  logger = cake.logging.Logger(debugLevel=options.debugLevel)
+  engine = cake.engine.Engine(logger)
   bootCode = engine.getByteCode(options.boot)
   exec bootCode in {"engine" : engine, "__file__" : options.boot}
 
@@ -122,7 +131,7 @@ def run(args=None, cwd=None):
 
     # Find the common parts of the boot dir and arg and strip them off
     arg = cake.path.fileSystemPath(arg) 
-    index = len(os.path.commonprefix([arg, bootDir]))
+    index = len(cake.path.commonPath(arg, bootDir))
     # If stripping a directory, make sure to strip off the separator too 
     if index and (arg[index] == os.path.sep or arg[index] == os.path.altsep):
       index += 1
@@ -159,7 +168,9 @@ def run(args=None, cwd=None):
     threadPool.run()
     cake.task._threadPool = oldThreadPool
   else:
-    finished.wait()
+    # We must wait in a loop in case a KeyboardInterrupt comes.
+    while not finished.isSet():
+      time.sleep(0.1)
   
   endTime = datetime.datetime.utcnow()
 
@@ -172,4 +183,7 @@ def run(args=None, cwd=None):
   return engine.logger.errorCount
 
 if __name__ == '__main__':
-  sys.exit(run())
+  try:
+    sys.exit(run())
+  except KeyboardInterrupt:
+    sys.exit(-1)

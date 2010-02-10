@@ -63,7 +63,7 @@ class Engine(object):
   """Main object that holds all of the singleton resources for a build.
   """
   
-  def __init__(self):
+  def __init__(self, logger):
     """Default Constructor.
     """
     self._variants = set()
@@ -74,7 +74,7 @@ class Engine(object):
     self._dependencyInfoCache = {}
     self._executed = {}
     self._executedLock = threading.Lock()
-    self.logger = cake.logging.Logger()
+    self.logger = logger
       
   def addVariant(self, variant, default=False):
     """Register a new variant with this engine.
@@ -188,7 +188,7 @@ class Engine(object):
           )
         self._executed[key] = script
         task.addCallback(
-          lambda: self.logger.outputInfo("Finished %s\n" % script.path)
+          lambda: self.logger.outputDebug("Finished %s\n" % script.path, level=1)
           )
         task.start()
 
@@ -304,13 +304,49 @@ class Engine(object):
       # Check that the dependency info is valid  
       if not isinstance(dependencyInfo, DependencyInfo):
         raise EnvironmentError("invalid dependency file")
-      elif dependencyInfo.version != DependencyInfo.VERSION:
-        raise EnvironmentError("wrong dependency file version")
 
       self._dependencyInfoCache[targetPath] = dependencyInfo
       
     return dependencyInfo
+
+  def checkDependencyInfo(self, targetPath, args):
+    """Check dependency info to see if the target is up to date.
     
+    The dependency info contains information about the parameters and
+    dependencies of a target at the time it was last built.
+    
+    @param targetPath: The path of the target.
+    @type targetPath: string 
+    @param args: The current arguments.
+    @type args: list of string 
+
+    @return: A tuple containing the previous DependencyInfo or None if not
+    found, and the string reason to build or None if the target is up
+    to date.
+    @rtype: tuple of (L{DependencyInfo} or None, string or None)
+    """
+    try:
+      dependencyInfo = self.getDependencyInfo(targetPath)
+
+      if dependencyInfo.version != DependencyInfo.VERSION:
+        return dependencyInfo, "'" + targetPath + ".dep' version has changed"
+
+      if args != dependencyInfo.args:
+        return dependencyInfo, "'" + " ".join(args) + "' != '" + " ".join(dependencyInfo.args) + "'"
+      
+      for target in dependencyInfo.targets:
+        if not target.exists(self):
+          return dependencyInfo, "'" + target.path + "' doesn't exist"
+      
+      for dependency in dependencyInfo.dependencies:
+        if dependency.hasChanged(self):
+          return dependencyInfo, "'" + dependency.path + "' is newer than '" + target.path + "'"
+        
+    except EnvironmentError:
+      return None, "'" + targetPath + ".dep' doesn't exist"
+    
+    return dependencyInfo, None
+
   def storeDependencyInfo(self, dependencyInfo):
     """Call this method after a target was built to save the
     dependencies of the target.

@@ -181,6 +181,7 @@ class MsvcCompiler(Compiler):
     args = [
       os.path.basename(self.__clExe),
       "/nologo",
+      "/bigobj",
       ]
     
     if self.outputFullPath:

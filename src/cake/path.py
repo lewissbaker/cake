@@ -2,7 +2,7 @@
 """
 
 import os.path
-import win32file
+import platform
 
 def dirName(path):
   """Get the directory part of the path.
@@ -132,17 +132,65 @@ def baseNameWithoutExtension(path):
   else:
     return path[end:]
 
-def fileSystemPath(path):
-  """Look up the correctly cased, normalised path from the file system.
+def commonPath(path1, path2):
+  """
+  Given two paths, find their common root path, if any.
+  
+  @param path1: The first path to scan.
+  @type path1: string
+  @param path2: The second path to scan.
+  @type path2: string
+  @return: The common root path of the two paths.
+  @rtype: string
+  """
+  path1len = len(path1)
+  path2len = len(path2)
+  
+  safeCount = 0
+  charCount = min(path1len, path2len)
+  for i in xrange(charCount):
+    if path1[i] != path2[i]:
+      return path1[:safeCount] # No more matches
+    elif path1[i] == os.path.sep:
+      safeCount = i # Last safe path match
 
+  # All characters matched in at least one string. For the path to be valid,
+  #   the next character in other string must be a slash
+  if path1len > charCount:
+    if path1[charCount] == os.path.sep:
+      safeCount = charCount
+  elif path2len > charCount:
+    if path2[charCount] == os.path.sep:
+      safeCount = charCount
+  return path1[:safeCount]
+
+def fileSystemPath(path):
+  """Look up the correctly cased path from the file system.
+
+  This is only relevant on file systems that are case insensitive such
+  as Windows.
+  
+  This function will convert '/' and '\\' to '\\' on Windows. Ideally
+  it wouldn't but it was the simplest way to write the function.
+  
+  '.' and '..' will be left intact.
+  
+  A drive letter will be capitalized.
+  
   @param path: The path to look up.
   @type path: string
   
-  @return: The correctly cased, normalised file system path.
+  @return: The correctly cased file system path.
   @rtype: string
   """
+  if platform.system() != 'Windows':
+    return path
+  
   def fileSystemName(path):
+    """Return a correctly cased base name given a path.
+    """
     try:
+      import win32file
       findData = win32file.FindFilesIterator(path).next()
       return str(findData[8])
     except Exception:
@@ -169,6 +217,9 @@ def fileSystemPath(path):
       break # Must have hit the drive
     
   if path:
+    # Capitalize drive letter if found
+    if path[1:2] == ':':
+      path = path.capitalize()
     parts.insert(0, path)
   return os.path.join(*parts)
 

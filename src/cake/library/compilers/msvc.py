@@ -328,7 +328,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(preprocessArgs + ['>', _escapeArg(preprocessTarget)])
     def preprocess():
-      engine.logger.outputInfo("run: %s\n" % " ".join(preprocessArgs))
+      engine.logger.outputDebug("run: %s\n" % " ".join(preprocessArgs), level=2)
       
       with tempfile.TemporaryFile() as errFile:
         # Launch the process
@@ -373,7 +373,7 @@ class MsvcCompiler(Compiler):
 
     @makeCommand("msvc-scan")
     def scan():
-      engine.logger.outputInfo("scan: %s\n" % preprocessTarget)
+      engine.logger.outputDebug("scan: %s\n" % preprocessTarget, level=2)
       # TODO: Add dependencies on DLLs used by cl.exe
       dependencies = [self.__clExe]
       uniqueDeps = set()
@@ -386,7 +386,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(compileArgs)
     def compile():
-      engine.logger.outputInfo("run: %s\n" % " ".join(compileArgs))
+      engine.logger.outputDebug("run: %s\n" % " ".join(compileArgs), level=2)
       cake.filesys.makeDirs(cake.path.dirName(target))
       
       with tempfile.TemporaryFile() as errFile:
@@ -485,7 +485,7 @@ class MsvcCompiler(Compiler):
     @makeCommand(args)
     def archive():
 
-      engine.logger.outputInfo("run: %s\n" % " ".join(args))
+      engine.logger.outputDebug("run: %s\n" % " ".join(args), level=2)
       
       argsFile = target + '.args'
       cake.filesys.makeDirs(cake.path.dirName(argsFile))
@@ -644,7 +644,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      engine.logger.outputInfo("run: %s\n" % " ".join(args))
+      engine.logger.outputDebug("run: %s\n" % " ".join(args), level=2)
       
       argFile = target + '.args'
       cake.filesys.makeDirs(cake.path.dirName(argFile))
@@ -692,7 +692,7 @@ class MsvcCompiler(Compiler):
           embeddedRc,
           ]
 
-        engine.logger.outputInfo("run: %s\n" % " ".join(rcArgs))
+        engine.logger.outputDebug("run: %s\n" % " ".join(rcArgs), level=2)
         
         try:
           p = subprocess.Popen(
@@ -741,7 +741,7 @@ class MsvcCompiler(Compiler):
           "/out:" + embeddedManifest,
           ]
 
-        engine.logger.outputInfo("run: %s\n" % " ".join(mtArgs))
+        engine.logger.outputDebug("run: %s\n" % " ".join(mtArgs), level=2)
         
         try:
           p = subprocess.Popen(
@@ -822,7 +822,7 @@ class MsvcCompiler(Compiler):
         "/outputresource:%s;%i" % (target, manifestResourceId),
         ]
       
-      engine.logger.outputInfo("run: %s\n" % " ".join(mtArgs))
+      engine.logger.outputDebug("run: %s\n" % " ".join(mtArgs), level=2)
       
       try:
         p = subprocess.Popen(

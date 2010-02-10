@@ -74,6 +74,13 @@ def run(args=None, cwd=None):
     help="Path to output profiling information to.",
     default=None,
     )
+  parser.add_option(
+    "-d", "--debug",
+    type="int",
+    dest="debugLevel",
+    help="Set debug message level in the range [0=Default, 2].",
+    default=0,
+    )
   
   options, args = parser.parse_args(args)
   
@@ -109,7 +116,8 @@ def run(args=None, cwd=None):
   bootDir = cake.path.fileSystemPath(bootDir) 
   os.chdir(bootDir)
 
-  engine = cake.engine.Engine()
+  logger = cake.logging.Logger(debugLevel=options.debugLevel)
+  engine = cake.engine.Engine(logger)
   bootCode = engine.getByteCode(options.boot)
   exec bootCode in {"engine" : engine, "__file__" : options.boot}
 

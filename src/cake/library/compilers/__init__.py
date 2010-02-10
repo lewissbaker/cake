@@ -414,14 +414,14 @@ class Compiler(Tool):
     
     args = [repr(preprocess), repr(scan), repr(compile)]
     
-    # Check if the object file needs building
-    try:
-      oldDependencyInfo = engine.getDependencyInfo(target)
-      if oldDependencyInfo.isUpToDate(engine, args):
-        # Target is up to date, no work to do
-        return
-    except EnvironmentError:
-      oldDependencyInfo = None
+    # Check if the target needs building
+    oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(target, args)
+    if not reasonToBuild:
+      return # Target is up to date
+    engine.logger.outputDebug(
+      "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
+      level=1,
+      )
 
     if canBeCached and self.objectCachePath is not None:
       #
@@ -548,14 +548,15 @@ class Compiler(Tool):
     
     args = repr(archive)
     
-    if cake.filesys.isFile(target):
-      try:
-        oldDependencyInfo = engine.getDependencyInfo(target)
-        if oldDependencyInfo.isUpToDate(engine, args):
-          return
-      except EnvironmentError:
-        pass
-  
+    # Check if the target needs building
+    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    if not reasonToBuild:
+      return # Target is up to date
+    engine.logger.outputDebug(
+      "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
+      level=1,
+      )
+
     cake.filesys.makeDirs(cake.path.dirName(target))
     
     archive()
@@ -595,13 +596,14 @@ class Compiler(Tool):
 
     args = [repr(link), repr(scan)]
     
-    if cake.filesys.isFile(target):
-      try:
-        oldDependencyInfo = engine.getDependencyInfo(target)
-        if oldDependencyInfo.isUpToDate(engine, args):
-          return
-      except EnvironmentError:
-        pass
+    # Check if the target needs building
+    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    if not reasonToBuild:
+      return # Target is up to date
+    engine.logger.outputDebug(
+      "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
+      level=1,
+      )
   
     link()
   
@@ -655,13 +657,14 @@ class Compiler(Tool):
 
     args = [repr(link), repr(scan)]
     
-    if cake.filesys.isFile(target):
-      try:
-        oldDependencyInfo = engine.getDependencyInfo(target)
-        if oldDependencyInfo.isUpToDate(engine, args):
-          return
-      except EnvironmentError:
-        pass
+    # Check if the target needs building
+    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    if not reasonToBuild:
+      return # Target is up to date
+    engine.logger.outputDebug(
+      "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
+      level=1,
+      )
   
     link()
   

@@ -95,7 +95,7 @@ def run(args=None, cwd=None):
   parser.add_option(
     "-d", "--debug", metavar="KEYWORDS",
     action="extend",
-    dest="debugKeywords",
+    dest="debugComponents",
     help="Set features to debug, eg: 'reason,run,script,scan'.",
     default=[],
     )
@@ -134,7 +134,7 @@ def run(args=None, cwd=None):
   bootDir = cake.path.fileSystemPath(bootDir) 
   os.chdir(bootDir)
 
-  logger = cake.logging.Logger(debugKeywords=options.debugKeywords)
+  logger = cake.logging.Logger(debugComponents=options.debugComponents)
   engine = cake.engine.Engine(logger)
   bootCode = engine.getByteCode(options.boot)
   exec bootCode in {"engine" : engine, "__file__" : options.boot}

@@ -283,12 +283,14 @@ class Compiler(Tool):
       setattr(compiler, k, v)
   
     # And a copy of the current build engine
-    engine = Script.getCurrent().engine
+    
+    script = Script.getCurrent()
+    engine = script.engine
 
     paths, tasks = getPathsAndTasks(sources)
 
-    for script in compiler.libraryScripts:
-      tasks.append(engine.execute(script))
+    for libraryScript in compiler.libraryScripts:
+      tasks.append(engine.execute(libraryScript, script.variant))
     
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.moduleSuffix)
@@ -329,12 +331,13 @@ class Compiler(Tool):
       setattr(compiler, name, value)
   
     # And a copy of the current build engine
-    engine = Script.getCurrent().engine
+    script = Script.getCurrent()
+    engine = script.engine
 
     paths, tasks = getPathsAndTasks(sources)
     
-    for script in compiler.libraryScripts:
-      tasks.append(engine.execute(script))
+    for libraryScript in compiler.libraryScripts:
+      tasks.append(engine.execute(libraryScript, script.variant))
     
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.programSuffix)

@@ -15,7 +15,6 @@ try:
 except ImportError:
   import pickle
 
-import cake.logging
 import cake.bytecode
 import cake.tools
 import cake.task
@@ -38,16 +37,16 @@ class Variant(object):
   @type tools: dict
   """
   
-  def __init__(self, name=None):
+  def __init__(self, **keywords):
     """Construct an empty variant.
-    
-    @param name: The name of the new variant.
-    @type name: string or None
     """
-    self.name = name
+    self.keywords = keywords
     self.tools = {}
   
-  def clone(self, name=None):
+  def __repr__(self):
+    return "Variant(%s)" % ", ".join('%s=%r' % (k, v) for k, v in self.keywords.iteritems())
+  
+  def clone(self, **keywords):
     """Create an independent copy of this variant.
     
     @param name: The name of the new variant.
@@ -55,7 +54,9 @@ class Variant(object):
     
     @return: The new Variant.
     """
-    v = Variant(name=name)
+    newKeywords = self.keywords.copy()
+    newKeywords.update(keywords)
+    v = Variant(**newKeywords)
     v.tools = dict((name, tool.clone()) for name, tool in self.tools.iteritems())
     return v
 
@@ -89,6 +90,56 @@ class Engine(object):
     self._variants.add(variant)
     if default:
       self._defaultVariant = variant
+    
+  def findVariant(self, **keywords):
+    """Find a variant with the specified keywords.
+    
+    If there are multiple such variants then attempts to find one
+    that matches the current variant (either from the currently
+    executing script or the registered default variant).
+    """
+    script = Script.getCurrent()
+    if script is not None:
+      baseVariant = script.variant
+    else:
+      baseVariant = self._defaultVariant 
+    
+    if not keywords:
+      return baseVariant
+    
+    candidates = []
+    for variant in self._variants:
+      variantKeywords = variant.keywords
+      # Check that the variant contains all of the requested keywords
+      for keyword, value in keywords.iteritems():
+        if variantKeywords.get(keyword, None) != value:
+          # No match
+          break
+      else:
+        # Check that the remaining variables of the base variant
+        candidates.append(variant)
+        
+    if len(candidates) > 1 and baseVariant is not None:
+      # Tie break based on keywords that match with base variant
+      revisedCandidates = []
+      baseKeywords = baseVariant.keywords
+      for variant in candidates:
+        for keyword, value in variant.keywords.iteritems():
+          if keyword not in keywords:
+            if baseKeywords.get(keyword, None) != value:
+              break
+        else:
+          revisedCandidates.append(variant)
+          
+      if revisedCandidates:
+        candidates = revisedCandidates
+
+    if not candidates:
+      raise LookupError("Could not find matching variant")
+    elif len(candidates) > 1:
+      raise LookupError("Found %i matching variants" % len(candidates))
+
+    return candidates[0]
     
   def createTask(self, func):
     """Construct a new task that will call the specified function.
@@ -148,7 +199,7 @@ class Engine(object):
     self.logger.outputError(message)
     raise BuildError(message)
     
-  def execute(self, path, variant=None):
+  def execute(self, path, variant):
     """Execute the script with the specified variant.
     
     @param path: Path of the Cake script file to execute.
@@ -161,8 +212,6 @@ class Engine(object):
     tasks it starts finish executing.
     @rtype: L{cake.task.Task}
     """
-    if variant is None:
-      variant = self._defaultVariant
 
     path = os.path.normpath(path)
 

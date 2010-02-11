@@ -12,14 +12,14 @@ base.tools["filesys"] = FileSystemTool()
 env = base.tools["env"] = Environment()
 env["BUILD"] = "build/${PLATFORM}_${COMPILER}_${RELEASE}"
 
-windows = base.clone()
+windows = base.clone(type="code", platform="windows")
 compiler = windows.tools["compiler"] = findMsvcCompiler() 
 
 env = windows.tools["env"]
 env["PLATFORM"] = "windows"
 env["COMPILER"] = "msvc"
 
-windowsDebug = windows.clone(name="win32-debug")
+windowsDebug = windows.clone(release="debug")
 compiler = windowsDebug.tools["compiler"]
 compiler.debugSymbols = True
 compiler.optimisation = compiler.NO_OPTIMISATION
@@ -27,10 +27,17 @@ env = windowsDebug.tools["env"]
 env["RELEASE"] = "debug"
 engine.addVariant(windowsDebug, default=True)
 
-windowsOptimised = windows.clone(name="win32-opt")
+windowsOptimised = windows.clone(release="optimised")
 compiler = windowsOptimised.tools["compiler"]
 compiler.debugSymbols = True
 compiler.optimisation = compiler.PARTIAL_OPTIMISATION
 env = windowsOptimised.tools["env"]
 env["RELEASE"] = "optimised"
 engine.addVariant(windowsOptimised)
+
+art = base.clone(type="art", platform="windows")
+
+artDisc = art.clone(mode="disc")
+engine.addVariant(artDisc)
+artDev = art.clone(mode="dev")
+engine.addVariant(artDev)

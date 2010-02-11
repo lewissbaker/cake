@@ -24,7 +24,7 @@ class ScriptTool(Tool):
       for path in scripts:
         include(path)
     
-  def execute(self, scripts):
+  def execute(self, scripts, **keywords):
     """Execute another script as a background task.
 
     @param scripts: A path or sequence of paths of scripts to execute.
@@ -34,9 +34,11 @@ class ScriptTool(Tool):
       when all tasks created by the script have finished executing.
     @rtype: L{Task} or C{list} of L{Task}
     """
-    execute = Script.getCurrent().engine.execute
+    engine = Script.getCurrent().engine
+    variant = engine.findVariant(**keywords)
+    execute = engine.execute
     if isinstance(scripts, basestring):
-      return execute(scripts)
+      return execute(scripts, variant)
     else:
       return [execute(path) for path in scripts]
 

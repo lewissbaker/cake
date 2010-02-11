@@ -8,7 +8,9 @@ import optparse
 import threading
 import datetime
 import time
+import traceback
 
+import cake.logging
 import cake.engine
 import cake.task
 import cake.path
@@ -90,8 +92,21 @@ def run(args=None, cwd=None):
   else:
     cwd = os.getcwd()
 
-  if not args:
-    args = [cwd]
+  keywords = {}
+  scripts = []
+  
+  for arg in args:
+    if '=' in arg:
+      keyword, value = arg.split('=', 1)
+      keywords[keyword] = value
+    else:
+      if cake.filesys.isFile(arg):
+        scripts.append(arg)
+      else:
+        scripts.append(cake.path.join(arg, 'build.cake'))
+
+  if not scripts:
+    scripts = [cake.path.join(cwd, 'build.cake')]
   
   if options.profileOutput:
     import cProfile
@@ -119,26 +134,42 @@ def run(args=None, cwd=None):
 
   logger = cake.logging.Logger(debugLevel=options.debugLevel)
   engine = cake.engine.Engine(logger)
-  bootCode = engine.getByteCode(options.boot)
-  exec bootCode in {"engine" : engine, "__file__" : options.boot}
+  try:
+    bootCode = engine.getByteCode(options.boot)
+    exec bootCode in {"engine" : engine, "__file__" : options.boot}
+  except Exception:
+    msg = traceback.format_exc()
+    engine.logger.outputError(msg)
+    return 1
+
+  try:
+    variant = engine.findVariant(**keywords)
+  except LookupError, e:
+    msg = "Error: unable to determine build variant: %s" % str(e)
+    engine.logger.outputError(msg)
+    return 1
 
   tasks = []
-  for arg in args:
-    if not os.path.isabs(arg):
-      arg = os.path.join(cwd, arg)
+  for script in scripts:
+    if not os.path.isabs(script):
+      script = os.path.join(cwd, script)
     if cake.filesys.isDir(arg):
-      arg = cake.path.join(arg, 'build.cake')
+      script = cake.path.join(script, 'build.cake')
 
     # Find the common parts of the boot dir and arg and strip them off
-    arg = cake.path.fileSystemPath(arg) 
-    index = len(cake.path.commonPath(arg, bootDir))
+    arg = cake.path.fileSystemPath(script)
+    index = len(cake.path.commonPath(script, bootDir))
     # If stripping a directory, make sure to strip off the separator too 
-    if index and (arg[index] == os.path.sep or arg[index] == os.path.altsep):
+    if index and (script[index] == os.path.sep or script[index] == os.path.altsep):
       index += 1
-    arg = arg[index:]
+    script = script[index:]
     
-    task = engine.execute(arg)
-    tasks.append(task)
+    try:
+      task = engine.execute(path=script, variant=variant)
+      tasks.append(task)
+    except Exception:
+      msg = traceback.format_exc()
+      engine.logger.outputError(msg)
 
   finished = threading.Event()
   

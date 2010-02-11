@@ -419,8 +419,8 @@ class Compiler(Tool):
     if not reasonToBuild:
       return # Target is up to date
     engine.logger.outputDebug(
+      "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
-      level=1,
       )
 
     engine.logger.outputInfo("Compiling %s\n" % source)
@@ -563,8 +563,8 @@ class Compiler(Tool):
     if not reasonToBuild:
       return # Target is up to date
     engine.logger.outputDebug(
+      "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
-      level=1,
       )
 
     engine.logger.outputInfo("Archiving %s\n" % target)
@@ -613,8 +613,8 @@ class Compiler(Tool):
     if not reasonToBuild:
       return # Target is up to date
     engine.logger.outputDebug(
+      "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
-      level=1,
       )
 
     engine.logger.outputInfo("Linking %s\n" % target)
@@ -676,8 +676,8 @@ class Compiler(Tool):
     if not reasonToBuild:
       return # Target is up to date
     engine.logger.outputDebug(
+      "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
-      level=1,
       )
 
     engine.logger.outputInfo("Linking %s\n" % target)

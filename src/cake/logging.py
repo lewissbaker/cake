@@ -11,13 +11,13 @@ class Logger(object):
   with other messages output due to the use of a thread lock.
   """
   
-  def __init__(self, debugLevel=False):
+  def __init__(self, debugKeywords=False):
     """Default construction.
     
-    @param debugLevel: The level of debug messages to output.
-    @type debugLevel: int
+    @param debugKeywords: The debug messages to output.
+    @type debugKeywords: list of string
     """
-    self.debugLevel = debugLevel
+    self.debugKeywords = debugKeywords
     self.errorCount = 0
     self.warningCount = 0
     self._lock = threading.Lock()
@@ -54,15 +54,15 @@ class Logger(object):
       sys.stdout.write(message)
       sys.stdout.flush()
       
-  def outputDebug(self, message, level=1):
+  def outputDebug(self, keyword, message):
     """Output a debug message only if at the given debug level.
     
-    @param message: The message to output.
-    @type message: string
+    @param keyword: The debug keyword associated with this message.
+    @type keyword: string
     @param level: The debug level at which this message will be seen.
     @type level: int
     """
-    if level <= self.debugLevel:
+    if keyword in self.debugKeywords:
       with self._lock:
         sys.stdout.write(message)
         sys.stdout.flush()

@@ -60,9 +60,26 @@ def run(args=None, cwd=None):
   
   startTime = datetime.datetime.utcnow()
   
+  class MyOption(optparse.Option):
+    """Subclass the Option class to provide an 'extend' action.
+    """  
+    ACTIONS = optparse.Option.ACTIONS + ("extend",)
+    STORE_ACTIONS = optparse.Option.STORE_ACTIONS + ("extend",)
+    TYPED_ACTIONS = optparse.Option.TYPED_ACTIONS + ("extend",)
+    ALWAYS_TYPED_ACTIONS = optparse.Option.ALWAYS_TYPED_ACTIONS + ("extend",)
+  
+    def take_action(self, action, dest, opt, value, values, parser):
+      if action == "extend":
+        lvalue = value.split(",")
+        values.ensure_value(dest, []).extend(lvalue)
+      else:
+        optparse.Option.take_action(
+          self, action, dest, opt, value, values, parser
+          )
+  
   usage = "usage: %prog [options] <cake-script>*"
   
-  parser = optparse.OptionParser(usage=usage)
+  parser = optparse.OptionParser(usage=usage,option_class=MyOption)
   parser.add_option(
     "-b", "--boot", metavar="FILE",
     dest="boot",
@@ -76,11 +93,11 @@ def run(args=None, cwd=None):
     default=None,
     )
   parser.add_option(
-    "-d", "--debug",
-    type="int",
-    dest="debugLevel",
-    help="Set debug message level in the range [0=Default, 2].",
-    default=0,
+    "-d", "--debug", metavar="KEYWORDS",
+    action="extend",
+    dest="debugKeywords",
+    help="Set features to debug, eg: 'reason,run,script,scan'.",
+    default=[],
     )
   
   options, args = parser.parse_args(args)
@@ -117,7 +134,7 @@ def run(args=None, cwd=None):
   bootDir = cake.path.fileSystemPath(bootDir) 
   os.chdir(bootDir)
 
-  logger = cake.logging.Logger(debugLevel=options.debugLevel)
+  logger = cake.logging.Logger(debugKeywords=options.debugKeywords)
   engine = cake.engine.Engine(logger)
   bootCode = engine.getByteCode(options.boot)
   exec bootCode in {"engine" : engine, "__file__" : options.boot}

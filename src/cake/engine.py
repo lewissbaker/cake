@@ -188,7 +188,10 @@ class Engine(object):
           )
         self._executed[key] = script
         task.addCallback(
-          lambda: self.logger.outputDebug("Finished %s\n" % script.path, level=1)
+          lambda: self.logger.outputDebug(
+            "script",
+            "Finished %s\n" % script.path,
+            )
           )
         task.start()
 

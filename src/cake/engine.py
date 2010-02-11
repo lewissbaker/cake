@@ -561,7 +561,11 @@ class Script(object):
   def execute(self):
     """Execute this script.
     """
-    byteCode = self.engine.getByteCode(self.path)
+    # Use an absolute path so an absolute path is embedded in the .pyc file.
+    # This will make exceptions clickable in Eclipse, but it means copying
+    # your .pyc files may cause their embedded paths to be incorrect.
+    absPath = os.path.abspath(self.path)
+    byteCode = self.engine.getByteCode(absPath)
     old = Script.getCurrent()
     Script._current.value = self
     try:

@@ -12,21 +12,62 @@ base.tools["filesys"] = FileSystemTool()
 env = base.tools["env"] = Environment()
 env["BUILD"] = "build/${PLATFORM}_${COMPILER}_${RELEASE}"
 
+#
+# Dummy
+#
+dummy = base.clone()
+dummy.tools["compiler"] = DummyCompiler()
+
+env = dummy.tools["env"]
+env["PLATFORM"] = "dummy"
+env["COMPILER"] = "msvc"
+
+#
+# Dummy Debug
+#
+dummyDebug = dummy.clone(name="dummy-debug")
+compiler = dummyDebug.tools["compiler"]
+compiler.debugSymbols = True
+compiler.optimisation = compiler.NO_OPTIMISATION
+env = dummyDebug.tools["env"]
+env["RELEASE"] = "debug"
+engine.addVariant(dummyDebug, default=True)
+
+#
+# Dummy Optimised
+#
+dummyOptimised = dummy.clone(name="dummy-opt")
+compiler = dummyOptimised.tools["compiler"]
+compiler.debugSymbols = True
+compiler.optimisation = compiler.PARTIAL_OPTIMISATION
+env = dummyOptimised.tools["env"]
+env["RELEASE"] = "optimised"
+engine.addVariant(dummyOptimised)
+
+#
+# Windows
+#
 windows = base.clone()
-compiler = windows.tools["compiler"] = findMsvcCompiler() 
+windows.tools["compiler"] = findMsvcCompiler() 
 
 env = windows.tools["env"]
 env["PLATFORM"] = "windows"
 env["COMPILER"] = "msvc"
 
+#
+# Window Debug
+#
 windowsDebug = windows.clone(name="win32-debug")
 compiler = windowsDebug.tools["compiler"]
 compiler.debugSymbols = True
 compiler.optimisation = compiler.NO_OPTIMISATION
 env = windowsDebug.tools["env"]
 env["RELEASE"] = "debug"
-engine.addVariant(windowsDebug, default=True)
+engine.addVariant(windowsDebug)
 
+#
+# Windows Optimised
+#
 windowsOptimised = windows.clone(name="win32-opt")
 compiler = windowsOptimised.tools["compiler"]
 compiler.debugSymbols = True

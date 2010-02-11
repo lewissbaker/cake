@@ -109,6 +109,7 @@ class PathTests(unittest.TestCase):
     self.assertEqual(commonPath("ab/c", "ab"), "ab")
     self.assertEqual(commonPath("a/b/c", "a/b/d"), "a/b")
     self.assertEqual(commonPath("a/b/cd", "a/b/c"), "a/b")
+    self.assertEqual(commonPath("a/bc/d", "a/bcd/e"), "a")
     self.assertEqual(commonPath("a/b/c", "a/b/c/d"), "a/b/c")
 
   def testFileSystemPath(self):

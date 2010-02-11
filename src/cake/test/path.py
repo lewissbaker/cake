@@ -3,7 +3,9 @@
 
 import unittest
 import os.path
+import os
 import sys
+import platform
 
 class PathTests(unittest.TestCase):
   
@@ -91,6 +93,55 @@ class PathTests(unittest.TestCase):
     self.assertEqual(extension("foo/baz"), "")
     self.assertEqual(extension("foo.bar/baz"), "")
     self.assertEqual(extension("foo.bar/baz.blah"), ".blah")
+
+  def testCommonPath(self):
+    from cake.path import commonPath
+    self.assertEqual(commonPath("", ""), "")
+    self.assertEqual(commonPath(".", ".."), "")
+    self.assertEqual(commonPath("/.", "/.."), "")
+    self.assertEqual(commonPath("/./", "/./.."), "/.")
+    self.assertEqual(commonPath("/..", "/../"), "/..")
+    self.assertEqual(commonPath("./", "./"), ".")
+    self.assertEqual(commonPath("a", "a"), "a")
+    self.assertEqual(commonPath("a", "ab"), "")
+    self.assertEqual(commonPath("a/b", "a/c"), "a")
+    self.assertEqual(commonPath("ab/c", "a"), "")
+    self.assertEqual(commonPath("ab/c", "ab"), "ab")
+    self.assertEqual(commonPath("a/b/c", "a/b/d"), "a/b")
+    self.assertEqual(commonPath("a/b/cd", "a/b/c"), "a/b")
+    self.assertEqual(commonPath("a/b/c", "a/b/c/d"), "a/b/c")
+
+  def testFileSystemPath(self):
+    # Tests are only valid on case-insensitive platforms
+    if platform.system() != 'Windows':
+      return
+    
+    from cake.path import fileSystemPath
+    self.assertEqual(fileSystemPath(""), "")
+    self.assertEqual(fileSystemPath("."), ".")
+    
+    fileName = "aBcD.tXt"
+    with open(fileName, "wt"):
+      pass
+    self.assertEqual(fileSystemPath("abcd.txt"), fileName)
+    self.assertEqual(fileSystemPath("./abcd.txt"), "./" + fileName)
+    os.remove(fileName)
+    
+    dirName = "WhaT" 
+    os.mkdir(dirName)
+    path = dirName + "/" + fileName
+    with open(path, "wt"):
+      pass
+    self.assertEqual(fileSystemPath("whAT/aBCd.txt"), path)
+    self.assertEqual(fileSystemPath("./whAT/aBCd.txt"), "./" + path)
+    self.assertEqual(fileSystemPath("whAT/.."), dirName + "/..")
+    self.assertEqual(fileSystemPath("whAT/../WHat"), dirName + "/../" + dirName)
+    self.assertEqual(
+      fileSystemPath("./whAT/../WHAT/./aBCd.txt"),
+      "./" + dirName + "/../" + dirName + "/./" + fileName,
+      )
+    os.remove(path)
+    os.rmdir(dirName)
 
 if __name__ == "__main__":
   suite = unittest.TestLoader().loadTestsFromTestCase(PathTests)

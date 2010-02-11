@@ -143,25 +143,28 @@ def commonPath(path1, path2):
   @return: The common root path of the two paths.
   @rtype: string
   """
+  seps = [os.path.sep, os.path.altsep]
   path1len = len(path1)
   path2len = len(path2)
-  
-  safeCount = 0
   charCount = min(path1len, path2len)
+  safeCount = 0
+
   for i in xrange(charCount):
     if path1[i] != path2[i]:
       return path1[:safeCount] # No more matches
-    elif path1[i] == os.path.sep:
+    elif path1[i] in seps:
       safeCount = i # Last safe path match
 
   # All characters matched in at least one string. For the path to be valid,
   #   the next character in other string must be a slash
   if path1len > charCount:
-    if path1[charCount] == os.path.sep:
+    if path1[charCount] in seps:
       safeCount = charCount
   elif path2len > charCount:
-    if path2[charCount] == os.path.sep:
+    if path2[charCount] in seps:
       safeCount = charCount
+  elif path1len == path2len and path1len and path1[-1] not in seps:
+    safeCount = path1len
   return path1[:safeCount]
 
 def fileSystemPath(path):
@@ -170,9 +173,8 @@ def fileSystemPath(path):
   This is only relevant on file systems that are case insensitive such
   as Windows.
   
-  This function will convert '/' and '\\' to '\\' on Windows. Ideally
-  it wouldn't but it was the simplest way to write the function.
-  
+  '/' and '\\' will be left intact.
+
   '.' and '..' will be left intact.
   
   A drive letter will be capitalized.
@@ -186,7 +188,7 @@ def fileSystemPath(path):
   if platform.system() != 'Windows':
     return path
   
-  def fileSystemName(path):
+  def fileSystemBaseName(path):
     """Return a correctly cased base name given a path.
     """
     try:
@@ -201,11 +203,12 @@ def fileSystemPath(path):
       raise EnvironmentError(
         "Failed to find file or directory '%s'." % path
         )      
-    
+  
+  seps = [os.path.sep, os.path.altsep]
   parts = list()
   while path:
-    name = fileSystemName(path)
-    path, tail = os.path.split(path)
+    name = fileSystemBaseName(path)
+    head, tail = os.path.split(path)
 
     # Keep '.' and '..' as is
     if tail == '.' or tail == '..':
@@ -213,15 +216,24 @@ def fileSystemPath(path):
     else:
       parts.insert(0, name)
     
+    # Insert the character we split with
+    if len(head) and len(path) > len(head):
+      splitChar = path[len(head)]
+      if splitChar in seps:
+        parts.insert(0, splitChar)
+
+    path = head
+      
     if not tail:
       break # Must have hit the drive
-    
+      
   if path:
     # Capitalize drive letter if found
     if path[1:2] == ':':
       path = path.capitalize()
     parts.insert(0, path)
-  return os.path.join(*parts)
+  
+  return "".join(parts)
 
 def join(*args):
   """Find the cross product of any amount of input paths or lists of paths.

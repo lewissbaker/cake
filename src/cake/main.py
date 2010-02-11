@@ -100,13 +100,10 @@ def run(args=None, cwd=None):
       keyword, value = arg.split('=', 1)
       keywords[keyword] = value
     else:
-      if cake.filesys.isFile(arg):
-        scripts.append(arg)
-      else:
-        scripts.append(cake.path.join(arg, 'build.cake'))
+      scripts.append(arg)
 
   if not scripts:
-    scripts = [cake.path.join(cwd, 'build.cake')]
+    scripts.append(cwd)
   
   if options.profileOutput:
     import cProfile
@@ -153,11 +150,11 @@ def run(args=None, cwd=None):
   for script in scripts:
     if not os.path.isabs(script):
       script = os.path.join(cwd, script)
-    if cake.filesys.isDir(arg):
+    if cake.filesys.isDir(script):
       script = cake.path.join(script, 'build.cake')
 
     # Find the common parts of the boot dir and arg and strip them off
-    arg = cake.path.fileSystemPath(script)
+    script = cake.path.fileSystemPath(script)
     index = len(cake.path.commonPath(script, bootDir))
     # If stripping a directory, make sure to strip off the separator too 
     if index and (script[index] == os.path.sep or script[index] == os.path.altsep):

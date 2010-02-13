@@ -7,6 +7,8 @@ from cake.library import Tool, FileTarget, getPathAndTask
 from cake.engine import Script
 
 class FileSystemTool(Tool):
+  """Tool that provides file system related utilities. 
+  """
   
   def cwd(self, *args):
     """Return the path prefixed with the current script's directory.

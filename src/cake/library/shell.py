@@ -1,3 +1,7 @@
+"""Shell Tool.
+"""
+
+import os
 import subprocess
 import cake.filesys
 import cake.path

@@ -6,7 +6,9 @@ import cake.path
 from cake.library import Tool
 
 class Environment(Tool):
-  """A dictionary of key/value pairs used for path substitution.
+  """
+  Tool that provides a dictionary of key/value pairs
+  used for path substitution.
   """
   
   def __init__(self):
@@ -111,6 +113,7 @@ class Environment(Tool):
       sources += env.choose("platform",
         windows=["Win32.cpp"],
         ps2=["PS2.cpp"],
+        default=[],
         )
     
     @param key: The environment variable to base the choice on.

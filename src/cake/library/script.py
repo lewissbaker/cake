@@ -5,7 +5,7 @@ from cake.engine import Script, DependencyInfo, FileInfo
 from cake.library import Tool, FileTarget, getPathsAndTasks
 
 class ScriptTool(Tool):
-  """Builder that provides utilities for performing Script operations.
+  """Tool that provides utilities for performing Script operations.
   """
   
   def include(self, scripts):

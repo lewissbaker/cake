@@ -18,7 +18,7 @@ if __name__ == "__main__":
     packages=find_packages('src', exclude=['*.test', '*.test.*']),
     entry_points={
       'console_scripts': [
-        'cake = cake.main:run',
+        'cake = run:run',
         ],
       }
     )

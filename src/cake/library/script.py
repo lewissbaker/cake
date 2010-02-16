@@ -8,6 +8,34 @@ class ScriptTool(Tool):
   """Tool that provides utilities for performing Script operations.
   """
   
+  @property
+  def path(self):
+    """The path of the currently executing script.
+    """
+    script = Script.getCurrent()
+    return script.path if script else None
+  
+  @property
+  def dir(self):
+    """The path of the directory of the currently executing script.
+    """
+    script = Script.getCurrent()
+    return script.dir if script else None
+  
+  @property
+  def engine(self):
+    """The Engine the currently executing script belongs to.
+    """
+    script = Script.getCurrent()
+    return script.engine if script else None
+  
+  @property
+  def variant(self):
+    """The Variant the currently executing script is being built with.
+    """
+    script = Script.getCurrent()
+    return script.variant if script else None
+  
   def include(self, scripts):
     """Include another script within the context of the currently
     executing script.
@@ -34,13 +62,14 @@ class ScriptTool(Tool):
       when all tasks created by the script have finished executing.
     @rtype: L{Task} or C{list} of L{Task}
     """
-    engine = Script.getCurrent().engine
-    variant = engine.findVariant(**keywords)
+    script = Script.getCurrent()
+    engine = script.engine
+    variant = engine.findVariant(keywords, baseVariant=script.variant)
     execute = engine.execute
     if isinstance(scripts, basestring):
       return execute(scripts, variant)
     else:
-      return [execute(path) for path in scripts]
+      return [execute(path, variant) for path in scripts]
 
   def run(self, func, args=None, targets=None, sources=[]):
     """Execute the specified python function as a task.

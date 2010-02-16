@@ -30,9 +30,7 @@ class BuildError(Exception):
 
 class Variant(object):
   """A container for build configuration information.
-  
-  @ivar name: The name of this configuration.
-  @type name: string or None
+
   @ivar tools: The available tools for this variant.
   @type tools: dict
   """
@@ -44,7 +42,30 @@ class Variant(object):
     self.tools = {}
   
   def __repr__(self):
-    return "Variant(%s)" % ", ".join('%s=%r' % (k, v) for k, v in self.keywords.iteritems())
+    keywords = ", ".join('%s=%r' % (k, v) for k, v in self.keywords.iteritems())
+    return "Variant(%s)" % keywords 
+  
+  def matches(*args, **keywords):
+    """Query if this variant matches the specified keywords.
+    """
+    # Don't use self in signature in case the user wants a keyword of
+    # self.
+    self, = args
+    variantKeywords = self.keywords
+    for key, value in keywords.iteritems():
+      variantValue = variantKeywords.get(key, None)
+      if isinstance(value, (list, tuple)):
+        for v in value:
+          if variantValue == v:
+            break
+        else:
+          return False
+      elif value == "all" and variantValue is not None:
+        continue
+      elif variantValue != value:
+        return False
+    else:
+      return True
   
   def clone(self, **keywords):
     """Create an independent copy of this variant.
@@ -67,8 +88,8 @@ class Engine(object):
   def __init__(self, logger):
     """Default Constructor.
     """
-    self._variants = set()
-    self._defaultVariant = None
+    self._variants = {}
+    self.defaultVariants = []
     self._byteCodeCache = {}
     self._timestampCache = {}
     self._digestCache = {}
@@ -87,59 +108,55 @@ class Engine(object):
     build variant.
     @type default: C{bool}
     """
-    self._variants.add(variant)
+    key = frozenset(variant.keywords.iteritems())
+    if key in self._variants:
+      raise KeyError("Already added variant with these keywords: %r" % variant)
+    
+    self._variants[key] = variant
     if default:
-      self._defaultVariant = variant
+      self.defaultVariants.append(variant)
     
-  def findVariant(self, **keywords):
-    """Find a variant with the specified keywords.
-    
-    If there are multiple such variants then attempts to find one
-    that matches the current variant (either from the currently
-    executing script or the registered default variant).
+  def findAllVariants(self, keywords):
+    """Find all variants that match the specified keywords.
     """
-    script = Script.getCurrent()
-    if script is not None:
-      baseVariant = script.variant
+    for variant in self._variants.itervalues():
+      if variant.matches(**keywords):
+        yield variant
+  
+  def findVariant(self, keywords, baseVariant=None):
+    """Find the variant that matches the specified keywords.
+    
+    @param keywords: A dictionary of key/value pairs the variant needs
+    to match. The value can be either a string, "all", a list of
+    strings or None.
+    
+    @param baseVariant: If specified then attempts to find the 
+    
+    @raise LookupError: If no variants matched or more than one variant
+    matched the criteria.
+    """
+    if baseVariant is None:
+      results = [v for v in self.findAllVariants(keywords)]
     else:
-      baseVariant = self._defaultVariant 
-    
-    if not keywords:
-      return baseVariant
-    
-    candidates = []
-    for variant in self._variants:
-      variantKeywords = variant.keywords
-      # Check that the variant contains all of the requested keywords
-      for keyword, value in keywords.iteritems():
-        if variantKeywords.get(keyword, None) != value:
-          # No match
-          break
-      else:
-        # Check that the remaining variables of the base variant
-        candidates.append(variant)
-        
-    if len(candidates) > 1 and baseVariant is not None:
-      # Tie break based on keywords that match with base variant
-      revisedCandidates = []
-      baseKeywords = baseVariant.keywords
-      for variant in candidates:
-        for keyword, value in variant.keywords.iteritems():
-          if keyword not in keywords:
-            if baseKeywords.get(keyword, None) != value:
+      results = []
+      getBaseValue = baseVariant.keywords.get
+      for variant in self.findAllVariants(keywords):
+        for key, value in variant.keywords.iteritems():
+          if key not in keywords:
+            baseValue = getBaseValue(key, None)
+            if value != baseValue:
               break
         else:
-          revisedCandidates.append(variant)
-          
-      if revisedCandidates:
-        candidates = revisedCandidates
+          results.append(variant) 
+    
+    if not results:
+      raise LookupError("No variants matched criteria.")
+    elif len(results) > 1:
+      msg = "Found %i variants that matched criteria.\n"
+      msg += "".join("- %r\n" % v for v in results)
+      raise LookupError(msg)
 
-    if not candidates:
-      raise LookupError("Could not find matching variant")
-    elif len(candidates) > 1:
-      raise LookupError("Found %i matching variants" % len(candidates))
-
-    return candidates[0]
+    return results[0]
     
   def createTask(self, func):
     """Construct a new task that will call the specified function.

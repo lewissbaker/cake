@@ -14,6 +14,8 @@ objects = compiler.objects(
 compiler.program(
   target=env.expand("${BUILD}/simple2/test"),
   sources=objects,
-  embedManifest=True,
-  useIncrementalLinking=True,
+  )
+
+script.execute(
+  "foo.cake",
   )

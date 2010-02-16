@@ -115,6 +115,9 @@ def run(args=None, cwd=None):
   for arg in args:
     if '=' in arg:
       keyword, value = arg.split('=', 1)
+      value = value.split(',')
+      if len(value) == 1:
+        value = value[0]
       keywords[keyword] = value
     else:
       scripts.append(arg)
@@ -156,12 +159,15 @@ def run(args=None, cwd=None):
     engine.logger.outputError(msg)
     return 1
 
-  try:
-    variant = engine.findVariant(**keywords)
-  except LookupError, e:
-    msg = "Error: unable to determine build variant: %s" % str(e)
-    engine.logger.outputError(msg)
-    return 1
+  if keywords:
+    try:
+      variants = engine.findAllVariants(keywords)
+    except LookupError, e:
+      msg = "Error: unable to determine build variant: %s" % str(e)
+      engine.logger.outputError(msg)
+      return 1
+  else:
+    variants = engine.defaultVariants
 
   tasks = []
   for script in scripts:
@@ -177,13 +183,14 @@ def run(args=None, cwd=None):
     if index and (script[index] == os.path.sep or script[index] == os.path.altsep):
       index += 1
     script = script[index:]
-    
-    try:
-      task = engine.execute(path=script, variant=variant)
-      tasks.append(task)
-    except Exception:
-      msg = traceback.format_exc()
-      engine.logger.outputError(msg)
+
+    for variant in variants:
+      try:
+        task = engine.execute(path=script, variant=variant)
+        tasks.append(task)
+      except Exception:
+        msg = traceback.format_exc()
+        engine.logger.outputError(msg)
 
   finished = threading.Event()
   

@@ -83,13 +83,22 @@ def run(args=None, cwd=None):
   
   parser = optparse.OptionParser(usage=usage,option_class=MyOption)
   parser.add_option(
-    "-b", "--boot", metavar="FILE",
+    "-b", "--boot",
+    metavar="FILE",
     dest="boot",
     help="Path to the boot.cake configuration file to use.",
     default=None
     )
   parser.add_option(
-    "-p", "--profile", metavar="FILE",
+    "-f", "--force",
+    action="store_true",
+    dest="forceBuild",
+    help="Force rebuild of every target.",
+    default=False,
+    )
+  parser.add_option(
+    "-p", "--profile",
+    metavar="FILE",
     dest="profileOutput",
     help="Path to output profiling information to.",
     default=None,
@@ -151,6 +160,7 @@ def run(args=None, cwd=None):
 
   logger = cake.logging.Logger(debugComponents=options.debugComponents)
   engine = cake.engine.Engine(logger)
+  engine.forceBuild = options.forceBuild
   try:
     bootCode = engine.getByteCode(options.boot)
     exec bootCode in {"engine" : engine, "__file__" : options.boot}

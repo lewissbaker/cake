@@ -26,22 +26,27 @@ class ShellTool(Tool):
 
       if targets:
         # Check dependencies to see if they've changed
-        buildArgs = (args, sourcePaths)
+        buildArgs = (args, sourcePaths, targets)
         try:
-          if all(cake.filesys.isFile(t) for t in targets):
-            oldDependencyInfo = engine.getDependencyInfo(targets[0])
-            if oldDependencyInfo.isUpToDate(engine, buildArgs):
+          oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(targets[0])
+          if reasonToBuild is None:
               # Target is up to date, no work to do
               return
         except EnvironmentError:
           pass
+        
+        engine.logger.outputDebug(
+          "reason",
+          "Rebuilding '%s' because %s.\n" % (targets[0], reasonToBuild),
+          )
         
       # Create target directories first
       if targets:
         for t in targets:
           cake.filesys.makeDirs(cake.path.dirName(t))
 
-      engine.logger.outputInfo("run: %s\n" % " ".join(args))
+      # Output the command-line we're about to run.
+      engine.logger.outputInfo("%s\n" % " ".join(args))
 
       try:
         p = subprocess.Popen(

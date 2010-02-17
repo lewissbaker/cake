@@ -85,6 +85,8 @@ class Engine(object):
   """Main object that holds all of the singleton resources for a build.
   """
   
+  forceBuild = False
+  
   def __init__(self, logger):
     """Default Constructor.
     """
@@ -397,6 +399,9 @@ class Engine(object):
     try:
       dependencyInfo = self.getDependencyInfo(targetPath)
 
+      if self.forceBuild:
+        return dependencyInfo, "rebuild has been forced"
+
       if dependencyInfo.version != DependencyInfo.VERSION:
         return dependencyInfo, "'" + targetPath + ".dep' version has changed"
 
@@ -409,7 +414,7 @@ class Engine(object):
       
       for dependency in dependencyInfo.dependencies:
         if dependency.hasChanged(self):
-          return dependencyInfo, "'" + dependency.path + "' is newer than '" + target.path + "'"
+          return dependencyInfo, "'" + dependency.path + "' has changed since last build"
         
     except EnvironmentError:
       return None, "'" + targetPath + ".dep' doesn't exist"

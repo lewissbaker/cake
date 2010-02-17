@@ -47,11 +47,21 @@ class FileSystemTool(Tool):
     engine = Script.getCurrent().engine
    
     def doCopy():
-      if cake.filesys.isFile(target) and \
-         engine.getTimestamp(sourcePath) <= engine.getTimestamp(target):
+      
+      if engine.forceBuild:
+        reasonToBuild = "rebuild has been forced"
+      elif not cake.filesys.isFile(target):
+        reasonToBuild = "'%s' does not exist" % target
+      elif engine.getTimestamp(sourcePath) > engine.getTimestamp(target):
+        reasonToBuild = "'%s' is newer than '%s'" % (sourcePath, target)
+      else:
         # up-to-date
         return
 
+      engine.logger.outputDebug(
+        "reason",
+        "Rebuilding '%s' because %s.\n" % (target, reasonToBuild),
+        )
       engine.logger.outputInfo("Copying %s to %s\n" % (sourcePath, target))
       
       try:

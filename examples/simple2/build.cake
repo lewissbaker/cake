@@ -16,6 +16,4 @@ compiler.program(
   sources=objects,
   )
 
-script.execute(
-  "foo.cake",
-  )
+script.execute(filesys.cwd("foo.cake"))

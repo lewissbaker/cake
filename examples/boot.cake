@@ -31,7 +31,7 @@ compiler.debugSymbols = True
 compiler.optimisation = compiler.NO_OPTIMISATION
 env = dummyDebug.tools["env"]
 env["RELEASE"] = "debug"
-engine.addVariant(dummyDebug, default=True)
+engine.addVariant(dummyDebug)
 
 #
 # Dummy Optimised
@@ -48,7 +48,8 @@ engine.addVariant(dummyOptimised)
 # Windows
 #
 windows = base.clone(platform="windows", compiler="msvc")
-windows.tools["compiler"] = findMsvcCompiler() 
+compiler = windows.tools["compiler"] = findMsvcCompiler() 
+compiler.subSystem = 'console'
 
 env = windows.tools["env"]
 env["PLATFORM"] = "windows"
@@ -61,9 +62,10 @@ windowsDebug = windows.clone(release="debug")
 compiler = windowsDebug.tools["compiler"]
 compiler.debugSymbols = True
 compiler.optimisation = compiler.NO_OPTIMISATION
+compiler.runtimeLibraries = 'debug-dll'
 env = windowsDebug.tools["env"]
 env["RELEASE"] = "debug"
-engine.addVariant(windowsDebug)
+engine.addVariant(windowsDebug, default=True)
 
 #
 # Windows Optimised
@@ -72,6 +74,7 @@ windowsOptimised = windows.clone(release="optimised")
 compiler = windowsOptimised.tools["compiler"]
 compiler.debugSymbols = True
 compiler.optimisation = compiler.PARTIAL_OPTIMISATION
+compiler.runtimeLibraries = 'release-dll'
 env = windowsOptimised.tools["env"]
 env["RELEASE"] = "optimised"
 engine.addVariant(windowsOptimised)

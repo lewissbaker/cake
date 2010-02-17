@@ -18,7 +18,18 @@ from cake.library import memoise
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
 
-def findCompiler(version=None, architecture='x86'):
+def getHostArchitecture():
+  """Returns the current machines architecture.
+  """
+  try:
+    return os.environ['PROCESSOR_ARCHITECTURE']
+  except KeyError:
+    raise EnvironmentError("Could not determine host architecture.")
+
+def findCompiler(
+  version=None,
+  architecture=None,
+  ):
   """Returns an MSVC compiler given a version and architecture.
   
   Raises an EnvironmentError if a compiler or matching platform SDK
@@ -26,15 +37,32 @@ def findCompiler(version=None, architecture='x86'):
   
   @param version: The specific version to find. If version is None the
   latest version is found instead. 
-  @param architecture: The machine architecture to compile for.
+  @param architecture: The machine architecture to compile for. If
+  architecture is None then the current architecture is used.
+  
+  @raise ValueError: When an invalid architecture is passed in.
+  @raise EnvironmentError: Then a valid compiler or Windows SDK could
+  not be found.
   """
+  # Determine host architecture
+  hostArchitecture = getHostArchitecture()
+  if architecture is None:
+    architecture = hostArchitecture
+
+  # Validate architecture
+  if architecture not in ['x86', 'x64', 'ia64']:
+    raise ValueError("Unknown architecture '%s'." % architecture)
+
   if version is not None:
     versions = [version]
   else:
     # Prefer later versions over earlier ones
     versions = [
+      '10.0',
       '9.0',
       '8.0',
+      '7.1',
+      '7.0',
       ]
 
   # Prefer Enterprise edition over Express
@@ -48,8 +76,8 @@ def findCompiler(version=None, architecture='x86'):
     for e in editions:
       try:
         registryPath = e + '\\' + v
-        msvcProductDir = getMsvcProductDir(registryPath)
         msvsInstallDir = getMsvsInstallDir(registryPath)
+        msvcProductDir = getMsvcProductDir(registryPath)
       
         # Use the compilers platform SDK if installed
         platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
@@ -68,16 +96,31 @@ def findCompiler(version=None, architecture='x86'):
     raise EnvironmentError(
       "Could not find Microsoft Visual Studio C++ compiler."
       )
-  
-  clExe = cake.path.join(msvcProductDir, "bin", "cl.exe")
-  libExe = cake.path.join(msvcProductDir, "bin", "lib.exe")
-  linkExe = cake.path.join(msvcProductDir, "bin", "link.exe")
-  rcExe = cake.path.join(msvcProductDir, "bin", "rc.exe")
+
+  # Re-map x64 -> amd64 so we can find the bin and lib directories
+  targetArchitecture = {'x64' : 'amd64'}.get(architecture, architecture)
+
+  if targetArchitecture != hostArchitecture:
+    # Determine the bin directory for cross-compilers
+    msvcBinDir = cake.path.join(
+      msvcProductDir,
+      "bin",
+      "%s_%s" % (hostArchitecture, targetArchitecture)
+      )
+  else:
+    msvcBinDir = cake.path.join(msvcProductDir, "bin")
+
+  clExe = cake.path.join(msvcBinDir, "cl.exe")
+  libExe = cake.path.join(msvcBinDir, "lib.exe")
+  linkExe = cake.path.join(msvcBinDir, "link.exe")
+  rcExe = cake.path.join(msvcBinDir, "rc.exe")
+  mtExe = cake.path.join(msvcBinDir, "mt.exe")
+
   if not cake.filesys.isFile(rcExe):
     rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
-  mtExe = cake.path.join(msvcProductDir, "bin", "mt.exe")
   if not cake.filesys.isFile(mtExe):
     mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
+  
   dllPaths = [msvsInstallDir]
     
   compiler = MsvcCompiler(
@@ -91,19 +134,28 @@ def findCompiler(version=None, architecture='x86'):
     )
 
   msvcIncludeDir = cake.path.join(msvcProductDir, "include")
-  msvcLibDir = cake.path.join(msvcProductDir, "lib")
-
   platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
-  if architecture =='x64':
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
-  else:
+
+  if architecture == 'x86':
+    defines = ['WIN32']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib")
     platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
+  elif architecture == 'x64':
+    defines = ['WIN32', 'WIN64']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
+  elif architecture == 'ia64':
+    defines = ['WIN32', 'WIN64']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "IA64")
 
   compiler.addIncludePath(msvcIncludeDir)
   compiler.addLibraryPath(msvcLibDir)
   compiler.addIncludePath(platformSdkIncludeDir)
   compiler.addLibraryPath(platformSdkLibDir)
-  
+  for d in defines:
+    compiler.addDefine(d)
+
   return compiler
 
 def _escapeArg(arg):
@@ -179,7 +231,7 @@ class MsvcCompiler(Compiler):
   @memoise
   def _getCommonArgs(self, language):
     args = [
-      os.path.basename(self.__clExe),
+      self.__clExe,
       "/nologo",
       "/bigobj",
       ]
@@ -467,7 +519,7 @@ class MsvcCompiler(Compiler):
 
   @memoise
   def _getCommonLibraryArgs(self):
-    args = [cake.path.baseName(self.__libExe), '/NOLOGO']
+    args = [self.__libExe, '/NOLOGO']
     
     # XXX: MSDN says /errorReport:queue is supported by lib.exe
     # but it seems to go unrecognised in MSVC8.
@@ -545,7 +597,7 @@ class MsvcCompiler(Compiler):
   @memoise
   def _getLinkCommonArgs(self, dll):
     
-    args = [cake.path.baseName(self.__linkExe), '/NOLOGO']
+    args = [self.__linkExe, '/NOLOGO']
 
     # XXX: MSVC8 linker complains about /errorReport being unrecognised.
     #if self.errorReport:
@@ -703,7 +755,7 @@ class MsvcCompiler(Compiler):
       def compileRcToRes():
         
         rcArgs = [
-          cake.path.baseName(self.__rcExe),
+          self.__rcExe,
           "/fo" + embeddedRes,
           embeddedRc,
           ]
@@ -753,7 +805,7 @@ class MsvcCompiler(Compiler):
         """
         
         mtArgs = [
-          cake.path.baseName(self.__mtExe),
+          self.__mtExe,
           "/nologo",
           "/notify_update",
           "/manifest", intermediateManifest,
@@ -838,7 +890,7 @@ class MsvcCompiler(Compiler):
         return
       
       mtArgs = [
-        cake.path.baseName(self.__mtExe),
+        self.__mtExe,
         "/nologo",
         "/manifest", embeddedManifest,
         "/outputresource:%s;%i" % (target, manifestResourceId),

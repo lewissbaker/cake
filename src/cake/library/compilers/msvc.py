@@ -44,32 +44,41 @@ def findCompiler(
   @raise EnvironmentError: Then a valid compiler or Windows SDK could
   not be found.
   """
-  # Determine host architecture
-  hostArchitecture = getHostArchitecture()
-  if architecture is None:
-    architecture = hostArchitecture
+  # Valid architectures
+  architectures = ['x86', 'x64', 'ia64']
 
-  # Validate architecture
-  if architecture not in ['x86', 'x64', 'ia64']:
-    raise ValueError("Unknown architecture '%s'." % architecture)
+  # Valid versions - prefer later versions over earlier ones
+  versions = [
+    '10.0',
+    '9.0',
+    '8.0',
+    '7.1',
+    '7.0',
+    ]
 
-  if version is not None:
-    versions = [version]
-  else:
-    # Prefer later versions over earlier ones
-    versions = [
-      '10.0',
-      '9.0',
-      '8.0',
-      '7.1',
-      '7.0',
-      ]
-
-  # Prefer Enterprise edition over Express
+  # Valid editions - prefer Enterprise edition over Express
   editions = [
     'VisualStudio',
     'VCExpress',
     ]
+
+  # Determine host architecture
+  hostArchitecture = getHostArchitecture()
+  if hostArchitecture not in architectures:
+    raise ValueError("Unknown host architecture '%s'." % hostArchitecture)
+
+  # Default architecture is hostArchitecture
+  if architecture is None:
+    architecture = hostArchitecture
+  elif architecture not in architectures:
+    raise ValueError("Unknown architecture '%s'." % architecture)
+
+  if version is not None:
+    # Validate version
+    if version not in versions:
+      raise ValueError("Unknown version '%s'." % version)
+    # Only check for this version
+    versions = [version]
 
   for v in versions:
     found = False
@@ -97,19 +106,32 @@ def findCompiler(
       "Could not find Microsoft Visual Studio C++ compiler."
       )
 
-  # Re-map x64 -> amd64 so we can find the bin and lib directories
-  targetArchitecture = {'x64' : 'amd64'}.get(architecture, architecture)
+  def toArchitectureDir(architecture):
+    """Re-map 'x64' to 'amd64' to match MSVC directory names.
+    """
+    return {'x64' : 'amd64'}.get(architecture, architecture)
 
-  if targetArchitecture != hostArchitecture:
+  if architecture == 'x86':
+    # Root bin directory is always used for the x86 compiler
+    msvcBinDir = cake.path.join(msvcProductDir, "bin")
+  elif architecture != hostArchitecture:
     # Determine the bin directory for cross-compilers
     msvcBinDir = cake.path.join(
       msvcProductDir,
       "bin",
-      "%s_%s" % (hostArchitecture, targetArchitecture)
+      "%s_%s" % (
+        toArchitectureDir(hostArchitecture),
+        toArchitectureDir(architecture),
+        ),
       )
   else:
-    msvcBinDir = cake.path.join(msvcProductDir, "bin")
-
+    # Determine the bin directory for 64-bit compilers
+    msvcBinDir = cake.path.join(
+      msvcProductDir,
+      "bin",
+      "%s" % toArchitectureDir(architecture),
+      )
+    
   clExe = cake.path.join(msvcBinDir, "cl.exe")
   libExe = cake.path.join(msvcBinDir, "lib.exe")
   linkExe = cake.path.join(msvcBinDir, "link.exe")

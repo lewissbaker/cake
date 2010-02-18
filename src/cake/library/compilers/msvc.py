@@ -184,26 +184,16 @@ class MsvcCompiler(Compiler):
   programSuffix = '.exe'
   
   outputFullPath = True
-  outputMapFile = False
   memoryLimit = None
-  stackSize = None
-  heapSize = None
   runtimeLibraries = None
-  subSystem = None
   moduleVersion = None
   embedManifest = False
   
-  useFunctionLevelLinking = False
-  useIncrementalLinking = False
   useStringPooling = False
   useMinimalRebuild = False
   useEditAndContinue = False
   
   errorReport = 'queue'
-  
-  pdbFile = None
-  strippedPdbFile = None
-  importLibrary = None
   
   def __init__(
     self,

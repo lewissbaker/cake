@@ -63,10 +63,23 @@ class Compiler(Tool):
   programSuffix = ''
   
   linkObjectsInLibrary = False
+  outputMapFile = False
+  useIncrementalLinking = False
+  useFunctionLevelLinking = False
+  stackSize = None
+  heapSize = None
   
   objectCachePath = None
-  
+
   language = None
+ 
+  # This is defined here so that .cake scripts don't have to
+  # check if the compiler is msvc before setting it. Compilers
+  # that don't use them can just ignore them. 
+  pdbFile = None
+  strippedPdbFile = None
+  subSystem = None
+  importLibrary = None
   
   def __init__(self):
     super(Compiler, self).__init__()

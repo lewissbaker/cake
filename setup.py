@@ -1,5 +1,4 @@
 if __name__ == "__main__":
-  import sys
   import ez_setup
   ez_setup.use_setuptools()
   
@@ -18,7 +17,7 @@ if __name__ == "__main__":
     packages=find_packages('src', exclude=['*.test', '*.test.*']),
     entry_points={
       'console_scripts': [
-        'cake = run:run',
+        'cake = cakemain:run',
         ],
       }
     )

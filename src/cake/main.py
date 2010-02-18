@@ -1,4 +1,4 @@
-"""Main Entrypoint and Running Utilities.
+"""Running Utilities.
 """
 
 import os
@@ -243,9 +243,3 @@ def run(args=None, cwd=None):
   engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
   
   return engine.logger.errorCount
-
-if __name__ == '__main__':
-  try:
-    sys.exit(run())
-  except KeyboardInterrupt:
-    sys.exit(-1)

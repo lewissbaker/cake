@@ -235,6 +235,9 @@ class Engine(object):
     path = os.path.normpath(path)
 
     key = (os.path.normcase(path), variant)
+
+    currentScript = Script.getCurrent()
+    currentVariant = currentScript.variant if currentScript else None
     
     with self._executedLock:
       if key in self._executed:
@@ -245,6 +248,8 @@ class Engine(object):
           cake.tools.__dict__.clear()
           for name, tool in variant.tools.items():
             setattr(cake.tools, name, tool.clone())
+          if variant is not currentVariant:
+            self.logger.outputInfo("Building with %s\n" % str(variant))
           self.logger.outputInfo("Executing %s\n" % script.path)
           script.execute()
         task = self.createTask(execute)

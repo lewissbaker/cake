@@ -10,8 +10,8 @@ def run():
   """
   try:
     import sys
-    import cake.main
-    sys.exit(cake.main.run())
+    import cake.runner
+    sys.exit(cake.runner.run())
   except KeyboardInterrupt:
     import sys
     sys.exit(-1)

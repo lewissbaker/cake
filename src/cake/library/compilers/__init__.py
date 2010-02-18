@@ -392,14 +392,14 @@ class Compiler(Tool):
             break
         else:
           engine.raiseError(
-            "cake: failed to find library '%s' in libraryPaths:\n%s" % (
+            "cake: failed to find library '%s' in libraryPaths:\n%s\n" % (
               library,
               "".join("- %s\n" % path for path in self.libraryPaths),
               ))
       else:
         if not cake.filesys.isFile(library):
           engine.raiseError(
-            "cake: library '%s' does not exist." % library
+            "cake: library '%s' does not exist.\n" % library
             )
         libraryPaths.append(library)
       
@@ -555,7 +555,7 @@ class Compiler(Tool):
     file and a flag indicating whether the compile result can be cached
     respectively.
     """
-    engine.raiseError("Don't know how to compile %s" % source)
+    engine.raiseError("Don't know how to compile %s\n" % source)
   
   def buildLibrary(self, target, sources, engine):
     """Perform the actual build of a library.

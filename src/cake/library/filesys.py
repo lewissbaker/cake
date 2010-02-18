@@ -68,7 +68,7 @@ class FileSystemTool(Tool):
         cake.filesys.makeDirs(cake.path.dirName(target))
         cake.filesys.copyFile(sourcePath, target)
       except EnvironmentError, e:
-        engine.raiseError("%s: %s" % (target, str(e)))
+        engine.raiseError("%s: %s\n" % (target, str(e)))
 
       engine.notifyFileChanged(target)
       

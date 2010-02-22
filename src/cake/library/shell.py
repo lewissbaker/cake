@@ -26,9 +26,12 @@ class ShellTool(Tool):
 
       if targets:
         # Check dependencies to see if they've changed
-        buildArgs = (args, sourcePaths, targets)
+        buildArgs = args + sourcePaths + targets
         try:
-          oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(targets[0])
+          oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(
+            targets[0],
+            buildArgs,
+            )
           if reasonToBuild is None:
               # Target is up to date, no work to do
               return

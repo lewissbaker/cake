@@ -11,14 +11,6 @@ import cake.filesys
 import cake.path
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand
-
-def _escapeArg(arg):
-  if ' ' in arg:
-    if '"' in arg:
-      arg = arg.replace('"', '\\"')
-    return '"%s"' % arg
-  else:
-    return arg
   
 class GccCompiler(Compiler):
 
@@ -43,8 +35,11 @@ class GccCompiler(Compiler):
     self.__architecture = architecture
     
     if architecture == 'x86':
+      self.objectSuffix = '.obj'
+      self.libraryPrefix = ''
+      self.librarySuffix = '.lib'
       self.moduleSuffix = '.dll'
-      self.programSuffix = '.exe' 
+      self.programSuffix = '.exe'
 
 # TODO: Is this needed?
   @property
@@ -70,19 +65,11 @@ class GccCompiler(Compiler):
         ])
     return env
 
-  def _executeProcess(
-    self,
-    args,
-    target,
-    engine,
-    wantStdout=False
-    ):
-# TODO: Why does Lewis use a response file for some things but not others?
+  def _executeProcess(self, args, target, engine):
     engine.logger.outputDebug(
       "run",
       "run: %s\n" % " ".join(args),
       )
-      
     cake.filesys.makeDirs(cake.path.dirName(target))
     
 # TODO: Response file support...but gcc 3.x doesn't support it???     
@@ -100,7 +87,7 @@ class GccCompiler(Compiler):
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,
           stdout=subprocess.PIPE,
-          stderr=errFile,
+          stderr=subprocess.STDOUT,
           )
       except EnvironmentError, e:
         engine.raiseError(
@@ -110,30 +97,22 @@ class GccCompiler(Compiler):
       p.stdin.close()
       output = p.stdout.read()
       exitCode = p.wait()
-  
-      errFile.seek(0)
-      errString = errFile.read()
-  
-    if not wantStdout:
-      errString += output
       
-    if errString:
-      engine.logger.outputWarning(errString + '\n')
+    if output:
+      engine.logger.outputWarning(output + '\n')
         
     if exitCode != 0:
       engine.raiseError("%s: failed with exit code %i\n" % (args[0], exitCode))
-    
-    return output
   
   @memoise
   def _getCommonArgs(self, language):
-    args = [self.__ccExe]
-
     # Almost all compile options can also set preprocessor defines (see
     # http://gcc.gnu.org/onlinedocs/cpp/Common-Predefined-Macros.html),
     # so for safety all compile options are shared across preprocessing
-    # for compiling.
-    # To dump predefined compiler macros: 'echo | gcc -E -dM -'
+    # and compiling.
+    # Note: To dump predefined compiler macros: 'echo | gcc -E -dM -'
+    args = [self.__ccExe]
+
     args.extend(['-x', language])
 
     if self.debugSymbols:
@@ -179,7 +158,8 @@ class GccCompiler(Compiler):
     for p in reversed(self.includePaths):
       args.extend(['-I', p])
 
-    args.extend('-D' + d for d in self.defines)
+# TODO: Should Lewis reverse defines?
+    args.extend('-D' + d for d in reversed(self.defines))
     
 # TODO: Should Lewis reverse this in msvc.py?    
     for p in reversed(self.forceIncludes):
@@ -199,49 +179,39 @@ class GccCompiler(Compiler):
     preprocessTarget = target + '.ii'
 
     preprocessArgs = list(self._getPreprocessArgs(language))
-# TODO: Check speed of writing to disk vs stdout    
-    preprocessArgs += [source]#, '-o', preprocessTarget]
+    preprocessArgs += [source, '-o', preprocessTarget]
     
     compileArgs = list(self._getCompileArgs(language))
     compileArgs += [preprocessTarget, '-o', target]
     
-    preprocessorOutput = []
- 
-# TODO: Why is this command different? 
-    @makeCommand(preprocessArgs + ['>', _escapeArg(preprocessTarget)])
+    @makeCommand(preprocessArgs)
     def preprocess():
-      output = self._executeProcess(
-        preprocessArgs,
-        preprocessTarget,
-        engine,
-        True
-        )
-      with open(preprocessTarget, 'wb') as f:
-        f.write(output)
+      self._executeProcess(preprocessArgs, preprocessTarget, engine)
 
-      preprocessorOutput.append(output)
-
-    @makeCommand("gcc-scan")
+    @makeCommand("obj-scan")
     def scan():
       engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % preprocessTarget,
         )
+      
       # TODO: Add dependencies on DLLs used by cc.exe
       dependencies = [self.__ccExe]
       uniqueDeps = set()
-# TODO: Check speed of line at a time vs whole file      
-      for match in self._lineRegex.finditer(preprocessorOutput[0]):
-        path = match.group('path').replace('\\\\', '\\')
-        if path not in uniqueDeps:
-          uniqueDeps.add(path)
-          if not cake.filesys.isFile(path):
-            engine.logger.outputDebug(
-              "scan",
-              "scan: Ignoring missing include '" + path + "'\n",
-              )
-          else:
-            dependencies.append(path)
+
+      with open(preprocessTarget, 'rb') as f:
+        for match in self._lineRegex.finditer(f.read()):
+          path = match.group('path').replace('\\\\', '\\')
+          if path not in uniqueDeps:
+            uniqueDeps.add(path)
+            if not cake.filesys.isFile(path):
+              engine.logger.outputDebug(
+                "scan",
+                "scan: Ignoring missing include '" + path + "'\n",
+                )
+            else:
+              dependencies.append(path)
+
       return dependencies
 
     @makeCommand(compileArgs)
@@ -253,28 +223,18 @@ class GccCompiler(Compiler):
 
   @memoise
   def _getCommonLibraryArgs(self):
-    args = [self.__arExe]
-    
-    # r - Replace existing/insert new files
-    # P - Use full path names when matching
-    # c - Don't warn if we had to create new file
+    # q - Quick append file to the end of the archive
+    # c - Don't warn if we had to create a new file
     # s - Build an index
-    # u - Update files that are newer
-    # v - Be verbose
-    args.append('-rcPs')
-
-    return args
+    return [self.__arExe, '-qcs']
 
   def getLibraryCommand(self, target, sources, engine):
-
     args = list(self._getCommonLibraryArgs())
     args.append(target)
     args.extend(sources)
     
     @makeCommand(args)
     def archive():
-
-      # Remove the target so the object order and deleted objs update properly
       cake.filesys.remove(target)
       self._executeProcess(args, target, engine)
 
@@ -287,7 +247,6 @@ class GccCompiler(Compiler):
 
   @memoise
   def _getCommonLinkArgs(self, dll):
-    
     args = [self.__ldExe]
 
     if dll:

@@ -2,10 +2,10 @@
 """
 
 import os
+import os.path
 import re
 import subprocess
 import tempfile
-import os.path
 
 import cake.filesys
 import cake.path
@@ -70,16 +70,31 @@ class GccCompiler(Compiler):
         ])
     return env
 
-  def _executeProcess(self, args, engine, wantStdout=False):
+  def _executeProcess(
+    self,
+    args,
+    target,
+    engine,
+    wantStdout=False
+    ):
 # TODO: Why does Lewis use a response file for some things but not others?
     engine.logger.outputDebug(
       "run",
       "run: %s\n" % " ".join(args),
       )
       
+    cake.filesys.makeDirs(cake.path.dirName(target))
+    
+# TODO: Response file support...but gcc 3.x doesn't support it???     
+#    argsFile = target + '.args'
+#    with open(argsFile, 'wt') as f:
+#      for arg in args[1:]:
+#        f.write(arg + '\n')
+      
     with tempfile.TemporaryFile() as errFile:
       try:
         p = subprocess.Popen(
+          #args=[args[0], '@' + argsFile],
           args=args,
           executable=args[0],
           env=self._getProcessEnv(),
@@ -162,7 +177,7 @@ class GccCompiler(Compiler):
     args.append('-E')
     
     for p in reversed(self.includePaths):
-      args.extend(['-I', os.path.normpath(p)])
+      args.extend(['-I', p])
 
     args.extend('-D' + d for d in self.defines)
     
@@ -174,9 +189,6 @@ class GccCompiler(Compiler):
     
   def getObjectCommands(self, target, source, engine):
     
-    source = os.path.normpath(source)
-    target = os.path.normpath(target)
-
     language = self.language
     if not language:
       if source.lower().endswith('.c'):
@@ -198,8 +210,12 @@ class GccCompiler(Compiler):
 # TODO: Why is this command different? 
     @makeCommand(preprocessArgs + ['>', _escapeArg(preprocessTarget)])
     def preprocess():
-      cake.filesys.makeDirs(cake.path.dirName(preprocessTarget))
-      output = self._executeProcess(preprocessArgs, engine, True)
+      output = self._executeProcess(
+        preprocessArgs,
+        preprocessTarget,
+        engine,
+        True
+        )
       with open(preprocessTarget, 'wb') as f:
         f.write(output)
 
@@ -219,13 +235,18 @@ class GccCompiler(Compiler):
         path = match.group('path').replace('\\\\', '\\')
         if path not in uniqueDeps:
           uniqueDeps.add(path)
-          dependencies.append(path)
+          if not cake.filesys.isFile(path):
+            engine.logger.outputDebug(
+              "scan",
+              "scan: Ignoring missing include '" + path + "'\n",
+              )
+          else:
+            dependencies.append(path)
       return dependencies
 
     @makeCommand(compileArgs)
     def compile():
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      self._executeProcess(compileArgs, engine)
+      self._executeProcess(compileArgs, target, engine)
 
     canBeCached = True
     return preprocess, scan, compile, canBeCached    
@@ -246,9 +267,6 @@ class GccCompiler(Compiler):
 
   def getLibraryCommand(self, target, sources, engine):
 
-    target = os.path.normpath(target)
-    sources = [os.path.normpath(s) for s in sources]
-    
     args = list(self._getCommonLibraryArgs())
     args.append(target)
     args.extend(sources)
@@ -258,8 +276,7 @@ class GccCompiler(Compiler):
 
       # Remove the target so the object order and deleted objs update properly
       cake.filesys.remove(target)
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      self._executeProcess(args, engine)
+      self._executeProcess(args, target, engine)
 
     @makeCommand("lib-scan")
     def scan():
@@ -286,25 +303,21 @@ class GccCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     
-    target = os.path.normpath(target)
-    sources = [os.path.normpath(s) for s in sources]
-     
 # TODO: Library paths returns absolute paths to libraries,
 #  so why do we add paths as well???
 # TODO: We should reverse libraries as well as library paths
     libraries = self._resolveLibraries(engine)
-    #sources += ['-l' + cake.path.baseName(l)[3:-2] for l in libraries]
-    sources += [os.path.normpath(p) for p in libraries]
+    sources += libraries    
+    #sources += ['-l' + l for l in libraries]    
     
     args = list(self._getCommonLinkArgs(dll))
-    #args.extend('-L' + os.path.normpath(p) for p in self.libraryPaths)
+    #args.extend('-L' + p for p in self.libraryPaths)
     args.extend(sources)
     args.extend(['-o', target])
     
     @makeCommand(args)
     def link():
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      self._executeProcess(args, engine)      
+      self._executeProcess(args, target, engine)      
     
     @makeCommand("link-scan")
     def scan():

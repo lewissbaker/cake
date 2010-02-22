@@ -98,6 +98,27 @@ def stripExtension(path):
   else:
     return path
 
+def addPrefix(path, prefix):
+  """Prefix the baseName part of a path and return the result.
+
+  @param path: The path to prefix.
+  @type path: string
+  @param prefix: The prefix to prepend to the baseName part.
+  @type prefix: string
+  
+  @return: The path with it's baseName part prefixed with 'prefix'.
+  @rtype: string
+  """
+  if not prefix:
+    return path
+  
+  head, tail = os.path.split(path)
+  tail = prefix + tail
+  if head:
+    return os.path.join(head, tail)
+  else:
+    return tail
+
 def forceExtension(path, ext):
   """Return the path modified if needed to have the specified extension.
   

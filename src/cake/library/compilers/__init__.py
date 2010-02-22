@@ -58,6 +58,7 @@ class Compiler(Tool):
   warningsAsErrors = False
   
   objectSuffix = '.o'
+  libraryPrefix = 'lib'
   librarySuffix = '.a'
   moduleSuffix = '.so'
   programSuffix = ''
@@ -80,6 +81,7 @@ class Compiler(Tool):
   strippedPdbFile = None
   subSystem = None
   importLibrary = None
+  embedManifest = False
   
   def __init__(self):
     super(Compiler, self).__init__()
@@ -269,6 +271,7 @@ class Compiler(Tool):
 
     paths, tasks = getPathsAndTasks(sources)
     
+    target = cake.path.addPrefix(target, compiler.libraryPrefix)
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.librarySuffix)
     
@@ -382,11 +385,22 @@ class Compiler(Tool):
     libraryPaths = []
     for library in self.libraries:
       if not cake.path.dirName(library):
+
+# TODO: This version is for MingW...it needs to be merged with 
+#  the version below somehow
+#        fileNames = [library + '.lib']
+#
+#        if not library.endswith(self.librarySuffix):
+#          fileNames.append(self.libraryPrefix + library + self.librarySuffix)
+#        else:
+#          fileNames.append(self.libraryPrefix + library)
+          
         fileNames = [library]
+        
         if not library.endswith(self.librarySuffix):
           fileNames.append(library + self.librarySuffix)
-          
-        for candidate in cake.path.join(self.libraryPaths, fileNames):
+                  
+        for candidate in cake.path.join(reversed(self.libraryPaths), fileNames):
           if cake.filesys.isFile(candidate):
             libraryPaths.append(candidate)
             break

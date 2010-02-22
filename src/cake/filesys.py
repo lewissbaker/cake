@@ -38,6 +38,22 @@ def isDir(path):
   """
   return os.path.isdir(path)
 
+def remove(path):
+  """Remove a file.
+  
+  Unlike os.remove() this function fails silently if the
+  file does not exist.
+
+  @param path: The path of the file to remove.
+  @type path: string
+  """
+  try:
+    os.remove(path)
+  except EnvironmentError:
+    # Ignore failure if file doesn't exist. Fail if it's a directory.
+    if os.path.exists(path):
+      raise
+  
 def copyFile(source, target):
   """Copy a file from source path to target path.
   

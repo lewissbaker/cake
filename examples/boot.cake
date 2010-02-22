@@ -1,5 +1,6 @@
 import cake.path
 from cake.library.compilers.dummy import DummyCompiler
+from cake.library.compilers.gcc import GccCompiler
 from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
@@ -65,7 +66,7 @@ compiler.optimisation = compiler.NO_OPTIMISATION
 compiler.runtimeLibraries = 'debug-dll'
 env = windowsDebug.tools["env"]
 env["RELEASE"] = "debug"
-engine.addVariant(windowsDebug, default=True)
+engine.addVariant(windowsDebug)
 
 #
 # Windows Optimised
@@ -75,6 +76,43 @@ compiler = windowsOptimised.tools["compiler"]
 compiler.debugSymbols = True
 compiler.optimisation = compiler.PARTIAL_OPTIMISATION
 compiler.runtimeLibraries = 'release-dll'
+env = windowsOptimised.tools["env"]
+env["RELEASE"] = "optimised"
+engine.addVariant(windowsOptimised)
+
+#
+# Windows Gcc
+#
+windows = base.clone(platform="windows", compiler="gcc")
+compiler = windows.tools["compiler"] = GccCompiler(
+  ccExe="C:/Tools/MinGW/bin/gcc.exe",
+  arExe="C:/Tools/MinGW/bin/ar.exe",
+  ldExe="C:/Tools/MinGW/bin/gcc.exe",
+  architecture="x86",
+  ) 
+
+env = windows.tools["env"]
+env["PLATFORM"] = "windows"
+env["COMPILER"] = "gcc"
+
+#
+# Window Gcc Debug
+#
+windowsDebug = windows.clone(release="debug")
+compiler = windowsDebug.tools["compiler"]
+compiler.debugSymbols = True
+compiler.optimisation = compiler.NO_OPTIMISATION
+env = windowsDebug.tools["env"]
+env["RELEASE"] = "debug"
+engine.addVariant(windowsDebug, default=True)
+
+#
+# Windows Gcc Optimised
+#
+windowsOptimised = windows.clone(release="optimised")
+compiler = windowsOptimised.tools["compiler"]
+compiler.debugSymbols = True
+compiler.optimisation = compiler.PARTIAL_OPTIMISATION
 env = windowsOptimised.tools["env"]
 env["RELEASE"] = "optimised"
 engine.addVariant(windowsOptimised)

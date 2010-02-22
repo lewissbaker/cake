@@ -1,1 +1,6 @@
-#include "foo.cpp"
+#include <stdio.h>
+
+void printWorld()
+{
+	printf("world!\n");
+}

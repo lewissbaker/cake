@@ -201,6 +201,7 @@ class MsvcCompiler(Compiler):
   _pdbQueueLock = threading.Lock()
   
   objectSuffix = '.obj'
+  libraryPrefix = ''
   librarySuffix = '.lib'
   moduleSuffix = '.dll'
   programSuffix = '.exe'
@@ -209,7 +210,6 @@ class MsvcCompiler(Compiler):
   memoryLimit = None
   runtimeLibraries = None
   moduleVersion = None
-  embedManifest = False
   
   useStringPooling = False
   useMinimalRebuild = False

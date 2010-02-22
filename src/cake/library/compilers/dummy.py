@@ -11,6 +11,7 @@ from cake.library.compilers import Compiler, makeCommand
 class DummyCompiler(Compiler):
   
   objectSuffix = '.obj'
+  libraryPrefix = ''
   librarySuffix = '.lib'
   moduleSuffix = '.dll'
   programSuffix = '.exe'
@@ -51,7 +52,7 @@ class DummyCompiler(Compiler):
 
     language = self.language
     if not language:
-      if source.endswith('.c'):
+      if source.lower().endswith('.c'):
         language = 'c'
       else:
         language = 'c++'

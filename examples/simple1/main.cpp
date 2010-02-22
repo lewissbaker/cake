@@ -1,7 +1,9 @@
-#include <stdio.h>
+void printHello();
+void printWorld();
 
 int main(int argc, char* argv[])
 {
-	printf("hello world!\n");
+	printHello();
+	printWorld();
 	return 0;
 }

@@ -1,0 +1,1 @@
+This example demonstrates building a program that uses a single library. Both the program and library are built using the compiler tool. If the program is built before the library it will implicitly build the library via its 'use.cake' dependency.

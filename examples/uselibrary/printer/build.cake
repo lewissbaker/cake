@@ -16,12 +16,12 @@ sources = filesys.cwd("source", [
 
 # Build objects
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/library/printer/objs"),
+  targetDir=env.expand("${BUILD}/uselibrary/printer/objs"),
   sources=sources,
   )
 
 # Build library
 compiler.library(
-  target=env.expand("${BUILD}/library/printer/lib/printer"),
+  target=env.expand("${BUILD}/uselibrary/printer/lib/printer"),
   sources=objects,
   )

@@ -1,1 +1,0 @@
-This example demonstrates building a program that uses a single library.

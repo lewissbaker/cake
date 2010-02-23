@@ -5,11 +5,11 @@ sources = filesys.cwd([
   ])
 
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/program/obj"),
+  targetDir=env.expand("${BUILD}/compileprogram/obj"),
   sources=sources,
   )
 
 compiler.program(
-  target=env.expand("${BUILD}/program/bin/main"),
+  target=env.expand("${BUILD}/compileprogram/bin/main"),
   sources=objects,
   )

@@ -4,12 +4,14 @@ from cake.library.compilers.gcc import GccCompiler
 from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
+from cake.library.variant import VariantTool
 from cake.library.env import Environment
 from cake.engine import Variant
 
 base = Variant()
 base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
+base.tools["variant"] = VariantTool()
 env = base.tools["env"] = Environment()
 env["BUILD"] = "build/${PLATFORM}_${COMPILER}_${RELEASE}"
 env["EXAMPLES"] = "."

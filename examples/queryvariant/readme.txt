@@ -1,0 +1,1 @@
+This example demonstrates querying properties of the current variant.

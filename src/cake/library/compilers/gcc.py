@@ -4,6 +4,7 @@
 import os
 import os.path
 import re
+import sys
 import subprocess
 import tempfile
 
@@ -65,44 +66,61 @@ class GccCompiler(Compiler):
         ])
     return env
 
+  def _formatMessage(self, inputText):
+    outputText = ""
+    lines = inputText.split('\r\n')
+    for line in lines:
+      m = re.search('(?P<lnum>:\d+)(?P<colnum>:\d+)?', line)
+      if m:
+        lnum, _colnum = m.groups()
+        sourceFile = line[:m.start('lnum')]
+        sourceFile = os.path.abspath(os.path.normpath(sourceFile))
+        lineNumber = lnum[1:]
+        message = line[m.end()+2:]
+        outputText += "%s(%s): %s\n" % (sourceFile, lineNumber, message)
+      elif line.strip(): # Don't print blank lines
+        outputText += line + '\n'
+    return outputText
+      
   def _executeProcess(self, args, target, engine):
     engine.logger.outputDebug(
       "run",
       "run: %s\n" % " ".join(args),
       )
     cake.filesys.makeDirs(cake.path.dirName(target))
-    
+
 # TODO: Response file support...but gcc 3.x doesn't support it???     
 #    argsFile = target + '.args'
 #    with open(argsFile, 'wt') as f:
 #      for arg in args[1:]:
 #        f.write(arg + '\n')
-      
-    with tempfile.TemporaryFile() as errFile:
-      try:
-        p = subprocess.Popen(
-          #args=[args[0], '@' + argsFile],
-          args=args,
-          executable=args[0],
-          env=self._getProcessEnv(),
-          stdin=subprocess.PIPE,
-          stdout=subprocess.PIPE,
-          stderr=subprocess.STDOUT,
-          )
-      except EnvironmentError, e:
-        engine.raiseError(
-          "cake: failed to launch %s: %s\n" % (args[0], str(e))
-          )
+
+    try:
+      p = subprocess.Popen(
+        #args=[args[0], '@' + argsFile],
+        args=args,
+        executable=args[0],
+        env=self._getProcessEnv(),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        )
+    except EnvironmentError, e:
+      engine.raiseError(
+        "cake: failed to launch %s: %s\n" % (args[0], str(e))
+        )
+  
+    p.stdin.close()
+    output = p.stdout.read()
+    exitCode = p.wait()
     
-      p.stdin.close()
-      output = p.stdout.read()
-      exitCode = p.wait()
-      
     if output:
-      engine.logger.outputWarning(output + '\n')
+      sys.stderr.write(self._formatMessage(output))
         
     if exitCode != 0:
-      engine.raiseError("%s: failed with exit code %i\n" % (args[0], exitCode))
+      engine.raiseError(
+        "%s: failed with exit code %i\n" % (args[0], exitCode)
+        )
   
   @memoise
   def _getCommonArgs(self, language):

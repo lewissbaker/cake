@@ -12,6 +12,7 @@ base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
 env = base.tools["env"] = Environment()
 env["BUILD"] = "build/${PLATFORM}_${COMPILER}_${RELEASE}"
+env["EXAMPLES"] = "."
 
 #
 # Dummy

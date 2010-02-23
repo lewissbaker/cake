@@ -21,7 +21,7 @@ class ShellTool(Tool):
     engine = script.engine
 
     env = deepCopyBuiltins(self.__env)
-    
+
     def spawnProcess():
 
       if targets:
@@ -110,7 +110,7 @@ class ShellTool(Tool):
       return self.__env.get(key, default)
 
   def __getitem__(self, key):
-    return self.__env
+    return self.__env[key]
 
   def __setitem__(self, key, value):
     self.__env[key] = value

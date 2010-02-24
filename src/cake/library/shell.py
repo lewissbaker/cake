@@ -28,7 +28,7 @@ class ShellTool(Tool):
         # Check dependencies to see if they've changed
         buildArgs = args + sourcePaths + targets
         try:
-          oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(
+          _, reasonToBuild = engine.checkDependencyInfo(
             targets[0],
             buildArgs,
             )

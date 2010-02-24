@@ -10,7 +10,7 @@ if variant.release in ["debug", "optimised"]:
 else:
   print "Unknown release '%s'." % variant.release
 
-if variant.compiler in ["gcc", "msvc"]:
+if variant.compiler in ["dummy", "gcc", "msvc"]:
   print "Current compiler is '%s'." % variant.compiler
 else:
   print "Unknown compiler '%s'." % variant.compiler

@@ -41,6 +41,9 @@ class GccCompiler(Compiler):
       self.librarySuffix = '.lib'
       self.moduleSuffix = '.dll'
       self.programSuffix = '.exe'
+    elif architecture == 'ppu':
+      self.moduleSuffix = '.sprx'
+      self.programSuffix = '.self'
 
 # TODO: Is this needed?
   @property
@@ -133,6 +136,9 @@ class GccCompiler(Compiler):
 
     args.extend(['-x', language])
 
+    if self.warningsAsErrors:
+      args.append('-Werror')
+
     if self.debugSymbols:
       args.append('-g')
 
@@ -152,7 +158,11 @@ class GccCompiler(Compiler):
     elif self.optimisation == self.PARTIAL_OPTIMISATION:
       args.append('-O2')
     elif self.optimisation == self.FULL_OPTIMISATION:
-      args.append('-O4')
+      args.extend([
+        '-O4',
+        '-ffunction-sections',
+        '-fdata-sections',
+        ])
 
     if self.useSse:
       args.append('-msse')
@@ -269,7 +279,19 @@ class GccCompiler(Compiler):
 
     if dll:
       args.append('-shared')
+    else:
+      if self.__architecture == 'ppu':
+        args.append('-Wl,--oformat=fself')
 
+    if self.optimisation == self.FULL_OPTIMISATION:
+      args.append('--gc-sections')
+      
+      if self.__architecture == 'ppu':
+        args.extend([
+          '-Wl,-strip-unused',
+          '-Wl,-strip-unused-data',
+          ])
+      
     return args
   
   def getProgramCommands(self, target, sources, engine):

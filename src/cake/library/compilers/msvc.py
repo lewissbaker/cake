@@ -188,6 +188,9 @@ def findCompiler(
     defines = ['WIN32', 'WIN64']
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
     platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
+    # External Platform SDKs may use 'x64' instead of 'amd64'
+    if not cake.filesys.isDir(platformSdkLibDir):
+      platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
   elif architecture == 'ia64':
     defines = ['WIN32', 'WIN64']
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')

@@ -14,7 +14,12 @@ def setupVariant(variant):
   compiler = variant.tools["compiler"]
   
   env = variant.tools["env"]
-  env["BUILD"] = "build/%s_%s_%s" % (platform, compilerName, release)
+  env["BUILD"] = "build/" + "_".join([
+    platform,
+    compilerName,
+    compiler.architecture,
+    release,
+    ])
 
   if release == "debug":
     compiler.debugSymbols = True
@@ -45,7 +50,7 @@ msvc = base.clone(platform="windows", compiler="msvc")
 msvc.tools["compiler"] = findMsvcCompiler() 
 
 msvcDebug = msvc.clone(release="debug")
-engine.addVariant(setupVariant(msvcDebug))
+engine.addVariant(setupVariant(msvcDebug), default=True)
 
 msvcRelease = msvc.clone(release="release")
 engine.addVariant(setupVariant(msvcRelease))
@@ -60,7 +65,7 @@ gcc.tools["compiler"] = GccCompiler(
   )
 
 gccDebug = gcc.clone(release="debug")
-engine.addVariant(setupVariant(gccDebug), default=True)
+engine.addVariant(setupVariant(gccDebug))
 
 gccRelease = gcc.clone(release="release")
 engine.addVariant(setupVariant(gccRelease))

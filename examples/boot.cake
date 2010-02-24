@@ -40,7 +40,7 @@ dummy = base.clone(platform="windows", compiler="dummy")
 dummy.tools["compiler"] = DummyCompiler()
 
 dummyDebug = dummy.clone(release="debug")
-engine.addVariant(setupVariant(dummyDebug))
+engine.addVariant(setupVariant(dummyDebug), default=True)
 
 dummyRelease = dummy.clone(release="release")
 engine.addVariant(setupVariant(dummyRelease))
@@ -50,7 +50,7 @@ msvc = base.clone(platform="windows", compiler="msvc")
 msvc.tools["compiler"] = findMsvcCompiler() 
 
 msvcDebug = msvc.clone(release="debug")
-engine.addVariant(setupVariant(msvcDebug), default=True)
+engine.addVariant(setupVariant(msvcDebug))
 
 msvcRelease = msvc.clone(release="release")
 engine.addVariant(setupVariant(msvcRelease))

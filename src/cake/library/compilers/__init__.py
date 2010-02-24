@@ -58,8 +58,7 @@ class Compiler(Tool):
   warningsAsErrors = False
   
   objectSuffix = '.o'
-  libraryPrefix = 'lib'
-  librarySuffix = '.a'
+  libraryPrefixSuffixes = [('lib', '.a')]
   moduleSuffix = '.so'
   programSuffix = ''
   
@@ -271,9 +270,9 @@ class Compiler(Tool):
 
     paths, tasks = getPathsAndTasks(sources)
     
-    target = cake.path.addPrefix(target, compiler.libraryPrefix)
     if forceExtension:
-      target = cake.path.forceExtension(target, compiler.librarySuffix)
+      prefix, suffix = self.libraryPrefixSuffixes[0]
+      target = cake.path.forcePrefixSuffix(target, prefix, suffix)
     
     self._setObjectsInLibrary(engine, target, paths)
     
@@ -311,9 +310,11 @@ class Compiler(Tool):
     if forceExtension:
       target = cake.path.forceExtension(target, compiler.moduleSuffix)
       if compiler.importLibrary:
-        compiler.importLibrary = cake.path.forceExtension(
+        prefix, suffix = self.libraryPrefixSuffixes[0]
+        compiler.importLibrary = cake.path.forcePrefixSuffix(
           compiler.importLibrary,
-          compiler.librarySuffix,
+          prefix,
+          suffix,
           )
     
     moduleTask = engine.createTask(
@@ -386,19 +387,12 @@ class Compiler(Tool):
     for library in self.libraries:
       if not cake.path.dirName(library):
 
-# TODO: This version is for MingW...it needs to be merged with 
-#  the version below somehow
-#        fileNames = [library + '.lib']
-#
-#        if not library.endswith(self.librarySuffix):
-#          fileNames.append(self.libraryPrefix + library + self.librarySuffix)
-#        else:
-#          fileNames.append(self.libraryPrefix + library)
-          
         fileNames = [library]
-        
-        if not library.endswith(self.librarySuffix):
-          fileNames.append(library + self.librarySuffix)
+
+        libraryExtension = os.path.normcase(cake.path.extension(library))
+        for prefix, suffix in self.libraryPrefixSuffixes:
+          if libraryExtension != os.path.normcase(suffix):
+            fileNames.append(cake.path.addPrefix(library, prefix) + suffix)
                   
         for candidate in cake.path.join(reversed(self.libraryPaths), fileNames):
           if cake.filesys.isFile(candidate):

@@ -37,8 +37,7 @@ class GccCompiler(Compiler):
     
     if architecture == 'x86':
       self.objectSuffix = '.obj'
-      self.libraryPrefix = ''
-      self.librarySuffix = '.lib'
+      self.libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
       self.moduleSuffix = '.dll'
       self.programSuffix = '.exe'
     elif architecture == 'ppu':

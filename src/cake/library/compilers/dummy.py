@@ -11,8 +11,7 @@ from cake.library.compilers import Compiler, makeCommand
 class DummyCompiler(Compiler):
   
   objectSuffix = '.obj'
-  libraryPrefix = ''
-  librarySuffix = '.lib'
+  libraryPrefixSuffixes = [('', '.lib')]
   moduleSuffix = '.dll'
   programSuffix = '.exe'
   

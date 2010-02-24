@@ -119,6 +119,24 @@ def addPrefix(path, prefix):
   else:
     return tail
 
+def forcePrefixSuffix(path, prefix, suffix):
+  """Force both a prefix and suffix only if the suffix does not match.
+
+  @param path: The path to modify.
+  @type path: string
+  @param prefix: The prefix to prepend to the baseName part.
+  @type prefix: string
+  @param suffix: The suffix to append to the path.
+  @type suffix: string
+  @return: The path with the given prefix and suffix if the suffix did
+  not exist, otherwise the original path.
+  @rtype: string
+  """
+  if os.path.normcase(extension(path)) != os.path.normcase(suffix):
+    return addPrefix(path, prefix) + suffix
+  else:
+    return path
+  
 def forceExtension(path, ext):
   """Return the path modified if needed to have the specified extension.
   

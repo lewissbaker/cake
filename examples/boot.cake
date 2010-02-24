@@ -50,17 +50,17 @@ engine.addVariant(setupVariant(msvcDebug))
 msvcRelease = msvc.clone(release="release")
 engine.addVariant(setupVariant(msvcRelease))
 
-# MinGW
-mingw = base.clone(platform="windows", compiler="gcc")
-mingw.tools["compiler"] = GccCompiler(
+# Gcc
+gcc = base.clone(platform="windows", compiler="gcc")
+gcc.tools["compiler"] = GccCompiler(
   ccExe="C:/Tools/MinGW/bin/gcc.exe",
   arExe="C:/Tools/MinGW/bin/ar.exe",
   ldExe="C:/Tools/MinGW/bin/gcc.exe",
   architecture="x86",
   )
 
-mingwDebug = mingw.clone(release="debug")
-engine.addVariant(setupVariant(mingwDebug))
+gccDebug = gcc.clone(release="debug")
+engine.addVariant(setupVariant(gccDebug), default=True)
 
-mingwRelease = mingw.clone(release="release")
-engine.addVariant(setupVariant(mingwRelease), default=True)
+gccRelease = gcc.clone(release="release")
+engine.addVariant(setupVariant(gccRelease))

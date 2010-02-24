@@ -10,6 +10,9 @@ import tempfile
 import re
 import threading
 import weakref
+import ctypes
+import ctypes.wintypes
+import platform
 
 import cake.filesys
 import cake.path
@@ -18,13 +21,32 @@ from cake.library import memoise
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
 
+kernel32 = ctypes.windll.kernel32
+IsWow64Process = kernel32.IsWow64Process
+IsWow64Process.restype = ctypes.wintypes.BOOL
+IsWow64Process.argtypes = (ctypes.wintypes.HANDLE,
+                           ctypes.POINTER(ctypes.wintypes.BOOL))
+
+GetCurrentProcess = kernel32.GetCurrentProcess
+GetCurrentProcess.restype = ctypes.wintypes.HANDLE
+GetCurrentProcess.argtypes = ()
+
 def getHostArchitecture():
   """Returns the current machines architecture.
   """
-  try:
-    return os.environ['PROCESSOR_ARCHITECTURE']
-  except KeyError:
-    raise EnvironmentError("Could not determine host architecture.")
+  if platform.architecture()[0] == '32bit':
+    result = ctypes.wintypes.BOOL()
+    ok = IsWow64Process(GetCurrentProcess(), ctypes.byref(result))
+    if not ok:
+      raise WindowsError("IsWow64Process")
+
+    if result.value == 1:
+      return "x64"
+    else:
+      return "x86"
+  else:
+    # HACK: Could be IA-64 but who uses that these days?
+    return "x64"
 
 def findCompiler(
   version=None,
@@ -165,7 +187,7 @@ def findCompiler(
   elif architecture == 'x64':
     defines = ['WIN32', 'WIN64']
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
   elif architecture == 'ia64':
     defines = ['WIN32', 'WIN64']
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
@@ -281,6 +303,13 @@ class MsvcCompiler(Compiler):
         args.append('/EHsc') # Enable exceptions
       else:
         args.append('/EHsc-') # Disable exceptions
+
+    if self.optimisation == self.FULL_OPTIMISATION:
+      args.append('/GL') # Global optimisation
+    elif self.optimisation == self.PARTIAL_OPTIMISATION:
+      args.append('/Ox') # Full optimisation
+    elif self.optimisation == self.NO_OPTIMISATION:
+      args.append('/Od') # No optimisation
  
     if self.warningLevel is not None:
       args.append('/W%s' % self.warningLevel)
@@ -697,6 +726,10 @@ class MsvcCompiler(Compiler):
     
     if dll and self.importLibrary is not None:
       args.append('/IMPLIB:' + self.importLibrary)
+
+    if self.optimisation == self.FULL_OPTIMISATION and \
+       self.useIncrementalLinking:
+      engine.raiseError("Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n")
     
     if self.embedManifest:
       if not self.__mtExe:

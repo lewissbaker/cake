@@ -123,7 +123,7 @@ class GccCompiler(Compiler):
       engine.raiseError(
         "%s: failed with exit code %i\n" % (args[0], exitCode)
         )
-  
+
   @memoise
   def _getCommonArgs(self, language):
     # Almost all compile options can also set preprocessor defines (see
@@ -163,6 +163,11 @@ class GccCompiler(Compiler):
         '-fdata-sections',
         ])
 
+    if self.__architecture == 'x86':
+      args.append("-m32")
+    elif self.__architecture == 'x64':
+      args.append("-m64")
+      
     if self.useSse:
       args.append('-msse')
     

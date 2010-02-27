@@ -1,6 +1,8 @@
 """Logging Utilities.
 """
 
+from __future__ import with_statement
+ 
 import sys
 import threading
 

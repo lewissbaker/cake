@@ -1,6 +1,8 @@
 """Engine-Level Classes and Utilities.
 """
 
+from __future__ import with_statement
+
 import hashlib
 import threading
 import traceback

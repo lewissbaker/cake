@@ -1,6 +1,8 @@
 """Utilities for loading Byte-Compiled Scripts.
 """
 
+from __future__ import with_statement
+
 __all__ = ["loadCode"]
 
 import __builtin__

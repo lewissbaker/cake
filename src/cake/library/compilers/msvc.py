@@ -1,6 +1,8 @@
 """The Microsoft Visual C++ Compiler.
 """
 
+from __future__ import with_statement
+
 __all__ = ["MsvcCompiler"]
 
 import os

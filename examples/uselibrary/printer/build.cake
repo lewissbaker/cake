@@ -16,7 +16,7 @@ sources = filesys.cwd("source", [
 
 # Build objects
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/uselibrary/printer/objs"),
+  targetDir=env.expand("${BUILD}/uselibrary/printer/obj"),
   sources=sources,
   )
 

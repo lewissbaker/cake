@@ -72,8 +72,8 @@ def _overrideOpen():
 
     if flags & os.O_BINARY and flags & os.O_TEXT:
       raise ValueError("Cannot specify both 't' and 'b' in mode")
-    if flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
-      raise ValueError("Cannot specify both 'S' and 'R' in mode")
+    #if flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
+    #  raise ValueError("Cannot specify both 'S' and 'R' in mode")
 
     try:
       fd = os.open(filename, flags)

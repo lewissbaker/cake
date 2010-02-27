@@ -1,6 +1,8 @@
 """Path Unit Tests.
 """
 
+from __future__ import with_statement
+
 import unittest
 import os.path
 import os

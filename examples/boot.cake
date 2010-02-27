@@ -40,7 +40,7 @@ dummy = base.clone(platform="windows", compiler="dummy")
 dummy.tools["compiler"] = DummyCompiler()
 
 dummyDebug = dummy.clone(release="debug")
-engine.addVariant(setupVariant(dummyDebug))
+engine.addVariant(setupVariant(dummyDebug), default=True)
 
 dummyRelease = dummy.clone(release="release")
 engine.addVariant(setupVariant(dummyRelease))
@@ -70,6 +70,6 @@ try:
   engine.addVariant(setupVariant(gccDebug))
   
   gccRelease = gcc.clone(release="release")
-  engine.addVariant(setupVariant(gccRelease), default=True)
+  engine.addVariant(setupVariant(gccRelease))
 except EnvironmentError:
   pass

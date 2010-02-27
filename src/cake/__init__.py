@@ -2,6 +2,7 @@
 """
 
 import threading
+import platform
 import sys
 
 __version_info__ = (0, 1, 0)
@@ -103,8 +104,10 @@ def _speedUp():
     #psyco.profile()
     #psyco.log()
   except ImportError:
-    sys.stderr.write(
-      "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
-      )
+    # Only report import failures on systems we know Psyco supports.
+    if platform.system() == "Windows":
+      sys.stderr.write(
+        "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
+        )
 
 _speedUp()

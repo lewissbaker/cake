@@ -65,7 +65,7 @@ def findCompiler(
   architecture is None then the current architecture is used.
   
   @raise ValueError: When an invalid architecture is passed in.
-  @raise EnvironmentError: Then a valid compiler or Windows SDK could
+  @raise EnvironmentError: When a valid compiler or Windows SDK could
   not be found.
   """
   # Valid architectures
@@ -219,8 +219,6 @@ def _escapeArgs(args):
   return [_escapeArg(arg) for arg in args]
 
 class MsvcCompiler(Compiler):
-
-  name = 'msvc'
 
   _lineRegex = re.compile('#line [0-9]+ "(?P<path>.+)"', re.MULTILINE)
   
@@ -717,7 +715,7 @@ class MsvcCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     
-    libraryPaths = self._resolveLibraries(engine)
+    libraryPaths, _ = self._resolveLibraries(engine)
     sources = sources + libraryPaths
     
     args = list(self._getLinkCommonArgs(dll))

@@ -380,11 +380,13 @@ class Compiler(Tool):
     @param engine: The engine to use for logging error messages.
     @type engine: cake.engine.Engine
     
-    @return: A list of library/object paths.
-    @rtype: list of string
+    @return: A tuple containing a list of paths to resolved
+    libraries/objects, followed by a list of unresolved libraries.
+    @rtype: tuple of (list of string, list of string)
     """
     libraryPaths = []
-    for library in self.libraries:
+    unresolvedLibs = []
+    for library in reversed(self.libraries):
       if not cake.path.dirName(library):
 
         fileNames = [library]
@@ -399,11 +401,11 @@ class Compiler(Tool):
             libraryPaths.append(candidate)
             break
         else:
-          engine.raiseError(
-            "cake: failed to find library '%s' in libraryPaths:\n%s\n" % (
-              library,
-              "".join("- %s\n" % path for path in self.libraryPaths),
-              ))
+          engine.logger.outputDebug(
+            "scan",
+            "scan: Ignoring missing library '" + library + "'\n",
+            )
+          unresolvedLibs.append(library)
       else:
         if not cake.filesys.isFile(library):
           engine.raiseError(
@@ -419,9 +421,9 @@ class Compiler(Tool):
           results.append(libraryPath)
         else:
           results.extend(objects)
-      return results
+      return results, unresolvedLibs
     else:
-      return libraryPaths
+      return libraryPaths, unresolvedLibs
   
   def buildObject(self, target, source, engine):
     """Perform the actual build of an object.

@@ -1,22 +1,66 @@
 """The Gcc Compiler.
 """
 
+from __future__ import with_statement
+
 import os
 import os.path
 import re
 import sys
 import subprocess
-import tempfile
 
 import cake.filesys
 import cake.path
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand
-  
-class GccCompiler(Compiler):
 
-# TODO: Is this needed?
-  name = 'gcc'
+def getHostArchitecture():
+  """Returns the current machines architecture.
+  """
+  try:
+    return os.environ['PROCESSOR_ARCHITECTURE']
+  except KeyError:
+    raise EnvironmentError("Could not determine host architecture.")
+
+def findExecutable(name, paths):
+  """Find an executable given a list of paths.  
+  """
+  for p in paths:
+    executable = cake.path.join(p, name)
+    if cake.filesys.isFile(executable):
+      return executable
+  else:
+    raise EnvironmentError("Could not find executable.");
+
+def findCompiler(architecture=None):
+  """Returns a GCC compiler given an architecture.
+
+  @param architecture: The machine architecture to compile for. If
+  architecture is None then the current architecture is used.
+
+  @raise EnvironmentError: When a valid gcc compiler could not be found.
+  """
+  if architecture is None:
+    architecture = getHostArchitecture()
+    
+  paths = os.environ.get('PATH', '').split(os.path.pathsep)
+
+  try:
+    ccExe = findExecutable("gcc", paths)
+    arExe = findExecutable("ar", paths)
+  except EnvironmentError:
+    raise EnvironmentError("Could not find GCC compiler and AR archiver.")
+    
+  compiler = GccCompiler(
+    ccExe=ccExe,
+    arExe=arExe,
+    ldExe=ccExe,
+    architecture=architecture,
+    )
+
+  return compiler
+
+class GccCompiler(Compiler):
 
   _lineRegex = re.compile('# [0-9]+ "(?!\<)(?P<path>.+)"', re.MULTILINE)
   
@@ -50,7 +94,7 @@ class GccCompiler(Compiler):
     return self.__architecture
   
   @memoise
-  def _getProcessEnv(self):
+  def _getProcessEnv(self, executable):
     temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
     env = {
       'COMPSPEC' : os.environ.get('COMSPEC', ''),
@@ -58,7 +102,7 @@ class GccCompiler(Compiler):
       'SYSTEMROOT' : os.environ.get('SYSTEMROOT', ''),
       'TMP' : temp,
       'TEMP' : temp,  
-      'PATH' : '.',
+      'PATH' : cake.path.dirName(executable),
       }
     if env['SYSTEMROOT']:
       env['PATH'] = os.path.pathsep.join([
@@ -102,7 +146,7 @@ class GccCompiler(Compiler):
         #args=[args[0], '@' + argsFile],
         args=args,
         executable=args[0],
-        env=self._getProcessEnv(),
+        env=self._getProcessEnv(args[0]),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -306,16 +350,13 @@ class GccCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     
-# TODO: Library paths returns absolute paths to libraries,
-#  so why do we add paths as well???
-# TODO: We should reverse libraries as well as library paths
-    libraries = self._resolveLibraries(engine)
-    sources += libraries    
-    #sources += ['-l' + l for l in libraries]    
+    resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
     
     args = list(self._getCommonLinkArgs(dll))
     #args.extend('-L' + p for p in self.libraryPaths)
     args.extend(sources)
+    args.extend(resolvedPaths)    
+    args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
     
     @makeCommand(args)
@@ -324,7 +365,9 @@ class GccCompiler(Compiler):
     
     @makeCommand("link-scan")
     def scan():
-      # TODO: Add dependencies on DLLs used by link.exe
-      return [self.__ldExe] + sources
+      # TODO: Add dependencies on DLLs used by ld.exe
+      # TODO: Add dependencies on system libraries, perhaps
+      #  by parsing the output of ',Wl,--trace'
+      return [self.__ldExe] + sources + resolvedPaths
     
     return link, scan

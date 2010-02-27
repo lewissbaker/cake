@@ -1,11 +1,10 @@
-from cake.library.compilers.dummy import DummyCompiler
-from cake.library.compilers.gcc import GccCompiler
-from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
 from cake.library.variant import VariantTool
 from cake.library.env import Environment
 from cake.engine import Variant
+
+import platform
 
 def setupVariant(variant):
   platform = variant.keywords["platform"]
@@ -36,36 +35,41 @@ env = base.tools["env"] = Environment()
 env["EXAMPLES"] = "."
 
 # Dummy
+from cake.library.compilers.dummy import DummyCompiler
 dummy = base.clone(platform="windows", compiler="dummy")
 dummy.tools["compiler"] = DummyCompiler()
 
 dummyDebug = dummy.clone(release="debug")
-engine.addVariant(setupVariant(dummyDebug), default=True)
+engine.addVariant(setupVariant(dummyDebug))
 
 dummyRelease = dummy.clone(release="release")
 engine.addVariant(setupVariant(dummyRelease))
 
-# Msvc
-msvc = base.clone(platform="windows", compiler="msvc")
-msvc.tools["compiler"] = findMsvcCompiler() 
+if platform.system() == 'Windows':
+  # Msvc
+  from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
+  msvc = base.clone(platform="windows", compiler="msvc")
+  msvc.tools["compiler"] = findMsvcCompiler() 
+  
+  msvcDebug = msvc.clone(release="debug")
+  engine.addVariant(setupVariant(msvcDebug))
+  
+  msvcRelease = msvc.clone(release="release")
+  engine.addVariant(setupVariant(msvcRelease))
 
-msvcDebug = msvc.clone(release="debug")
-engine.addVariant(setupVariant(msvcDebug))
-
-msvcRelease = msvc.clone(release="release")
-engine.addVariant(setupVariant(msvcRelease))
-
-# Gcc
-gcc = base.clone(platform="windows", compiler="gcc")
-gcc.tools["compiler"] = GccCompiler(
-  ccExe="C:/Tools/MinGW/bin/gcc.exe",
-  arExe="C:/Tools/MinGW/bin/ar.exe",
-  ldExe="C:/Tools/MinGW/bin/gcc.exe",
-  architecture="x86",
-  )
-
-gccDebug = gcc.clone(release="debug")
-engine.addVariant(setupVariant(gccDebug))
-
-gccRelease = gcc.clone(release="release")
-engine.addVariant(setupVariant(gccRelease))
+try:
+  # Gcc
+  from cake.library.compilers.gcc import findCompiler as findGccCompiler
+  gcc = base.clone(platform="windows", compiler="gcc")
+  compiler = gcc.tools["compiler"] = findGccCompiler()
+  
+  # TODO: Should we move this to a runtimes.cake?
+  compiler.addLibrary("supc++")
+  
+  gccDebug = gcc.clone(release="debug")
+  engine.addVariant(setupVariant(gccDebug))
+  
+  gccRelease = gcc.clone(release="release")
+  engine.addVariant(setupVariant(gccRelease), default=True)
+except EnvironmentError:
+  pass

@@ -8,6 +8,7 @@ import os.path
 import re
 import sys
 import subprocess
+import platform
 
 import cake.filesys
 import cake.path
@@ -163,15 +164,21 @@ class GccCompiler(Compiler):
     return env
 
   def _formatMessage(self, inputText):
+    """Format errors to be clickable in MS Visual Studio.
+    """
+    if platform.system() != "Windows":
+      return inputText
+    
     outputText = ""
-    lines = inputText.split('\r\n')
+    lines = inputText.split('\n')
     for line in lines:
-      m = re.search('(?P<lnum>:\d+)(?P<colnum>:\d+)?', line)
+      line = line.rstrip('\r')
+      m = re.search('(?P<linenum>:\d+)(?P<colnum>:\d+)?', line)
       if m:
-        lnum, _colnum = m.groups()
-        sourceFile = line[:m.start('lnum')]
+        linenum, _colnum = m.groups()
+        sourceFile = line[:m.start('linenum')]
         sourceFile = os.path.abspath(os.path.normpath(sourceFile))
-        lineNumber = lnum[1:]
+        lineNumber = linenum[1:]
         message = line[m.end()+2:]
         outputText += "%s(%s): %s\n" % (sourceFile, lineNumber, message)
       elif line.strip(): # Don't print blank lines

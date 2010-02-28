@@ -8,6 +8,7 @@ import os.path
 import re
 import sys
 import subprocess
+import platform
 
 import cake.filesys
 import cake.path
@@ -70,13 +71,12 @@ def findMinGWCompiler(architecture=None):
   except WindowsError:
     raise EnvironmentError("Could not find MinGW install directory.")
 
-  gccExe = cake.path.join(installDir, "bin", "gcc.exe")
   arExe = cake.path.join(installDir, "bin", "ar.exe")
+  gccExe = cake.path.join(installDir, "bin", "gcc.exe")
   
   compiler = GccCompiler(
-    ccExe=gccExe,
     arExe=arExe,
-    ldExe=gccExe,
+    gccExe=gccExe,
     architecture=architecture,
     )
 
@@ -96,15 +96,14 @@ def findGccCompiler(architecture=None):
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
   try:
-    gccExe = findExecutable("gcc", paths)
     arExe = findExecutable("ar", paths)
+    gccExe = findExecutable("gcc", paths)
   except EnvironmentError:
     raise EnvironmentError("Could not find GCC compiler and AR archiver.")
     
   compiler = GccCompiler(
-    ccExe=gccExe,
     arExe=arExe,
-    ldExe=gccExe,
+    gccExe=gccExe,
     architecture=architecture,
     )
 
@@ -118,15 +117,13 @@ class GccCompiler(Compiler):
   
   def __init__(
     self,
-    ccExe=None,
     arExe=None,
-    ldExe=None,
+    gccExe=None,
     architecture=None,
     ):
     Compiler.__init__(self)
-    self.__ccExe = ccExe
     self.__arExe = arExe
-    self.__ldExe = ldExe
+    self.__gccExe = gccExe
     self.__architecture = architecture
     
     if architecture == 'x86':
@@ -138,7 +135,6 @@ class GccCompiler(Compiler):
       self.moduleSuffix = '.sprx'
       self.programSuffix = '.self'
 
-# TODO: Is this needed?
   @property
   def architecture(self):
     return self.__architecture
@@ -163,15 +159,21 @@ class GccCompiler(Compiler):
     return env
 
   def _formatMessage(self, inputText):
+    """Format errors to be clickable in MS Visual Studio.
+    """
+    if platform.system() != "Windows":
+      return inputText
+    
     outputText = ""
-    lines = inputText.split('\r\n')
+    lines = inputText.split('\n')
     for line in lines:
-      m = re.search('(?P<lnum>:\d+)(?P<colnum>:\d+)?', line)
+      line = line.rstrip('\r')
+      m = re.search('(?P<linenum>:\d+)(?P<colnum>:\d+)?', line)
       if m:
-        lnum, _colnum = m.groups()
-        sourceFile = line[:m.start('lnum')]
+        linenum, _colnum = m.groups()
+        sourceFile = line[:m.start('linenum')]
         sourceFile = os.path.abspath(os.path.normpath(sourceFile))
-        lineNumber = lnum[1:]
+        lineNumber = linenum[1:]
         message = line[m.end()+2:]
         outputText += "%s(%s): %s\n" % (sourceFile, lineNumber, message)
       elif line.strip(): # Don't print blank lines
@@ -225,7 +227,7 @@ class GccCompiler(Compiler):
     # so for safety all compile options are shared across preprocessing
     # and compiling.
     # Note: To dump predefined compiler macros: 'echo | gcc -E -dM -'
-    args = [self.__ccExe]
+    args = [self.__gccExe]
 
     args.extend(['-x', language])
 
@@ -284,10 +286,8 @@ class GccCompiler(Compiler):
     for p in reversed(self.includePaths):
       args.extend(['-I', p])
 
-# TODO: Should Lewis reverse defines?
     args.extend('-D' + d for d in reversed(self.defines))
     
-# TODO: Should Lewis reverse this in msvc.py?    
     for p in reversed(self.forceIncludes):
       args.extend(['-include', p])
 
@@ -321,8 +321,8 @@ class GccCompiler(Compiler):
         "scan: %s\n" % preprocessTarget,
         )
       
-      # TODO: Add dependencies on DLLs used by cc.exe
-      dependencies = [self.__ccExe]
+      # TODO: Add dependencies on DLLs used by gcc.exe
+      dependencies = [self.__gccExe]
       uniqueDeps = set()
 
       with open(preprocessTarget, 'rb') as f:
@@ -366,14 +366,14 @@ class GccCompiler(Compiler):
 
     @makeCommand("lib-scan")
     def scan():
-      # TODO: Add dependencies on DLLs used by lib.exe
+      # TODO: Add dependencies on DLLs used by ar.exe
       return [self.__arExe] + sources
 
     return archive, scan
 
   @memoise
   def _getCommonLinkArgs(self, dll):
-    args = [self.__ldExe]
+    args = [self.__gccExe]
 
     if dll:
       args.append('-Wl,-shared')
@@ -415,9 +415,9 @@ class GccCompiler(Compiler):
     
     @makeCommand("link-scan")
     def scan():
-      # TODO: Add dependencies on DLLs used by ld.exe
-      # TODO: Add dependencies on system libraries, perhaps
+      # TODO: Add dependencies on DLLs used by gcc.exe
+      # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [self.__ldExe] + sources + resolvedPaths
+      return [self.__gccExe] + sources + resolvedPaths
     
     return link, scan

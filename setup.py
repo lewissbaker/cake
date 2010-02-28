@@ -13,6 +13,7 @@ if __name__ == "__main__":
     version=cake.__version__,
     description="A Python build tool.",
     license="MIT",
+    py_modules=['cakemain'],
     package_dir={'' : 'src'},
     packages=find_packages('src', exclude=['*.test', '*.test.*']),
     entry_points={

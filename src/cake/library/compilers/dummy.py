@@ -22,7 +22,7 @@ class DummyCompiler(Compiler):
 
   @property
   def architecture(self):
-    return 'none'
+    return 'unknown'
   
   @memoise
   def _getCompileArgs(self, language):

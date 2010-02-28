@@ -328,9 +328,9 @@ class MsvcCompiler(Compiler):
   def _getPreprocessorCommonArgs(self, language):
     args = list(self._getCommonArgs(language))
    
-    args.extend("/D" + define for define in self.defines)
+    args.extend("/D" + define for define in reversed(self.defines))
     args.extend("/I" + path for path in reversed(self.includePaths))
-    args.extend("/FI" + path for path in self.forceIncludes)
+    args.extend("/FI" + path for path in reversed(self.forceIncludes))
 
     args.append("/E")
     

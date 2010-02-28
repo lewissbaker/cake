@@ -135,7 +135,6 @@ class GccCompiler(Compiler):
       self.moduleSuffix = '.sprx'
       self.programSuffix = '.self'
 
-# TODO: Is this needed?
   @property
   def architecture(self):
     return self.__architecture
@@ -287,10 +286,8 @@ class GccCompiler(Compiler):
     for p in reversed(self.includePaths):
       args.extend(['-I', p])
 
-# TODO: Should Lewis reverse defines?
     args.extend('-D' + d for d in reversed(self.defines))
     
-# TODO: Should Lewis reverse this in msvc.py?    
     for p in reversed(self.forceIncludes):
       args.extend(['-include', p])
 
@@ -419,7 +416,7 @@ class GccCompiler(Compiler):
     @makeCommand("link-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by gcc.exe
-      # TODO: Add dependencies on system libraries, perhaps
+      # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
       return [self.__gccExe] + sources + resolvedPaths
     

@@ -46,20 +46,37 @@ dummyRelease = dummy.clone(release="release")
 engine.addVariant(setupVariant(dummyRelease))
 
 if platform.system() == 'Windows':
-  # Msvc
-  from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
-  msvc = base.clone(platform="windows", compiler="msvc")
-  msvc.tools["compiler"] = findMsvcCompiler() 
-  
-  msvcDebug = msvc.clone(release="debug")
-  engine.addVariant(setupVariant(msvcDebug))
-  
-  msvcRelease = msvc.clone(release="release")
-  engine.addVariant(setupVariant(msvcRelease))
+  try:
+    # Msvc
+    from cake.library.compilers.msvc import findCompiler as findMsvcCompiler
+    msvc = base.clone(platform="windows", compiler="msvc")
+    msvc.tools["compiler"] = findMsvcCompiler() 
+    
+    msvcDebug = msvc.clone(release="debug")
+    engine.addVariant(setupVariant(msvcDebug))
+    
+    msvcRelease = msvc.clone(release="release")
+    engine.addVariant(setupVariant(msvcRelease))
+  except EnvironmentError:
+    pass
+
+  try:
+    # MinGW
+    from cake.library.compilers.gcc import findMinGWCompiler
+    mingw = base.clone(platform="windows", compiler="mingw")
+    compiler = mingw.tools["compiler"] = findMinGWCompiler()
+    
+    mingwDebug = mingw.clone(release="debug")
+    engine.addVariant(setupVariant(mingwDebug))
+    
+    mingwRelease = mingw.clone(release="release")
+    engine.addVariant(setupVariant(mingwRelease))
+  except EnvironmentError:
+    pass
 
 try:
   # Gcc
-  from cake.library.compilers.gcc import findCompiler as findGccCompiler
+  from cake.library.compilers.gcc import findGccCompiler
   gcc = base.clone(platform="windows", compiler="gcc")
   compiler = gcc.tools["compiler"] = findGccCompiler()
   

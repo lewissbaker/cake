@@ -16,14 +16,18 @@ from cake.library.compilers import Compiler, makeCommand
 
 def getHostArchitecture():
   """Returns the current machines architecture.
+  
+  @return: The host architecture, or 'unknown' if the host
+  architecture could not be determined.
+  @rtype: string
   """
   try:
     return os.environ['PROCESSOR_ARCHITECTURE']
   except KeyError:
-    raise EnvironmentError("Could not determine host architecture.")
+    return 'unknown'
 
 def findExecutable(name, paths):
-  """Find an executable given a list of paths.  
+  """Find an executable given its name and a list of paths.  
   """
   for p in paths:
     executable = cake.path.join(p, name)
@@ -32,7 +36,53 @@ def findExecutable(name, paths):
   else:
     raise EnvironmentError("Could not find executable.");
 
-def findCompiler(architecture=None):
+def getMinGWInstallDir():
+  """Returns the MinGW install directory.
+  
+  Typically: 'C:\MinGW'.
+
+  @return: The path to the MinGW install directory.
+  @rtype: string 
+
+  @raise WindowsError: If MinGW is not installed. 
+  """
+  import _winreg
+  subKey = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MinGW"
+  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+  try:
+    return str(_winreg.QueryValueEx(key, "InstallLocation")[0])
+  finally:
+    _winreg.CloseKey(key)
+
+def findMinGWCompiler(architecture=None):
+  """Returns a MinGW compiler given an architecture.
+  
+  @param architecture: The machine architecture to compile for. If
+  architecture is None then the current architecture is used.
+
+  @raise EnvironmentError: When a valid MinGW compiler could not be found.
+  """
+  if architecture is None:
+    architecture = getHostArchitecture()
+
+  try:
+    installDir = getMinGWInstallDir()
+  except WindowsError:
+    raise EnvironmentError("Could not find MinGW install directory.")
+
+  gccExe = cake.path.join(installDir, "bin", "gcc.exe")
+  arExe = cake.path.join(installDir, "bin", "ar.exe")
+  
+  compiler = GccCompiler(
+    ccExe=gccExe,
+    arExe=arExe,
+    ldExe=gccExe,
+    architecture=architecture,
+    )
+
+  return compiler
+
+def findGccCompiler(architecture=None):
   """Returns a GCC compiler given an architecture.
 
   @param architecture: The machine architecture to compile for. If
@@ -42,19 +92,19 @@ def findCompiler(architecture=None):
   """
   if architecture is None:
     architecture = getHostArchitecture()
-    
+
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
   try:
-    ccExe = findExecutable("gcc", paths)
+    gccExe = findExecutable("gcc", paths)
     arExe = findExecutable("ar", paths)
   except EnvironmentError:
     raise EnvironmentError("Could not find GCC compiler and AR archiver.")
     
   compiler = GccCompiler(
-    ccExe=ccExe,
+    ccExe=gccExe,
     arExe=arExe,
-    ldExe=ccExe,
+    ldExe=gccExe,
     architecture=architecture,
     )
 
@@ -326,19 +376,19 @@ class GccCompiler(Compiler):
     args = [self.__ldExe]
 
     if dll:
-      args.append('-shared')
+      args.append('-Wl,-shared')
     else:
       if self.__architecture == 'ppu':
         args.append('-Wl,--oformat=fself')
 
     if self.optimisation == self.FULL_OPTIMISATION:
-      args.append('--gc-sections')
-      
       if self.__architecture == 'ppu':
         args.extend([
           '-Wl,-strip-unused',
           '-Wl,-strip-unused-data',
           ])
+      else:
+        args.append('-Wl,--gc-sections')
       
     return args
   

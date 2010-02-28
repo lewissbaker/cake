@@ -76,6 +76,7 @@ class ThreadPool(object):
     # Create the worker threads
     for _ in xrange(numWorkers):
       worker = threading.Thread(target=self._runThread)
+      worker.daemon = True
       worker.start()
       self._workers.append(worker)
     

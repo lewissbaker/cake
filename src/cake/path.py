@@ -206,73 +206,64 @@ def commonPath(path1, path2):
     safeCount = path1len
   return path1[:safeCount]
 
-def fileSystemPath(path):
-  """Look up the correctly cased path from the file system.
-
-  This is only relevant on file systems that are case insensitive such
-  as Windows.
+if platform.system() == "Windows":
+  def fileSystemPath(path):
+    """Look up the correctly cased path from the file system.
   
-  '/' and '\\' will be left intact.
-
-  '.' and '..' will be left intact.
-  
-  A drive letter will be capitalized.
-  
-  @param path: The path to look up.
-  @type path: string
-  
-  @return: The correctly cased file system path.
-  @rtype: string
-  """
-  if platform.system() != 'Windows':
-    return path
-  
-  def fileSystemBaseName(path):
-    """Return a correctly cased base name given a path.
-    """
-    try:
-      import win32file
-      findData = win32file.FindFilesIterator(path).next()
-      return str(findData[8])
-    except Exception:
-      # Find may fail if eg. checking the drive, but this should still
-      # be a valid path
-      if os.path.exists(path):
-        return os.path.basename(path)
-      raise EnvironmentError(
-        "Failed to find file or directory '%s'." % path
-        )      
-  
-  seps = [os.path.sep, os.path.altsep]
-  parts = list()
-  while path:
-    name = fileSystemBaseName(path)
-    head, tail = os.path.split(path)
-
-    # Keep '.' and '..' as is
-    if tail == '.' or tail == '..':
-      parts.insert(0, tail)
-    else:
-      parts.insert(0, name)
+    This is only relevant on file systems that are case insensitive such
+    as Windows.
     
-    # Insert the character we split with
-    if len(head) and len(path) > len(head):
-      splitChar = path[len(head)]
-      if splitChar in seps:
-        parts.insert(0, splitChar)
-
-    path = head
-      
-    if not tail:
-      break # Must have hit the drive
-      
-  if path:
-    # Capitalize drive letter if found
-    if path[1:2] == ':':
-      path = path.capitalize()
-    parts.insert(0, path)
+    '/' and '\\' will be left intact.
   
-  return "".join(parts)
+    '.' and '..' will be left intact.
+    
+    A drive letter will be capitalized.
+    
+    @param path: The path to look up.
+    @type path: string
+    
+    @return: The correctly cased file system path.
+    @rtype: string
+    """
+  
+    import win32file
+  
+    seps = frozenset([os.path.sep, os.path.altsep])
+    
+    parts = list()
+    while path:
+      stem, leaf = os.path.split(path)
+      if leaf != '.' and leaf != '..':
+        try:
+          findData = win32file.FindFilesIterator(path).next()
+          leaf = str(findData[8])
+        except Exception:
+          pass
+      parts.append(leaf)
+  
+      if stem and len(path) > len(stem):
+        sep = path[len(stem)]
+        if sep in seps:
+          parts.append(sep)
+          
+      path = stem
+      
+      if not leaf:
+        # Reached root path
+        break
+  
+    if path:
+      # Capitalise drive letter if found
+      if len(path) >= 2 and path[1] == ':':
+        path = path.capitalize()
+      parts.append(path)
+  
+    return "".join(reversed(parts))
+
+else:
+  # Assume a case-sensitive file-system
+  def fileSystemPath(path):
+    return path
 
 def join(*args):
   """Find the cross product of any amount of input paths or lists of paths.

@@ -71,13 +71,12 @@ def findMinGWCompiler(architecture=None):
   except WindowsError:
     raise EnvironmentError("Could not find MinGW install directory.")
 
-  gccExe = cake.path.join(installDir, "bin", "gcc.exe")
   arExe = cake.path.join(installDir, "bin", "ar.exe")
+  gccExe = cake.path.join(installDir, "bin", "gcc.exe")
   
   compiler = GccCompiler(
-    ccExe=gccExe,
     arExe=arExe,
-    ldExe=gccExe,
+    gccExe=gccExe,
     architecture=architecture,
     )
 
@@ -97,15 +96,14 @@ def findGccCompiler(architecture=None):
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
   try:
-    gccExe = findExecutable("gcc", paths)
     arExe = findExecutable("ar", paths)
+    gccExe = findExecutable("gcc", paths)
   except EnvironmentError:
     raise EnvironmentError("Could not find GCC compiler and AR archiver.")
     
   compiler = GccCompiler(
-    ccExe=gccExe,
     arExe=arExe,
-    ldExe=gccExe,
+    gccExe=gccExe,
     architecture=architecture,
     )
 
@@ -119,15 +117,13 @@ class GccCompiler(Compiler):
   
   def __init__(
     self,
-    ccExe=None,
     arExe=None,
-    ldExe=None,
+    gccExe=None,
     architecture=None,
     ):
     Compiler.__init__(self)
-    self.__ccExe = ccExe
     self.__arExe = arExe
-    self.__ldExe = ldExe
+    self.__gccExe = gccExe
     self.__architecture = architecture
     
     if architecture == 'x86':
@@ -232,7 +228,7 @@ class GccCompiler(Compiler):
     # so for safety all compile options are shared across preprocessing
     # and compiling.
     # Note: To dump predefined compiler macros: 'echo | gcc -E -dM -'
-    args = [self.__ccExe]
+    args = [self.__gccExe]
 
     args.extend(['-x', language])
 
@@ -328,8 +324,8 @@ class GccCompiler(Compiler):
         "scan: %s\n" % preprocessTarget,
         )
       
-      # TODO: Add dependencies on DLLs used by cc.exe
-      dependencies = [self.__ccExe]
+      # TODO: Add dependencies on DLLs used by gcc.exe
+      dependencies = [self.__gccExe]
       uniqueDeps = set()
 
       with open(preprocessTarget, 'rb') as f:
@@ -373,14 +369,14 @@ class GccCompiler(Compiler):
 
     @makeCommand("lib-scan")
     def scan():
-      # TODO: Add dependencies on DLLs used by lib.exe
+      # TODO: Add dependencies on DLLs used by ar.exe
       return [self.__arExe] + sources
 
     return archive, scan
 
   @memoise
   def _getCommonLinkArgs(self, dll):
-    args = [self.__ldExe]
+    args = [self.__gccExe]
 
     if dll:
       args.append('-Wl,-shared')
@@ -422,9 +418,9 @@ class GccCompiler(Compiler):
     
     @makeCommand("link-scan")
     def scan():
-      # TODO: Add dependencies on DLLs used by ld.exe
+      # TODO: Add dependencies on DLLs used by gcc.exe
       # TODO: Add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [self.__ldExe] + sources + resolvedPaths
+      return [self.__gccExe] + sources + resolvedPaths
     
     return link, scan

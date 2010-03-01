@@ -7,8 +7,9 @@ This script is used to generate documentation for Cake.
 @license: Licensed under the MIT license (see license.txt).
 """
 
-if __name__ == "__main__":
-  import sys
+import sys
+
+def run():
   import epydoc.cli
   sys.argv += [
     "--verbose",
@@ -23,4 +24,7 @@ if __name__ == "__main__":
     "src/cake",
     ]
   epydoc.cli.cli()
-  sys.exit(0)
+  return 0
+    
+if __name__ == "__main__":
+  sys.exit(run())

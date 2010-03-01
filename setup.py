@@ -8,11 +8,12 @@ redistributable packages.
 @license: Licensed under the MIT license (see license.txt).
 """
 
-if __name__ == "__main__":
+import sys
+
+def run():
   import ez_setup
   ez_setup.use_setuptools()
   
-  import sys
   import os.path
   sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
   import cake
@@ -32,5 +33,7 @@ if __name__ == "__main__":
         ],
       }
     )
+  return 0
 
-  sys.exit(0)
+if __name__ == "__main__":
+  sys.exit(run())

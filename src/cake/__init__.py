@@ -9,7 +9,7 @@ import threading
 import platform
 import sys
 
-__version_info__ = (0, 1, 0)
+__version_info__ = (0, 9, 0)
 """Current version number tuple.
 
 The number uses semantic versioning (see U{http://semver.org}).

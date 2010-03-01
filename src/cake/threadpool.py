@@ -2,6 +2,10 @@
 
 Provides a simple thread-pool utility for managing execution of multiple jobs
 in parallel on separate threads.
+
+@see: Cake Build System (http://sourceforge.net/projects/cake-build)
+@copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
+@license: Licensed under the MIT license (see license.txt).
 """
 
 import threading

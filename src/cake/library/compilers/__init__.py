@@ -1,5 +1,8 @@
-"""
-Base Class and Utilities for C/C++ Compiler Tools.
+"""Base Class and Utilities for C/C++ Compiler Tools.
+
+@see: Cake Build System (http://sourceforge.net/projects/cake-build)
+@copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
+@license: Licensed under the MIT license (see license.txt).
 """
 
 __all__ = ["Compiler"]

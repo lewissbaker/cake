@@ -1,3 +1,12 @@
+"""Document generation.
+
+This script is used to generate documentation for Cake.
+
+@see: Cake Build System (http://sourceforge.net/projects/cake-build)
+@copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
+@license: Licensed under the MIT license (see license.txt).
+"""
+
 if __name__ == "__main__":
   import sys
   import epydoc.cli

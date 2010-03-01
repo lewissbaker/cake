@@ -1,3 +1,13 @@
+"""Setup script.
+
+This script is used for installation and generation of
+redistributable packages.
+
+@see: Cake Build System (http://sourceforge.net/projects/cake-build)
+@copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
+@license: Licensed under the MIT license (see license.txt).
+"""
+
 if __name__ == "__main__":
   import ez_setup
   ez_setup.use_setuptools()

@@ -24,7 +24,7 @@ def run():
     version=cake.__version__,
     author="Lewis Baker, Stuart McMahon.",
     url="http://sourceforge.net/projects/cake-build",
-    description="A Python build tool.",
+    description="A build system written in Python.",
     license="MIT",
     py_modules=['cakemain'],
     package_dir={'' : 'src'},

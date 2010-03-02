@@ -2,7 +2,7 @@
 
 @see: Cake Build System (http://sourceforge.net/projects/cake-build)
 @copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
-@license: Licensed under the MIT license (see license.txt).
+@license: Licensed under the MIT license.
 """
 
 from cake.engine import Script

@@ -33,7 +33,7 @@ Upcoming Features
 License
 -------
 
-Licensed under the MIT license (see license.txt).
+Licensed under the MIT license.
 
 Installing
 ----------

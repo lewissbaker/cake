@@ -11,6 +11,9 @@ redistributable packages.
 import sys
 
 def run():
+  import ez_setup
+  ez_setup.use_setuptools()
+  
   import os.path
   sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 

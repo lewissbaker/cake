@@ -225,13 +225,8 @@ class GccCompiler(Compiler):
         )
 
   @memoise
-  def _getCommonArgs(self, language):
-    # Almost all compile options can also set preprocessor defines (see
-    # http://gcc.gnu.org/onlinedocs/cpp/Common-Predefined-Macros.html),
-    # so for safety all compile options are shared across preprocessing
-    # and compiling.
-    # Note: To dump predefined compiler macros: 'echo | gcc -E -dM -'
-    args = [self.__gccExe]
+  def _getCompileArgs(self, language):
+    args = [self.__gccExe, '-c', '-MD']
 
     args.extend(['-x', language])
 
@@ -270,23 +265,7 @@ class GccCompiler(Compiler):
       
     if self.useSse:
       args.append('-msse')
-    
-    return args
-
-  @memoise
-  def _getCompileArgs(self, language):
-    args = list(self._getCommonArgs(language))
-    
-    args.append('-c')
-
-    return args
-
-  @memoise
-  def _getPreprocessArgs(self, language):
-    args = list(self._getCommonArgs(language))
-
-    args.append('-E')
-    
+  
     for p in reversed(self.includePaths):
       args.extend(['-I', p])
 
@@ -294,9 +273,9 @@ class GccCompiler(Compiler):
     
     for p in reversed(self.forceIncludes):
       args.extend(['-include', p])
-
-    return args
     
+    return args
+
   def getObjectCommands(self, target, source, engine):
     
     language = self.language
@@ -305,49 +284,62 @@ class GccCompiler(Compiler):
         language = 'c'
       else:
         language = 'c++'
-    
-    preprocessTarget = target + '.ii'
-
-    preprocessArgs = list(self._getPreprocessArgs(language))
-    preprocessArgs += [source, '-o', preprocessTarget]
-    
+   
     compileArgs = list(self._getCompileArgs(language))
-    compileArgs += [preprocessTarget, '-o', target]
+    compileArgs += [source, '-o', target]
     
-    @makeCommand(preprocessArgs)
+    @makeCommand(compileArgs)
     def preprocess():
-      self._executeProcess(preprocessArgs, preprocessTarget, engine)
+      self._executeProcess(compileArgs, target, engine)
 
     @makeCommand("obj-scan")
     def scan():
+      dependencyFile = cake.path.stripExtension(target) + '.d'
       engine.logger.outputDebug(
         "scan",
-        "scan: %s\n" % preprocessTarget,
+        "scan: %s\n" % dependencyFile,
         )
       
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [self.__gccExe]
       uniqueDeps = set()
 
-      with open(preprocessTarget, 'rb') as f:
-        for match in self._lineRegex.finditer(f.read()):
-          path = match.group('path').replace('\\\\', '\\')
-          if path not in uniqueDeps:
-            uniqueDeps.add(path)
-            if not cake.filesys.isFile(path):
-              engine.logger.outputDebug(
-                "scan",
-                "scan: Ignoring missing include '" + path + "'\n",
-                )
-            else:
-              dependencies.append(path)
+      def addPath(path):
+        if path and path not in uniqueDeps:
+          uniqueDeps.add(path)
+          path = path.replace('\\ ', ' ') # fix escaped spaces
+          dependencies.append(path)
+            
+      with open(dependencyFile, 'rt') as f:
+        text = f.read()
+        text = text.replace('\\\n', ' ') # join escaped lines
+        text = text.replace('\n', ' ') # join other lines
+        text = text.lstrip(' ') # strip leading spaces
+        targetLen = len(target)
 
+        if text.startswith(target) and text[targetLen] == ':':
+          text = text[targetLen+1:] # strip target + ':'
+
+          while True:
+            text = text.lstrip(' ') # strip leading spaces
+
+            i = text.find(' ')
+            while i != -1 and text[i-1] == '\\': # Skip escaped spaces
+              i = text.find(' ', i+1)
+            
+            if i == -1:
+              addPath(text)
+              break
+            else:
+              addPath(text[:i])
+              text = text[i:]
+      
       return dependencies
 
-    @makeCommand(compileArgs)
+    @makeCommand("dummy-compile")
     def compile():
-      self._executeProcess(compileArgs, target, engine)
-
+      pass
+      
     canBeCached = True
     return preprocess, scan, compile, canBeCached    
 
@@ -407,10 +399,10 @@ class GccCompiler(Compiler):
     resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
     
     args = list(self._getCommonLinkArgs(dll))
-    #args.extend('-L' + p for p in self.libraryPaths)
     args.extend(sources)
     args.extend(resolvedPaths)    
     args.extend('-l' + l for l in unresolvedLibs)    
+    args.extend('-L' + p for p in reversed(self.libraryPaths))
     args.extend(['-o', target])
     
     @makeCommand(args)

@@ -48,36 +48,36 @@ def _overrideOpen():
       flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
     else:
       flags = os.O_RDONLY
-      mode = 'r' + mode
+      mode = "r" + mode
     
     for ch in mode[1:]:
       if ch == "+":
         flags |= os.O_RDWR
         flags &= ~(os.O_RDONLY | os.O_WRONLY)
-      elif ch == "t":
+      elif ch == "t" and hasattr(os, "O_TEXT"):
         flags |= os.O_TEXT
-      elif ch == "b":
+      elif ch == "b" and hasattr(os, "O_BINARY"):
         flags |= os.O_BINARY
       elif ch in " ,":
         pass
       elif ch == "U":
         pass # Universal newline support
-      elif ch == "N":
+      elif ch == "N" and hasattr(os, "O_NOINHERIT"):
         flags |= os.O_NOINHERIT
-      elif ch == "D":
+      elif ch == "D" and hasattr(os, "O_TEMPORARY"):
         flags |= os.O_TEMPORARY
-      elif ch == "T":
+      elif ch == "T" and hasattr(os, "O_SHORT_LIVED"):
         flags |= os.O_SHORT_LIVED
-      elif ch == "S":
+      elif ch == "S" and hasattr(os, "O_SEQUENTIAL"):
         flags |= os.O_SEQUENTIAL
-      elif ch == "R":
+      elif ch == "R" and hasattr(os, "O_RANDOM"):
         flags |= os.O_RANDOM
       else:
         raise ValueError("unknown flag '%s' in mode" % ch)
 
-    if flags & os.O_BINARY and flags & os.O_TEXT:
-      raise ValueError("Cannot specify both 't' and 'b' in mode")
-    #if flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
+    #if hasattr(os, "O_BINARY") and hasattr(os, "O_TEXT") and flags & os.O_BINARY and flags & os.O_TEXT:
+    #  raise ValueError("Cannot specify both 't' and 'b' in mode")
+    #if hasattr(os, "O_SEQUENTIAL") and hasattr(os, "O_RANDOM") and flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
     #  raise ValueError("Cannot specify both 'S' and 'R' in mode")
 
     try:
@@ -89,7 +89,8 @@ def _overrideOpen():
 
   old_os_open = os.open
   def new_os_open(filename, flag, mode=0777):
-    flag |= os.O_NOINHERIT
+    if hasattr(os, "O_NOINHERIT"):
+      flag |= os.O_NOINHERIT
     return old_os_open(filename, flag, mode)
   os.open = new_os_open
   

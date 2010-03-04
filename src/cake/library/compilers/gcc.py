@@ -18,6 +18,7 @@ import cake.filesys
 import cake.path
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand
+from cake.gnu import parseDependencyFile
 
 def getHostArchitecture():
   """Returns the current machines architecture.
@@ -115,10 +116,6 @@ def findGccCompiler(architecture=None):
 
 class GccCompiler(Compiler):
 
-  _lineRegex = re.compile('# [0-9]+ "(?!\<)(?P<path>.+)"', re.MULTILINE)
-  
-  useSse = False
-  
   def __init__(
     self,
     arExe=None,
@@ -302,38 +299,10 @@ class GccCompiler(Compiler):
       
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [self.__gccExe]
-      uniqueDeps = set()
-
-      def addPath(path):
-        if path and path not in uniqueDeps:
-          uniqueDeps.add(path)
-          path = path.replace('\\ ', ' ') # fix escaped spaces
-          dependencies.append(path)
-            
-      with open(dependencyFile, 'rt') as f:
-        text = f.read()
-        text = text.replace('\\\n', ' ') # join escaped lines
-        text = text.replace('\n', ' ') # join other lines
-        text = text.lstrip(' ') # strip leading spaces
-        targetLen = len(target)
-
-        if text.startswith(target) and text[targetLen] == ':':
-          text = text[targetLen+1:] # strip target + ':'
-
-          while True:
-            text = text.lstrip(' ') # strip leading spaces
-
-            i = text.find(' ')
-            while i != -1 and text[i-1] == '\\': # Skip escaped spaces
-              i = text.find(' ', i+1)
-            
-            if i == -1:
-              addPath(text)
-              break
-            else:
-              addPath(text[:i])
-              text = text[i:]
-      
+      dependencies.extend(parseDependencyFile(
+        dependencyFile,
+        self.objectSuffix
+        ))
       return dependencies
 
     @makeCommand("dummy-compile")
@@ -401,8 +370,8 @@ class GccCompiler(Compiler):
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
     args.extend(resolvedPaths)    
-    args.extend('-l' + l for l in unresolvedLibs)    
     args.extend('-L' + p for p in reversed(self.libraryPaths))
+    args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
     
     @makeCommand(args)

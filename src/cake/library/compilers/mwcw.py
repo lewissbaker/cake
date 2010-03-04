@@ -23,8 +23,6 @@ class MwcwCompiler(Compiler):
   libraryPrefixSuffixes = [('', '.a')]
   programSuffix = '.elf'
 
-  linkerCommandFile = None
-  
   def __init__(
     self,
     ccExe=None,
@@ -72,16 +70,14 @@ class MwcwCompiler(Compiler):
       )
     cake.filesys.makeDirs(cake.path.dirName(target))
 
-# TODO: Response file support...     
-#    argsFile = target + '.args'
-#    with open(argsFile, 'wt') as f:
-#      for arg in args[1:]:
-#        f.write(arg + '\n')
+    argsFile = target + '.args'
+    with open(argsFile, 'wt') as f:
+      for arg in args[1:]:
+        f.write('"' + arg + '"\n')
 
     try:
       p = subprocess.Popen(
-        #args=[args[0], '@' + argsFile],
-        args=args,
+        args=[args[0], '@' + argsFile],
         executable=args[0],
         env=self._getProcessEnv(args[0]),
         stdin=subprocess.PIPE,
@@ -110,7 +106,6 @@ class MwcwCompiler(Compiler):
     args = [
       '-msgstyle', 'parseable',  # Use parseable message output
       '-nowraplines',            # Don't wrap long lines
-      '-stderr',                 # Separate stderr and stdout
       '-sdatathreshold', '0',    # Max size for objects in small data section
       '-sdata2threshold', '0',   # Ditto for const small data section
       ]
@@ -150,7 +145,7 @@ class MwcwCompiler(Compiler):
       else:
         args.extend(['-RTTI', 'off'])
 
-    # Note: Exceptions are still allowed for 'c' language
+    # Note: Exceptions are allowed for 'c' language
     if self.enableExceptions:
       args.extend(['-cpp_exceptions', 'on'])
     else:
@@ -199,10 +194,6 @@ class MwcwCompiler(Compiler):
     return args
 
   def getObjectCommands(self, target, source, engine):
-    
-    # normalise slashes to match what CW does in the .d file
-    target = os.path.normpath(target)
-    
     language = self.language
     if not language:
       if source.lower().endswith('.c'):
@@ -268,9 +259,9 @@ class MwcwCompiler(Compiler):
     args = [self.__ldExe, '-application']
     args.extend(self._getCommonArgs())
     
-    if self.linkerCommandFile is not None:
-      args.extend(['-lcf', self.linkerCommandFile])
-      
+    if self.linkerScript is not None:
+      args.extend(['-lcf', self.linkerScript])
+
     return args
   
   def getProgramCommands(self, target, sources, engine):
@@ -280,7 +271,6 @@ class MwcwCompiler(Compiler):
     return self._getLinkCommands(target, sources, engine, dll=True)
 
   def _getLinkCommands(self, target, sources, engine, dll):
-    
     resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
     
     args = list(self._getCommonLinkArgs(dll))

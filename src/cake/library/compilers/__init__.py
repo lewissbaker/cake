@@ -71,7 +71,9 @@ class Compiler(Tool):
   useFunctionLevelLinking = False
   stackSize = None
   heapSize = None
-  
+
+  linkerScript = None
+    
   objectCachePath = None
 
   language = None

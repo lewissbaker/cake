@@ -116,9 +116,9 @@ class MwcwCompiler(Compiler):
     if self.debugSymbols:
       args.extend(['-sym', 'dwarf-2'])
 
-    if self.__architecture == 'wii':
+    if self.__architecture == 'gekko':
       args.extend([
-        '-processor', 'gekko',   # Target GameCube/Wii's Gekko processor
+        '-processor', 'gekko',   # Target the Gekko processor
         '-fp', 'fmadd',          # Use fmadd instructions where possible
         ])
     
@@ -179,8 +179,12 @@ class MwcwCompiler(Compiler):
         args.extend(['-ipa', 'file'])
       elif self.optimisation == self.FULL_OPTIMISATION:
         args.extend(['-ipa', 'file'])
-        # Note: I've never got program opt to work (on Wii) so I'm leaving
-        # it out until someone needs it
+        # Note: ipa program requires you to:
+        #  - link with cc.exe
+        #  - pass '-ipa program' to the link
+        #  - pass .irobj's to the link instead of .o's
+        # Even after this the compiler may run out of memory trying
+        # to optimise a large program. 
         #args.extend(['-ipa', 'program'])
   
     for p in reversed(self.includePaths):

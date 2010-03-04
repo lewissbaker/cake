@@ -282,12 +282,12 @@ class GccCompiler(Compiler):
       else:
         language = 'c++'
    
-    compileArgs = list(self._getCompileArgs(language))
-    compileArgs += [source, '-o', target]
+    args = list(self._getCompileArgs(language))
+    args += [source, '-o', target]
     
-    @makeCommand(compileArgs)
+    @makeCommand(args)
     def preprocess():
-      self._executeProcess(compileArgs, target, engine)
+      self._executeProcess(args, target, engine)
 
     @makeCommand("obj-scan")
     def scan():
@@ -298,7 +298,7 @@ class GccCompiler(Compiler):
         )
       
       # TODO: Add dependencies on DLLs used by gcc.exe
-      dependencies = [self.__gccExe]
+      dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
         dependencyFile,
         self.objectSuffix
@@ -332,7 +332,7 @@ class GccCompiler(Compiler):
     @makeCommand("lib-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by ar.exe
-      return [self.__arExe] + sources
+      return [args[0]] + sources
 
     return archive, scan
 
@@ -383,6 +383,6 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [self.__gccExe] + sources + resolvedPaths
+      return [args[0]] + sources + resolvedPaths
     
     return link, scan

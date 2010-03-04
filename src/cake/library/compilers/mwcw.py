@@ -201,12 +201,12 @@ class MwcwCompiler(Compiler):
       else:
         language = 'c++'
    
-    compileArgs = list(self._getCompileArgs(language))
-    compileArgs += [source, '-o', target]
+    args = list(self._getCompileArgs(language))
+    args += [source, '-o', target]
     
-    @makeCommand(compileArgs)
+    @makeCommand(args)
     def preprocess():
-      self._executeProcess(compileArgs, target, engine)
+      self._executeProcess(args, target, engine)
 
     @makeCommand("obj-scan")
     def scan():
@@ -217,7 +217,7 @@ class MwcwCompiler(Compiler):
         )
       
       # TODO: Add dependencies on DLLs used by gcc.exe
-      dependencies = [self.__ccExe]
+      dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
         dependencyFile,
         self.objectSuffix
@@ -250,7 +250,7 @@ class MwcwCompiler(Compiler):
     @makeCommand("lib-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by ld.exe
-      return [self.__ldExe] + sources
+      return [args[0]] + sources
 
     return archive, scan
 
@@ -292,6 +292,6 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [self.__ldExe] + sources + resolvedPaths
+      return [args[0]] + sources + resolvedPaths
     
     return link, scan

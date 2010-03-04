@@ -7,7 +7,7 @@
 
 from __future__ import with_statement
 
-__all__ = ["MsvcCompiler"]
+__all__ = ["MsvcCompiler", "findCompiler"]
 
 import os
 import os.path
@@ -15,10 +15,6 @@ import subprocess
 import tempfile
 import re
 import threading
-import weakref
-import ctypes
-import ctypes.wintypes
-import platform
 
 import cake.filesys
 import cake.path
@@ -26,33 +22,7 @@ from cake.library.compilers import Compiler, makeCommand
 from cake.library import memoise
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
-
-kernel32 = ctypes.windll.kernel32
-IsWow64Process = kernel32.IsWow64Process
-IsWow64Process.restype = ctypes.wintypes.BOOL
-IsWow64Process.argtypes = (ctypes.wintypes.HANDLE,
-                           ctypes.POINTER(ctypes.wintypes.BOOL))
-
-GetCurrentProcess = kernel32.GetCurrentProcess
-GetCurrentProcess.restype = ctypes.wintypes.HANDLE
-GetCurrentProcess.argtypes = ()
-
-def getHostArchitecture():
-  """Returns the current machines architecture.
-  """
-  if platform.architecture()[0] == '32bit':
-    result = ctypes.wintypes.BOOL()
-    ok = IsWow64Process(GetCurrentProcess(), ctypes.byref(result))
-    if not ok:
-      raise WindowsError("IsWow64Process")
-
-    if result.value == 1:
-      return "x64"
-    else:
-      return "x86"
-  else:
-    # HACK: Could be IA-64 but who uses that these days?
-    return "x64"
+from cake.engine import getHostArchitecture
 
 def findCompiler(
   version=None,

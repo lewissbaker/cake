@@ -8,6 +8,7 @@
 import threading
 import platform
 import sys
+import os
 
 __version_info__ = (0, 9, 0)
 """Current version number tuple.
@@ -37,7 +38,6 @@ def _overrideOpen():
   flag on files to prevent processes from inheriting file handles.
   """
   import __builtin__
-  import os
   
   def new_open(filename, mode="r", bufsize=0):
     if mode.startswith("r"):
@@ -93,8 +93,10 @@ def _overrideOpen():
       flag |= os.O_NOINHERIT
     return old_os_open(filename, flag, mode)
   os.open = new_os_open
-  
-_overrideOpen()
+
+# Only override if there is a no-inherit flag.  
+if hasattr(os, "O_NOINHERIT"):
+  _overrideOpen()
 
 def _speedUp():
   """

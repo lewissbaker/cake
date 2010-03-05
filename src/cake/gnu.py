@@ -5,6 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
+from __future__ import with_statement
+
 def parseDependencyFile(path, targetSuffix):
   """Parse a .d file and return the list of dependencies.
   

@@ -268,7 +268,7 @@ class GccCompiler(Compiler):
 
     args.extend('-D' + d for d in reversed(self.defines))
     
-    for p in reversed(self.forceIncludes):
+    for p in reversed(self.forcedIncludes):
       args.extend(['-include', p])
     
     return args

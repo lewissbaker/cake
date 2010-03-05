@@ -92,7 +92,7 @@ class Compiler(Tool):
     super(Compiler, self).__init__()
     self.includePaths = []
     self.defines = []
-    self.forceIncludes = []
+    self.forcedIncludes = []
     self.libraryScripts = []
     self.libraryPaths = []
     self.libraries = []
@@ -150,12 +150,12 @@ class Compiler(Tool):
       self.defines.append("{0}={1}".format(define, value))
     self._clearCache()
     
-  def addForceInclude(self, path):
+  def addForcedInclude(self, path):
     """Add a file to be forcibly included on the command-line.
     """
-    self.forceIncludes.append(path)
+    self.forcedIncludes.append(path)
     self._clearCache()
-    
+
   def addLibrary(self, name):
     """Add a library to the list of libraries to link with.
     

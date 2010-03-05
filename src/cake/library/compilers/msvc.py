@@ -342,7 +342,7 @@ class MsvcCompiler(Compiler):
  
     args.extend("/D" + define for define in reversed(self.defines))
     args.extend("/I" + path for path in reversed(self.includePaths))
-    args.extend("/FI" + path for path in self.forceIncludes)
+    args.extend("/FI" + path for path in self.forcedIncludes)
 
  
     return args 

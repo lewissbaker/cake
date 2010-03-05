@@ -217,23 +217,25 @@ class MwcwCompiler(Compiler):
     else:
       args.extend([
         '-inline', 'all',        # Let the compiler auto inline small functions
-        '-opt', 'level=4',       # Optimize level 4
-        '-opt', 'peep',          # Eliminate unnecessary moves/loads/stores
-        '-opt', 'schedule',      # Reorder instructions to eliminate stalls
         '-str', 'reuse,pool',    # Reuse string constants, place them together
+        '-ipa', 'file',          # File level optimisation
         ])
 
       if self.optimisation == self.PARTIAL_OPTIMISATION:
-        args.extend(['-ipa', 'file'])
+        args.extend(['-opt', 'level=2']) # Optimisation level 2
       elif self.optimisation == self.FULL_OPTIMISATION:
-        args.extend(['-ipa', 'file'])
+        args.extend([
+          '-opt', 'level=4',       # Optimisation level 4
+          '-opt', 'peep',          # Eliminate unnecessary moves/loads/stores
+          '-opt', 'schedule',      # Reorder instructions to eliminate stalls
+          ])
         # Note: ipa program requires you to:
         #  - link with cc.exe
-        #  - pass '-ipa program' to the link
-        #  - pass .irobj's to the link instead of .o's
+        #  - pass '-ipa program' to the link line
+        #  - pass .irobj's to the link line instead of .o's
         # Even after this the compiler may run out of memory trying
         # to optimise a large program. 
-        #args.extend(['-ipa', 'program'])
+        #args.extend(['-ipa', 'program']) # Whole program optimisation
   
     for p in reversed(self.includePaths):
       args.extend(['-i', p])

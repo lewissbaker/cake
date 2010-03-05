@@ -1,5 +1,4 @@
 from cake.tools import compiler, env, filesys, script
-import cake.path
 
 compiler.addIncludePath(filesys.cwd("include"))
 compiler.addDefine("EXPORT")

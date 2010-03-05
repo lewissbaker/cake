@@ -71,7 +71,9 @@ class Compiler(Tool):
   useFunctionLevelLinking = False
   stackSize = None
   heapSize = None
-  
+
+  linkerScript = None
+    
   objectCachePath = None
 
   language = None
@@ -84,6 +86,7 @@ class Compiler(Tool):
   subSystem = None
   importLibrary = None
   embedManifest = False
+  useSse = False
   
   def __init__(self):
     super(Compiler, self).__init__()

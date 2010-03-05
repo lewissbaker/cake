@@ -161,17 +161,8 @@ class MwcwCompiler(Compiler):
       args.extend([
         '-inline', 'all',        # Let the compiler auto inline small functions
         '-opt', 'level=4',       # Optimize level 4
-        '-opt', 'speed',         # Optimize for speed (alternative is 'space')
-        '-opt', 'commonsubs',    # Eliminate common subexpressions
-        '-opt', 'dead',          # Should be the same as: deadcode, deadstore
-        '-opt', 'deadcode',      # Remove dead code
-        '-opt', 'deadstore',     # Remove dead assignments
-        '-opt', 'lifetimes',     # Lifetime-based register allocation
-        '-opt', 'loop',          # Remove loop invariants
         '-opt', 'peep',          # Eliminate unnecessary moves/loads/stores
-        '-opt', 'prop',          # Propagation of constant and copy assignments
         '-opt', 'schedule',      # Reorder instructions to eliminate stalls
-        '-opt', 'strength',      # Reduce multiplies to adds
         '-str', 'reuse,pool',    # Reuse string constants, place them together
         ])
 

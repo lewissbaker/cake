@@ -9,6 +9,7 @@ from __future__ import with_statement
 
 __all__ = ["MsvcCompiler", "findCompiler"]
 
+import sys
 import os
 import os.path
 import subprocess
@@ -239,13 +240,17 @@ class MsvcCompiler(Compiler):
     return self.__architecture
     
   @memoise
-  def _getCommonArgs(self, language):
+  def _getCompileCommonArgs(self, language):
     args = [
       self.__clExe,
       "/nologo",
       "/bigobj",
+      "/showIncludes",
       ]
-    
+
+    if self.errorReport:
+      args.append('/errorReport:' + self.errorReport)
+
     if self.outputFullPath:
       args.append("/FC")
 
@@ -292,37 +297,6 @@ class MsvcCompiler(Compiler):
       
     if self.warningsAsErrors:
       args.append('/WX')
- 
-    if self.errorReport:
-      args.append('/errorReport:' + self.errorReport)
- 
-    return args 
-    
-  @memoise
-  def _getPreprocessorCommonArgs(self, language):
-    args = list(self._getCommonArgs(language))
-   
-    args.extend("/D" + define for define in reversed(self.defines))
-    args.extend("/I" + path for path in reversed(self.includePaths))
-    args.extend("/FI" + path for path in reversed(self.forceIncludes))
-
-    args.append("/E")
-    
-    return args
-    
-  @property
-  @memoise
-  def _needPdbFile(self):
-    if self.pdbFile is not None and self.debugSymbols:
-      return True
-    elif self.useMinimalRebuild or self.useEditAndContinue:
-      return True
-    else:
-      return False
-    
-  @memoise
-  def _getCompileCommonArgs(self, language):
-    args = list(self._getCommonArgs(language))
 
     if self.useEditAndContinue:
       args.append("/ZI") # Output debug info to PDB (edit-and-continue)
@@ -335,8 +309,23 @@ class MsvcCompiler(Compiler):
       args.append("/Gm") # Enable minimal rebuild
     
     args.append("/c")
-    args.append("/u")
-    return args
+ 
+    args.extend("/D" + define for define in reversed(self.defines))
+    args.extend("/I" + path for path in reversed(self.includePaths))
+    args.extend("/FI" + path for path in self.forcedIncludes)
+
+ 
+    return args 
+    
+  @property
+  @memoise
+  def _needPdbFile(self):
+    if self.pdbFile is not None and self.debugSymbols:
+      return True
+    elif self.useMinimalRebuild or self.useEditAndContinue:
+      return True
+    else:
+      return False
     
   @memoise
   def _getProcessEnv(self):
@@ -373,102 +362,38 @@ class MsvcCompiler(Compiler):
       else:
         language = 'c++'
 
-    preprocessTarget = target + '.i'
-
     processEnv = dict(self._getProcessEnv())    
     compileArgs = list(self._getCompileCommonArgs(language))
-    preprocessArgs = list(self._getPreprocessorCommonArgs(language))
     
     if language == 'c':
-      preprocessArgs.append('/Tc' + source)
-      compileArgs.append('/Tc' + preprocessTarget)
+      compileArgs.append('/Tc' + source)
     else:
-      preprocessArgs.append('/Tp' + source)
-      compileArgs.append('/Tp' + preprocessTarget)
+      compileArgs.append('/Tp' + source)
 
     if self._needPdbFile:
-      pdbFile = self.pdbFile if self.pdbFile is not None else target + '.pdb'
+      if self.pdbFile is not None:
+        pdbFile = self.pdbFile
+      else:
+        pdbFile = target + '.pdb'
       compileArgs.append('/Fd' + pdbFile)
     else:
       pdbFile = None
 
     compileArgs.append('/Fo' + target)
     
-    preprocessorOutput = []
-    
-    @makeCommand(preprocessArgs + ['>', _escapeArg(preprocessTarget)])
-    def preprocess():
-      engine.logger.outputDebug(
-        "run",
-        "run: %s\n" % " ".join(preprocessArgs),
-        )
-      
-      with tempfile.TemporaryFile() as errFile:
-        # Launch the process
-        try:
-          p = subprocess.Popen(
-            args=preprocessArgs,
-            executable=self.__clExe,
-            env=processEnv,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=errFile,
-            )
-        except EnvironmentError, e:
-          engine.raiseError("cake: failed to launch %s: %s\n" % (self.__clExe, str(e)))
-        p.stdin.close()
-        
-        output = p.stdout.read()
-        exitCode = p.wait()
-        
-        sourceName = cake.path.baseName(source)
-        
-        errFile.seek(0)
-        for line in errFile:
-          line = line.rstrip()
-          if not line or line == sourceName:
-            continue
-          if 'error' in line:
-            engine.logger.outputError(line + '\n')
-          elif 'warning' in line:
-            engine.logger.outputWarning(line + '\n')
-          else:
-            engine.logger.outputInfo(line + '\n')
-
-        if exitCode != 0:
-          raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
-
-      cake.filesys.makeDirs(cake.path.dirName(preprocessTarget))
-      with open(preprocessTarget, 'wb') as f:
-        f.write(output)
-
-      preprocessorOutput.append(output)
-
-    @makeCommand("msvc-scan")
-    def scan():
-      engine.logger.outputDebug(
-        "scan",
-        "scan: %s\n" % preprocessTarget,
-        )
-      # TODO: Add dependencies on DLLs used by cl.exe
-      dependencies = [self.__clExe]
-      uniqueDeps = set()
-      for match in self._lineRegex.finditer(preprocessorOutput[0]):
-        path = match.group('path').replace('\\\\', '\\')
-        if path not in uniqueDeps:
-          uniqueDeps.add(path)
-          dependencies.append(path)
-      return dependencies
+    includeDependencies = []
     
     @makeCommand(compileArgs)
-    def compile():
+    def preprocess():
       engine.logger.outputDebug(
         "run",
         "run: %s\n" % " ".join(compileArgs),
         )
+
       cake.filesys.makeDirs(cake.path.dirName(target))
       
       with tempfile.TemporaryFile() as errFile:
+        # Launch the process
         try:
           p = subprocess.Popen(
             args=compileArgs,
@@ -476,31 +401,55 @@ class MsvcCompiler(Compiler):
             env=processEnv,
             stdin=subprocess.PIPE,
             stdout=errFile,
-            stderr=subprocess.STDOUT,
+            stderr=errFile,
             )
         except EnvironmentError, e:
-          engine.raiseError("cake: failed to run %s: %s\n" % (self.__clExe, str(e)))
-          
+          engine.raiseError(
+            "cake: failed to launch %s: %s\n" % (self.__clExe, str(e))
+            )
         p.stdin.close()
         
         exitCode = p.wait()
         
-        sourceName = cake.path.baseName(preprocessTarget)
-        
+        sourceName = cake.path.baseName(source)
+
         errFile.seek(0)
+
+        includePrefix = ('Note: including file:')
+        includePrefixLen = len(includePrefix)
+
+        includeDependenciesSet = set()
+        
         for line in errFile:
           line = line.rstrip()
           if not line or line == sourceName:
             continue
-          if 'error' in line:
-            engine.logger.outputError(line + '\n')
-          elif 'warning' in line:
-            engine.logger.outputError(line + '\n')
-          else: 
-            engine.logger.outputInfo(line + '\n')
-        
-      if exitCode != 0:
-        engine.raiseError("cl: failed with code %i\n" % exitCode)
+          if line.startswith(includePrefix):
+            path = line[includePrefixLen:].lstrip()
+            normPath = os.path.normcase(os.path.normpath(path))
+            if normPath not in includeDependenciesSet:
+              includeDependenciesSet.add(normPath)
+              includeDependencies.append(path)
+          else:
+            sys.stderr.write(line + '\n')
+        sys.stderr.flush()
+
+        if exitCode != 0:
+          raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
+
+    @makeCommand("msvc-scan")
+    def scan():
+      engine.logger.outputDebug(
+        "scan",
+        "scan: %s\n" % target,
+        )
+      
+      # TODO: Add dependencies on DLLs used by cl.exe
+      return [self.__clExe, source] + includeDependencies
+    
+    @makeCommand("dummy-compile")
+    def compile():
+      pass
       
     @makeCommand(compileArgs)
     def compileWhenPdbIsFree():
@@ -594,12 +543,8 @@ class MsvcCompiler(Compiler):
       for line in output:
         if not line.rstrip():
           continue
-        if 'error' in line:
-          engine.logger.outputError(line)
-        elif 'warning' in line:
-          engine.logger.outputWarning(line)
-        else:
-          engine.logger.outputInfo(line)
+        sys.stderr.write(line)
+      sys.stderr.flush()
           
       if exitCode != 0:
         engine.raiseError("lib: failed with exit code %i\n" % exitCode)
@@ -765,8 +710,9 @@ class MsvcCompiler(Compiler):
       for line in output:
         if not line.rstrip():
           continue
-        engine.logger.outputInfo(line)
-        
+        sys.stderr.write(line)
+      sys.stderr.flush()
+
       if exitCode != 0:
         engine.raiseError("link: failed with exit code %i\n" % exitCode)
        
@@ -810,9 +756,10 @@ class MsvcCompiler(Compiler):
            output[0].startswith('Microsoft (R) Windows (R) Resource Compiler Version ') and \
            output[1].startswith('Copyright (C) Microsoft Corporation.  All rights reserved.'):
           output = output[2:]
-        
+
         for line in output:
-          engine.logger.outputInfo(line)
+          sys.stderr.write(line)
+        sys.stderr.flush()
         
         if exitCode != 0:
           engine.raiseError("rc: failed with exit code %i" % exitCode)
@@ -860,7 +807,8 @@ class MsvcCompiler(Compiler):
         for line in output:
           if not line.rstrip():
             continue
-          engine.logger.outputInfo(line)
+          sys.stderr.write(line)
+        sys.stderr.flush()
         
         # The magic number here is the exit code output by the mt.exe
         # tool when the manifest file hasn't actually changed. We can
@@ -944,11 +892,9 @@ class MsvcCompiler(Compiler):
       for line in output:
         if not line.rstrip():
           continue
-        if 'error' in line:
-          engine.logger.outputError(line)
-        else:
-          engine.logger.outputInfo(line)
-          
+        sys.stderr.write(line)
+      sys.stderr.flush()
+
       if exitCode != 0:
         engine.raiseError("mt: failed with exit code %i\n" % exitCode)
         

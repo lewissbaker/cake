@@ -48,7 +48,7 @@ class DummyCompiler(Compiler):
     args = ['cc', '/e']
     args.extend('/I%s' % p for p in reversed(self.includePaths))
     args.extend('/D%s' % d for d in self.defines)
-    args.extend('/FI%s' % p for p in self.forceIncludes)
+    args.extend('/FI%s' % p for p in self.forcedIncludes)
     if self.enableRtti:
       args.append('/rtti')
     if self.enableExceptions:
@@ -83,7 +83,7 @@ class DummyCompiler(Compiler):
 
     @makeCommand("dummy-scan")
     def scan():
-      return [source] + self.forceIncludes
+      return [source] + self.forcedIncludes
     
     @makeCommand(compilerArgs)
     def compile():

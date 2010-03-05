@@ -258,7 +258,7 @@ class GccCompiler(Compiler):
 
     args.extend('-D' + d for d in reversed(self.defines))
     
-    for p in reversed(self.forceIncludes):
+    for p in reversed(self.forcedIncludes):
       args.extend(['-include', p])
     
     return args
@@ -331,7 +331,7 @@ class GccCompiler(Compiler):
     args = [self.__gccExe]
 
     if dll:
-      args.append('-Wl,-shared')
+      args.append('-shared')
     else:
       if self.__architecture == 'ppu':
         args.append('-Wl,--oformat=fself')
@@ -356,16 +356,21 @@ class GccCompiler(Compiler):
   def _getLinkCommands(self, target, sources, engine, dll):
     
     resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
-    
+
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
     args.extend(resolvedPaths)    
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
+
+    if dll and self.importLibrary is not None:
+      args.append('-Wl,--out-implib=' + self.importLibrary)
     
     @makeCommand(args)
     def link():
+      if self.importLibrary:
+        cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
       self._executeProcess(args, target, engine)      
     
     @makeCommand("link-scan")

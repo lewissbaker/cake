@@ -60,8 +60,65 @@ class MwcwCompiler(Compiler):
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
-# TODO:
-    return inputText
+    def readLine(text):
+      res, _, text = text.partition("\r\n")
+      return res, text
+
+    line, inputText = readLine(inputText)
+    outputText = ""
+    indent = "   "
+
+    while line.count("|") == 2:
+      executable, component, type = line.split("|")
+      line, inputText = readLine(inputText)
+      
+      if line.count("|") == 5:
+        path, lineNum, colNum, _, _, _ = line[1:-1].split("|") 
+        line, inputText = readLine(inputText)
+      else:
+        path = executable
+        lineNum = component
+        colNum = None
+  
+      contextLines = []
+      while line.startswith("="):
+        contextLines.append(line[1:])
+        line, inputText = readLine(inputText)
+        
+      messageLines = []
+      while line.startswith(">"):
+        messageLines.append(line[1:])
+        line, inputText = readLine(inputText)
+
+      outputText += "%s(%s): %s: %s\n" % (
+        path,
+        lineNum,
+        type.lower(),
+        messageLines[0],
+        )
+      
+      # Context from the offending source file
+      if contextLines:
+        # Write out first line with ^ underneath pointing to the offending column
+        outputText += indent + contextLines[0] + "\n"
+        if colNum is not None:
+          outputText += indent + " " * (int(colNum) - 1) + "^\n"
+    
+        # Write out any remaining lines (if any)
+        for line in contextLines[1:]:
+          outputText += indent + line + "\n"
+
+      if len(messageLines) > 1:
+        # Write out the message again if it was multi-line
+        for messageLine in messageLines:
+          outputText += indent + messageLine + "\n"
+    
+    # Write the remaining lines
+    if line:
+      outputText += line + "\n"
+    outputText += inputText.replace("\r", "")
+
+    return outputText
       
   def _executeProcess(self, args, target, engine):
     engine.logger.outputDebug(
@@ -116,9 +173,9 @@ class MwcwCompiler(Compiler):
     if self.debugSymbols:
       args.extend(['-sym', 'dwarf-2'])
 
-    if self.__architecture == 'wii':
+    if self.__architecture == 'gekko':
       args.extend([
-        '-processor', 'gekko',   # Target GameCube/Wii's Gekko processor
+        '-processor', 'gekko',   # Target the Gekko processor
         '-fp', 'fmadd',          # Use fmadd instructions where possible
         ])
     
@@ -160,35 +217,32 @@ class MwcwCompiler(Compiler):
     else:
       args.extend([
         '-inline', 'all',        # Let the compiler auto inline small functions
-        '-opt', 'level=4',       # Optimize level 4
-        '-opt', 'speed',         # Optimize for speed (alternative is 'space')
-        '-opt', 'commonsubs',    # Eliminate common subexpressions
-        '-opt', 'dead',          # Should be the same as: deadcode, deadstore
-        '-opt', 'deadcode',      # Remove dead code
-        '-opt', 'deadstore',     # Remove dead assignments
-        '-opt', 'lifetimes',     # Lifetime-based register allocation
-        '-opt', 'loop',          # Remove loop invariants
-        '-opt', 'peep',          # Eliminate unnecessary moves/loads/stores
-        '-opt', 'prop',          # Propagation of constant and copy assignments
-        '-opt', 'schedule',      # Reorder instructions to eliminate stalls
-        '-opt', 'strength',      # Reduce multiplies to adds
         '-str', 'reuse,pool',    # Reuse string constants, place them together
+        '-ipa', 'file',          # File level optimisation
         ])
 
       if self.optimisation == self.PARTIAL_OPTIMISATION:
-        args.extend(['-ipa', 'file'])
+        args.extend(['-opt', 'level=2']) # Optimisation level 2
       elif self.optimisation == self.FULL_OPTIMISATION:
-        args.extend(['-ipa', 'file'])
-        # Note: I've never got program opt to work (on Wii) so I'm leaving
-        # it out until someone needs it
-        #args.extend(['-ipa', 'program'])
+        args.extend([
+          '-opt', 'level=4',       # Optimisation level 4
+          '-opt', 'peep',          # Eliminate unnecessary moves/loads/stores
+          '-opt', 'schedule',      # Reorder instructions to eliminate stalls
+          ])
+        # Note: ipa program requires you to:
+        #  - link with cc.exe
+        #  - pass '-ipa program' to the link line
+        #  - pass .irobj's to the link line instead of .o's
+        # Even after this the compiler may run out of memory trying
+        # to optimise a large program. 
+        #args.extend(['-ipa', 'program']) # Whole program optimisation
   
     for p in reversed(self.includePaths):
       args.extend(['-i', p])
 
     args.extend('-D' + d for d in reversed(self.defines))
     
-    for p in reversed(self.forceIncludes):
+    for p in reversed(self.forcedIncludes):
       args.extend(['-include', p])
     
     return args

@@ -60,8 +60,65 @@ class MwcwCompiler(Compiler):
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
-# TODO:
-    return inputText
+    def readLine(text):
+      res, _, text = text.partition("\r\n")
+      return res, text
+
+    line, inputText = readLine(inputText)
+    outputText = ""
+    indent = "   "
+
+    while line.count("|") == 2:
+      executable, component, type = line.split("|")
+      line, inputText = readLine(inputText)
+      
+      if line.count("|") == 5:
+        path, lineNum, colNum, _, _, _ = line[1:-1].split("|") 
+        line, inputText = readLine(inputText)
+      else:
+        path = executable
+        lineNum = component
+        colNum = None
+  
+      contextLines = []
+      while line.startswith("="):
+        contextLines.append(line[1:])
+        line, inputText = readLine(inputText)
+        
+      messageLines = []
+      while line.startswith(">"):
+        messageLines.append(line[1:])
+        line, inputText = readLine(inputText)
+
+      outputText += "%s(%s): %s: %s\n" % (
+        path,
+        lineNum,
+        type.lower(),
+        messageLines[0],
+        )
+      
+      # Context from the offending source file
+      if contextLines:
+        # Write out first line with ^ underneath pointing to the offending column
+        outputText += indent + contextLines[0] + "\n"
+        if colNum is not None:
+          outputText += indent + " " * (int(colNum) - 1) + "^\n"
+    
+        # Write out any remaining lines (if any)
+        for line in contextLines[1:]:
+          outputText += indent + line + "\n"
+
+      if len(messageLines) > 1:
+        # Write out the message again if it was multi-line
+        for messageLine in messageLines:
+          outputText += indent + messageLine + "\n"
+    
+    # Write the remaining lines
+    if line:
+      outputText += line + "\n"
+    outputText += inputText.replace("\r", "")
+
+    return outputText
       
   def _executeProcess(self, args, target, engine):
     engine.logger.outputDebug(

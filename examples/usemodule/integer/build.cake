@@ -1,4 +1,5 @@
 from cake.tools import compiler, env, filesys, script
+import cake.path
 
 compiler.addIncludePath(filesys.cwd("include"))
 compiler.addDefine("EXPORT")
@@ -16,8 +17,8 @@ objects = compiler.objects(
   sources=sources,
   )
 
-compiler.module(
-  target=env.expand("${BUILD}/usemodule/integer/lib/integer"),
+module = compiler.module(
+  target=env.expand("${BUILD}/usemodule/main/bin/integer"),
   importLibrary=env.expand("${BUILD}/usemodule/integer/lib/integer"),
   sources=objects,
   )

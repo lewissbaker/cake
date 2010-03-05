@@ -16,9 +16,3 @@ compiler.program(
   target=env.expand("${BUILD}/usemodule/main/bin/main"),
   sources=objects,
   )
-
-# TODO: Get a list of modules top copy from eg. the compiler.
-#filesys.copyFile(
-#  source=env.expand("${BUILD}/usemodule/integer/lib/integer.dll"),
-#  target=env.expand("${BUILD}/usemodule/main/bin/integer.dll"),
-#  )

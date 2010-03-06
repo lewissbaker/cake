@@ -123,7 +123,7 @@ def run(args=None, cwd=None):
     cwd = os.getcwd()
 
   keywords = {}
-  scripts = []
+  script = None
   
   for arg in args:
     if '=' in arg:
@@ -133,11 +133,25 @@ def run(args=None, cwd=None):
         value = value[0]
       keywords[keyword] = value
     else:
-      scripts.append(arg)
-
-  if not scripts:
-    scripts.append(cwd)
+      if script is None:
+        script = arg
+      else:
+        sys.stderr.write(
+          "cake: cannot execute multiple scripts '%s' and '%s'\n" % (
+            script,
+            arg,
+            ))
+        return -1
+    
+  if script is None:
+    script = cwd
   
+  if not os.path.isabs(script):
+    script = os.path.join(cwd, script)
+  if cake.filesys.isDir(script):
+    script = cake.path.join(script, 'build.cake')
+  scriptDir = os.path.dirname(script)
+
   if options.profileOutput:
     import cProfile
     p = cProfile.Profile()
@@ -145,11 +159,11 @@ def run(args=None, cwd=None):
     threadPool = cake.threadpool.DummyThreadPool()
     oldThreadPool = cake.task._threadPool
     cake.task._threadPool = threadPool
-    
+
   if options.boot is None:
-    options.boot = searchUpForFile(cwd, 'boot.cake')
+    options.boot = searchUpForFile(scriptDir, 'boot.cake')
     if options.boot is None:
-      sys.stderr.write("cake: could not find 'boot.cake' in %s\n" % cwd)
+      sys.stderr.write("cake: could not find 'boot.cake' in %s\n" % scriptDir)
       return -1
   elif not os.path.isabs(options.boot):
     options.boot = os.path.join(cwd, options.boot)
@@ -184,27 +198,22 @@ def run(args=None, cwd=None):
     variants = engine.defaultVariants
 
   tasks = []
-  for script in scripts:
-    if not os.path.isabs(script):
-      script = os.path.join(cwd, script)
-    if cake.filesys.isDir(script):
-      script = cake.path.join(script, 'build.cake')
 
-    # Find the common parts of the boot dir and arg and strip them off
-    script = cake.path.fileSystemPath(script)
-    index = len(cake.path.commonPath(script, bootDir))
-    # If stripping a directory, make sure to strip off the separator too 
-    if index and (script[index] == os.path.sep or script[index] == os.path.altsep):
-      index += 1
-    script = script[index:]
+  # Find the common parts of the boot dir and arg and strip them off
+  script = cake.path.fileSystemPath(script)
+  index = len(cake.path.commonPath(script, bootDir))
+  # If stripping a directory, make sure to strip off the separator too 
+  if index and (script[index] == os.path.sep or script[index] == os.path.altsep):
+    index += 1
+  script = script[index:]
 
-    for variant in variants:
-      try:
-        task = engine.execute(path=script, variant=variant)
-        tasks.append(task)
-      except Exception:
-        msg = traceback.format_exc()
-        engine.logger.outputError(msg)
+  for variant in variants:
+    try:
+      task = engine.execute(path=script, variant=variant)
+      tasks.append(task)
+    except Exception:
+      msg = traceback.format_exc()
+      engine.logger.outputError(msg)
 
   finished = threading.Event()
   

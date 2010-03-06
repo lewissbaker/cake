@@ -49,7 +49,7 @@ Usage
 boot.cake
 =========
 
-When Cake starts it will search for a 'boot.cake' file starting from the current working directory. This file should generally be located in your projects root directory.
+When Cake starts it will search for a 'boot.cake' file starting from the directory of the 'build.cake' script it is trying to execute. This file should generally be located in your projects root directory.
 
 The quickest way to create a boot.cake file is to copy examples/boot.cake. The example boot file supports automatic detection of MSVC, MinGW and Gcc compilers, and two development modes, 'debug' and 'release'.
 
@@ -84,8 +84,6 @@ Will output the reason cake is rebuilding your files (ie. what has changed).
 
 Known Issues
 ------------
-
-- Currently cake searches for boot.cake from the working directory. In future cake will search for the boot.cake starting from the directory of the script you are running. This will mean you can build your project from any working directory.
 
 - There is an issue when trying to use outer scoped variables/imports within an inner scope in a cake script.
 

@@ -1,9 +1,9 @@
-from cake.tools import compiler, env, filesys, script
+from cake.tools import compiler, env, script
 
 # Use the integer library.
 script.include(env.expand("${EXAMPLES}/usemodule/integer/use.cake"))
 
-sources = filesys.cwd([
+sources = script.cwd([
   "main.cpp",
   ])
 

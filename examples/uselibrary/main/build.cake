@@ -1,5 +1,5 @@
 # Script to build main program
-from cake.tools import compiler, env, filesys, script
+from cake.tools import compiler, env, script
 
 # Use the printer library. The libraries include path, library path
 # and library filename will be added to the compilers command line
@@ -7,7 +7,7 @@ from cake.tools import compiler, env, filesys, script
 script.include(env.expand("${EXAMPLES}/uselibrary/printer/use.cake"))
 
 # List of sources
-sources = filesys.cwd([
+sources = script.cwd([
   "main.cpp",
   ])
 

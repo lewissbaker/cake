@@ -13,22 +13,6 @@ from cake.engine import Script
 class FileSystemTool(Tool):
   """Tool that provides file system related utilities. 
   """
-  
-  def cwd(self, *args):
-    """Return the path prefixed with the current script's directory.
-    
-    Examples::
-      env.cwd("a") -> "{cwd}/a"
-      env.cwd(["a", "b", "c"]) -> ["{cwd}/a", "{cwd}/b", "{cwd}/c"]
-      
-    @param args: The arguments that need to have the prefix added.
-    @type args: string or list(string)
-    
-    @return: The path prefixed with the current script's directory.
-    @rtype: string or list(string)
-    """
-    script = Script.getCurrent()
-    return script.cwd(*args)
 
   def copyFile(self, source, target):
     """Copy a file from one location to another.

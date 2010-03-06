@@ -39,7 +39,23 @@ class ScriptTool(Tool):
     """
     script = Script.getCurrent()
     return script.variant if script else None
-  
+
+  def cwd(self, *args):
+    """Return the path prefixed with the this script's directory.
+    
+    Examples::
+      env.cwd("a") -> "{cwd}/a"
+      env.cwd(["a", "b", "c"]) -> ["{cwd}/a", "{cwd}/b", "{cwd}/c"]
+      
+    @param args: The arguments that need to have the prefix added.
+    @type args: string or list(string)
+    
+    @return: The path prefixed with this script's directory.
+    @rtype: string or list(string)
+    """
+    script = Script.getCurrent()
+    return script.cwd(*args)
+    
   def include(self, scripts):
     """Include another script within the context of the currently
     executing script.

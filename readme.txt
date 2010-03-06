@@ -92,3 +92,8 @@ Known Issues
 - Preprocessing and compiling are currently done separately. This can almost double the time of a full rebuild. In the future we will attempt to combine this into one stage for compilers that some form of support dependency output.
 
 - The object cache currently requires preprocessing to determine what files have changed. In the future a set of cached versions each with their own dependencies may be used to prevent the preprocessing step and speed up cached object builds.
+
+- There is no support for building a module (DLL) with import library under CodeWarrior.
+
+- There is no support for finding a CodeWarrior compiler automatically, eg. mwcw.findCodeWarriorCompiler().
+

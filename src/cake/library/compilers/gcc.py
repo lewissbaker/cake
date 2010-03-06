@@ -331,7 +331,10 @@ class GccCompiler(Compiler):
     args = [self.__gccExe]
 
     if dll:
-      args.append('-shared')
+      if self.__architecture == 'ppu':
+        args.append('-Wl,--oformat=fsprx')
+      else:
+        args.append('-shared')
     else:
       if self.__architecture == 'ppu':
         args.append('-Wl,--oformat=fself')

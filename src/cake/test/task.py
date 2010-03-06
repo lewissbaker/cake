@@ -422,6 +422,42 @@ class TaskTests(unittest.TestCase):
     self.assertFalse(ta.succeeded)
     self.assertTrue(ta.failed)
 
+  def testTaskResult(self):
+    
+    def a():
+      return "a"
+
+    e = threading.Event()
+    t = cake.task.Task(a)
+    t.addCallback(e.set)
+    
+    t.start()
+  
+    e.wait(0.5)
+
+    self.assertTrue(t.completed)
+    self.assertEqual(t.result, "a")
+
+  def testNestedTaskResult(self):
+    
+    def a():
+      tb = cake.task.Task(b)
+      tb.start()
+      return tb
+    
+    def b():
+      return "b"
+
+    e = threading.Event()
+    ta = cake.task.Task(a)
+    ta.addCallback(e.set)
+    ta.start()
+    
+    e.wait(0.5)
+    
+    self.assertTrue(ta.succeeded)
+    self.assertEqual(ta.result, "b")
+
 if __name__ == "__main__":
   suite = unittest.TestLoader().loadTestsFromTestCase(TaskTests)
   runner = unittest.TextTestRunner(verbosity=2)

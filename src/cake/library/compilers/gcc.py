@@ -19,18 +19,8 @@ import cake.path
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand
 from cake.gnu import parseDependencyFile
+from cake.engine import getHostArchitecture
 
-def getHostArchitecture():
-  """Returns the current machines architecture.
-  
-  @return: The host architecture, or 'unknown' if the host
-  architecture could not be determined.
-  @rtype: string
-  """
-  try:
-    return os.environ['PROCESSOR_ARCHITECTURE']
-  except KeyError:
-    return 'unknown'
 
 def findExecutable(name, paths):
   """Find an executable given its name and a list of paths.  

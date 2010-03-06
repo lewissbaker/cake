@@ -381,10 +381,7 @@ class MsvcCompiler(Compiler):
 
     compileArgs.append('/Fo' + target)
     
-    includeDependencies = []
-    
-    @makeCommand(compileArgs)
-    def preprocess():
+    def compile():
       engine.logger.outputDebug(
         "run",
         "run: %s\n" % " ".join(compileArgs),
@@ -418,7 +415,8 @@ class MsvcCompiler(Compiler):
         includePrefix = ('Note: including file:')
         includePrefixLen = len(includePrefix)
 
-        includeDependenciesSet = set()
+        dependencies = [self.__clExe, source]
+        dependenciesSet = set()
         
         for line in errFile:
           line = line.rstrip()
@@ -427,31 +425,18 @@ class MsvcCompiler(Compiler):
           if line.startswith(includePrefix):
             path = line[includePrefixLen:].lstrip()
             normPath = os.path.normcase(os.path.normpath(path))
-            if normPath not in includeDependenciesSet:
-              includeDependenciesSet.add(normPath)
-              includeDependencies.append(path)
+            if normPath not in dependenciesSet:
+              dependenciesSet.add(normPath)
+              dependencies.append(path)
           else:
             sys.stderr.write(line + '\n')
         sys.stderr.flush()
 
         if exitCode != 0:
           raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
-
-    @makeCommand("msvc-scan")
-    def scan():
-      engine.logger.outputDebug(
-        "scan",
-        "scan: %s\n" % target,
-        )
       
-      # TODO: Add dependencies on DLLs used by cl.exe
-      return [self.__clExe, source] + includeDependencies
-    
-    @makeCommand("dummy-compile")
-    def compile():
-      pass
+      return dependencies
       
-    @makeCommand(compileArgs)
     def compileWhenPdbIsFree():
       with self._pdbQueueLock:
         predecessor = self._pdbQueue.get(pdbFile, None)
@@ -469,19 +454,24 @@ class MsvcCompiler(Compiler):
         self._pdbQueue[pdbFile] = compileTask
         
       if compileNow:
-        compile()
+        return compile()
+      else:
+        return compileTask
       
-    if pdbFile is not None:
-      # Debug info is embedded in the .pdb so we can't cache the
-      # object file without somehow pulling the .pdb along for
-      # the ride.
-      canBeCached = False
-      return preprocess, scan, compileWhenPdbIsFree, canBeCached 
-    else:
-      # Debug info is embedded in the .obj so we can cache the
-      # object file without losing debug info.
-      canBeCached = True
-      return preprocess, scan, compile, canBeCached
+    # Can only cache the object if it's debug info is not going into
+    # a .pdb since multiple objects could all put their debug info
+    # into the same .pdb.
+    canBeCached = pdbFile is None
+
+    def startCompile():
+      if pdbFile is None:
+        compileTask = engine.createTask(compile)
+      else:
+        compileTask = engine.createTask(compileWhenPdbIsFree)
+      compileTask.start(immediate=True)
+      return compileTask
+      
+    return startCompile, compileArgs, canBeCached
 
   @memoise
   def _getCommonLibraryArgs(self):

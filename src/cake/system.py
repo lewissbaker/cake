@@ -55,4 +55,8 @@ else:
     try:
       return os.environ['PROCESSOR_ARCHITECTURE']
     except KeyError:
-      return platform.machine()
+      architecture = platform.machine()
+      if architecture:
+        return architecture
+      else:
+        return 'unknown'

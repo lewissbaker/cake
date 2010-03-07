@@ -108,8 +108,8 @@ def findMinGWCompiler(architecture=None):
 
     checkFile(arExe)
     checkFile(gccExe)
-      
-    return GccCompiler(
+
+    return WindowsGccCompiler(
       arExe=arExe,
       gccExe=gccExe,
       architecture=architecture,
@@ -117,14 +117,22 @@ def findMinGWCompiler(architecture=None):
   except WindowsError:
     raise CompilerNotFoundError("Could not find MinGW install directory.")
 
-def findGccCompiler(architecture=None):
+def _hostPlatform():
+  return platform.system().lower()
+
+def findGccCompiler(platform=None, architecture=None):
   """Returns a GCC compiler given an architecture.
 
+  @param platform: The platform/operating system to compile for. If
+  platform is None then the current platform is used.
   @param architecture: The machine architecture to compile for. If
   architecture is None then the current architecture is used.
 
   @raise CompilerNotFoundError: When a valid gcc compiler could not be found.
   """
+  if platform is None:
+    platform = _hostPlatform()
+    
   if architecture is None:
     architecture = getHostArchitecture()
 
@@ -141,7 +149,16 @@ def findGccCompiler(architecture=None):
     checkFile(arExe)
     checkFile(gccExe)
 
-    return GccCompiler(
+    if platform == "windows" or platform.startswith("cygwin"):
+      constructor = WindowsGccCompiler
+    elif platform == "darwin":
+      constructor = MacGccCompiler
+    elif platform == "ps3":
+      constructor = Ps3GccCompiler
+    else:
+      constructor = GccCompiler 
+    
+    return constructor(
       arExe=arExe,
       gccExe=gccExe,
       architecture=architecture,
@@ -161,20 +178,11 @@ class GccCompiler(Compiler):
     self.__arExe = arExe
     self.__gccExe = gccExe
     self.__architecture = architecture
-    
-    if architecture in ['x86', 'x64']:
-      self.objectSuffix = '.obj'
-      self.libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
-      self.moduleSuffix = '.dll'
-      self.programSuffix = '.exe'
-    elif architecture == 'ppu':
-      self.moduleSuffix = '.sprx'
-      self.programSuffix = '.self'
-
+  
   @property
   def architecture(self):
     return self.__architecture
-  
+
   @memoise
   def _getProcessEnv(self, executable):
     temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
@@ -289,11 +297,6 @@ class GccCompiler(Compiler):
         '-ffunction-sections',
         '-fdata-sections',
         ])
-
-    if self.architecture == 'x86':
-      args.append("-m32")
-    elif self.architecture == 'x64':
-      args.append("-m64")
       
     if self.useSse:
       args.append('-msse')
@@ -371,27 +374,7 @@ class GccCompiler(Compiler):
 
   @memoise
   def _getCommonLinkArgs(self, dll):
-    args = [self.__gccExe]
-
-    if dll:
-      if self.architecture == 'ppu':
-        args.append('-Wl,--oformat=fsprx')
-      else:
-        args.append('-shared')
-    else:
-      if self.architecture == 'ppu':
-        args.append('-Wl,--oformat=fself')
-
-    if self.optimisation == self.FULL_OPTIMISATION:
-      if self.architecture == 'ppu':
-        args.extend([
-          '-Wl,-strip-unused',
-          '-Wl,-strip-unused-data',
-          ])
-      else:
-        args.append('-Wl,--gc-sections')
-      
-    return args
+    return [self.__gccExe]
   
   def getProgramCommands(self, target, sources, engine):
     return self._getLinkCommands(target, sources, engine, dll=False)
@@ -427,3 +410,56 @@ class GccCompiler(Compiler):
       return [args[0]] + sources + resolvedPaths
     
     return link, scan
+
+class WindowsGccCompiler(GccCompiler):
+  
+  objectSuffix = '.obj'
+  libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
+  moduleSuffix = '.dll'
+  programSuffix = '.exe'
+
+  @memoise
+  def _getCommonLinkArgs(self, dll):
+    args = GccCompiler._getCommonLinkArgs(self, dll)
+
+    if dll:
+      args.append('-shared')
+
+    if self.optimisation == self.FULL_OPTIMISATION:
+      args.append('-Wl,--gc-sections')
+      
+    return args
+
+class MacGccCompiler(GccCompiler):
+
+  @memoise
+  def _getCommonLinkArgs(self, dll):
+    args = GccCompiler._getCommonLinkArgs(self, dll)
+
+    if dll:
+      args.append('-shared')
+
+    return args
+  
+class Ps3GccCompiler(GccCompiler):
+
+  moduleSuffix = '.sprx'
+  programSuffix = '.self'
+
+  @memoise
+  def _getCommonLinkArgs(self, dll):
+    args = GccCompiler._getCommonLinkArgs(self, dll)
+
+    if dll:
+      args.append('-Wl,--oformat=fsprx')
+    else:
+      args.append('-Wl,--oformat=fself')
+
+    if self.optimisation == self.FULL_OPTIMISATION:
+      args.extend([
+        '-Wl,-strip-unused',
+        '-Wl,-strip-unused-data',
+        ])
+      
+    return args
+  

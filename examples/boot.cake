@@ -46,7 +46,7 @@ dummy.tools["compiler"] = DummyCompiler()
 createVariants(dummy)
 
 if platform.system() == 'Windows':
-  # Msvc
+  # MSVC
   from cake.library.compilers.msvc import findMsvcCompiler
   for a in ["x86", "x64", "ia64"]:
     try:
@@ -66,12 +66,11 @@ if platform.system() == 'Windows':
     pass
 
 try:
-  # Gcc
+  # GCC
   from cake.library.compilers.gcc import findGccCompiler
   gcc = base.clone(platform=hostPlatform, compiler="gcc")
   compiler = gcc.tools["compiler"] = findGccCompiler()
-  # TODO: Should we move this to a runtimes.cake?
-  compiler.addLibrary("supc++")
+  compiler.addLibrary("stdc++")
   createVariants(gcc)
 except CompilerNotFoundError:
   pass

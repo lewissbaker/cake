@@ -5,10 +5,17 @@
 @license: Licensed under the MIT license.
 """
 
+from __future__ import with_statement
+
 __all__ = ["Compiler"]
 
+import hashlib
 import weakref
 import os.path
+try:
+  import cPickle as pickle
+except ImportError:
+  import pickle
 
 import cake.path
 import cake.filesys
@@ -35,6 +42,42 @@ def makeCommand(args):
   def run(func):
     return Command(args, func)
   return run
+
+def binaryToHex(value):
+  """Convert a byte string to a hex string.
+  
+  Example::
+    binaryToHex('\x3a\x8c\x07') -> '3a8c07'
+  
+  @param value: A string of bytes.
+  @type value: str
+  
+  @return: The bytes converted to a hexadecimal string.
+  @rtype: str
+  """
+  return "".join("%02x" % ord(c) for c in value)
+
+def hexToBinary(value):
+  """Convert a hex string to a binary string.
+  
+  Example::
+    hexToBinary("a37f92") -> '\xa3\x7f\x92'
+    
+  @param value: A hex string.
+  @type value: str
+  
+  @return: The string of bytes.
+  @rtype: str
+  """
+  valueLen = len(value)
+  if valueLen % 2 != 0:
+    raise ValueError("value must have an even number of hex chars")
+  value = value.lower()
+  hexCharsIndex = "0123456789abcdef".index
+  return "".join(
+    chr(16 * hexCharsIndex(value[i]) + hexCharsIndex(value[i+1]))
+    for i in xrange(0, valueLen, 2)
+    )
 
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
@@ -78,6 +121,14 @@ class Compiler(Tool):
   linkerScript = None
     
   objectCachePath = None
+  
+  # Set this if the object cache is to be shared across workspaces.
+  # This will cause objects and their dependencies under this directory
+  # to be stored as paths relative to this directory. This allows 
+  # workspaces at different paths to reuse object files with the 
+  # potential danger of debug information embedded in the object
+  # files referring to paths in the wrong workspace.
+  objectCacheWorkspaceRoot = None
 
   language = None
  
@@ -445,9 +496,8 @@ class Compiler(Tool):
     
     @param engine: The build Engine to use when building this object.
     """
-    preprocess, scan, compile, canBeCached = self.getObjectCommands(target, source, engine)
     
-    args = [repr(preprocess), repr(scan), repr(compile)]
+    compile, args, canBeCached = self.getObjectCommands(target, source, engine)
     
     # Check if the target needs building
     oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(target, args)
@@ -460,119 +510,200 @@ class Compiler(Tool):
 
     engine.logger.outputInfo("Compiling %s\n" % source)
       
-    if canBeCached and self.objectCachePath is not None:
-      #
-      # Building the object using the object cache
-      #
-      def getCacheEntryPath(digest):
-        d = "".join("%02x" % ord(c) for c in digest)
-        return cake.path.join(self.objectCachePath, d[0], d[1], d)
-
+    newDependencyInfo = DependencyInfo(
+      targets=[FileInfo(path=target)],
+      args=args,
+      dependencies=None,
+      )
+      
+    useCacheForThisObject = canBeCached and self.objectCachePath is not None
+      
+    if useCacheForThisObject:
+      #######################
+      # USING OBJECT CACHE
+      #######################
+      
+      # Prime the file digest cache from previous run so we don't have
+      # to recalculate file digests for files that haven't changed.
       if oldDependencyInfo is not None:
-        # Try to calculate the current hash using the old dependencies
-        # list. If this is found in the cache then we can just use it
-        # without having to determine the new dependency list.
-        newDependencyInfo = DependencyInfo(
-          targets=[FileInfo(path=target)],
-          args=args,
-          dependencies=oldDependencyInfo.dependencies,
-          )
-        newDigest = newDependencyInfo.calculateDigest(engine)
+        for dep in oldDependencyInfo.dependencies:
+          if dep.timestamp is not None and dep.digest is not None:
+            engine.updateFileDigestCache(dep.path, dep.timestamp, dep.digest)
+      
+      # Find the directory that will contain all cache entries for
+      # this particular target object file.
+      
+      targetDigest = hashlib.sha1()
+
+      # We either need to make all paths that form the cache digest relative
+      # to the workspace root or  
+      targetDigestPath = os.path.abspath(target)
+      if self.objectCacheWorkspaceRoot is not None:
+        workspaceRoot = os.path.abspath(self.objectCacheWorkspaceRoot)
+        workspaceRoot = os.path.normcase(workspaceRoot)
+        targetDigestPathNorm = os.path.normcase(targetDigestPath)
+        if cake.path.commonPath(targetDigestPathNorm, workspaceRoot) == workspaceRoot:
+          targetDigestPath = targetDigestPath[len(workspaceRoot)+1:]
+          
+      targetDigest = binaryToHex(hashlib.sha1(targetDigestPath.encode("utf8")).digest())
+      targetCacheDir = cake.path.join(
+        self.objectCachePath,
+        targetDigest[0],
+        targetDigest[1],
+        targetDigest
+        )
+      
+      # Find all entries in the directory
+      entries = set()
+      
+      # If doing a force build, pretend the cache is empty
+      if not engine.forceBuild:
+        try:
+          entries.update(os.listdir(targetCacheDir))
+        except EnvironmentError:
+          # Target cache dir doesn't exist, treat as if no entries
+          pass
+      
+      hexChars = "0123456789abcdefABCDEF"
+      
+      # Try to find the dependency files
+      for entry in entries:
+        # Skip any entry that's not a SHA-1 hash
+        if len(entry) != 40 or any(c not in hexChars for c in entry):
+          continue
+
+        # Make sure the .object exists too
+        objectEntry = entry + '.object'
+        if objectEntry not in entries:
+          continue
         
-        cacheEntryPath = getCacheEntryPath(newDigest)
-        if cake.filesys.isFile(cacheEntryPath):
-          engine.logger.outputInfo("from cache: %s\n" % target)
-          cake.filesys.copyFile(cacheEntryPath, target)
-          engine.storeDependencyInfo(newDependencyInfo)
-          return
-      else:
-        newDependencyInfo = DependencyInfo(
-          targets=[FileInfo(path=target)],
-          args=args,
-          dependencies=None,
-          )
-
-      # Need to preprocess and scan the source file to get the new
-      # list of dependencies.
-      preprocess()
-      newDependencies = scan()
-      
-      newDependencyInfo.dependencies = [
-        FileInfo(
-          path=path,
-          timestamp=engine.getTimestamp(path),
-          digest=engine.getFileDigest(path),
-          )
-        for path in newDependencies
-        ]
-      newDigest = newDependencyInfo.calculateDigest(engine)
-      
-      # Check if the hash of all dependencies using the new dependency
-      # list has a cache entry.
-      cacheEntryPath = getCacheEntryPath(newDigest)
-      if cake.filesys.isFile(cacheEntryPath):
-        engine.logger.outputInfo("from cache: %s\n" % target)
-        cake.filesys.copyFile(cacheEntryPath, target)
-        engine.storeDependencyInfo(newDependencyInfo)
-        return
-
-      # Finally, we need to do the compilation
-      compile()
-      
-      # and save info on the dependencies of the newly built target
-      engine.storeDependencyInfo(newDependencyInfo)
-      
-      # Try to update the cache with our newly built object file
-      # but don't sweat if we can't write to the cache.
-      try:
-        cake.filesys.copyFile(target, cacheEntryPath)
-      except EnvironmentError:
-        pass
-      
-    else:
-      #
-      # Building the object without the object cache
-      #
-      
-      # Need to run preprocessor first
-      preprocess()
-  
-      newDependencies = []
-
-      def storeDependencyInfo():
-        newDependencyInfo = DependencyInfo(
-          targets=[FileInfo(target)],
-          args=args,
-          dependencies=[
+        cacheDepPath = cake.path.join(targetCacheDir, entry)
+        cacheObjectPath = cake.path.join(targetCacheDir, objectEntry)
+        cacheDigest = hexToBinary(entry)
+        
+        try:
+          with open(cacheDepPath) as f:
+            cacheDepContents = f.read()
+        except EnvironmentError:
+          continue
+        
+        try:
+          candidateDependencies = pickle.loads(cacheDepContents)
+        except Exception:
+          # Invalid dependency file for this entry
+          continue
+        
+        if not isinstance(candidateDependencies, list):
+          # Data format change
+          continue
+        
+        try:
+          newDependencyInfo.dependencies = [
             FileInfo(
               path=path,
               timestamp=engine.getTimestamp(path),
-              #digest=engine.getFileDigest(path),
+              digest=engine.getFileDigest(path),
               )
-            for path in newDependencies
-            ],
-          )
-        engine.storeDependencyInfo(newDependencyInfo)
+            for path in candidateDependencies
+            ]
+        except EnvironmentError:
+          # One of the dependencies didn't exist
+          continue
+        
+        # Check if the state of our files matches that of the cached
+        # object dependencies.
+        if newDependencyInfo.calculateDigest(engine) == cacheDigest:
+          engine.logger.outputInfo("from cache: %s\n" % target)
+          cake.filesys.copyFile(
+            target=target,
+            source=cacheObjectPath,
+            )
+          engine.storeDependencyInfo(newDependencyInfo)
+          return
+
+    # If we get to here then we didn't find the object in the cache
+    # so we need to actually execute the build.
+    
+    compileTask = compile()
+
+    def storeDependencyInfoAndCache():
+     
+      # Since we are sharing this object in the object cache we need to
+      # make any paths in this workspace relative to the current workspace.
+      dependencies = []
+      if self.objectCacheWorkspaceRoot is None:
+        dependencies = [os.path.abspath(p) for p in compileTask.result]
+      else:
+        workspaceRoot = os.path.normcase(
+          os.path.abspath(self.objectCacheWorkspaceRoot)
+          ) + os.path.sep
+        workspaceRootLen = len(workspaceRoot)
+        for path in compileTask.result:
+          path = os.path.abspath(path)
+          pathNorm = os.path.normcase(path)
+          if pathNorm.startswith(workspaceRoot):
+            path = path[workspaceRootLen:]
+          dependencies.append(path)
       
-      scanTask = engine.createTask(lambda: newDependencies.extend(scan()))
-      scanTask.start(immediate=True)
+      getTimestamp = engine.getTimestamp
+      getFileDigest = engine.getFileDigest
       
-      compileTask = engine.createTask(compile)
-      compileTask.start(immediate=True)
-      
-      storeDependencyInfoTask = engine.createTask(storeDependencyInfo)
-      storeDependencyInfoTask.startAfter(
-        [scanTask, compileTask],
-        immediate=True,
-        )
+      if useCacheForThisObject:
+        # Need to store the file digests to improve performance of
+        # cache calculations in subsequent runs.
+        newDependencyInfo.dependencies = [
+          FileInfo(
+            path=path,
+            timestamp=getTimestamp(path),
+            digest=getFileDigest(path),
+            )
+          for path in dependencies
+          ]
+      else:
+        newDependencyInfo.dependencies = [
+          FileInfo(
+            path=path,
+            timestamp=getTimestamp(path),
+            )
+          for path in dependencies
+          ]
+      engine.storeDependencyInfo(newDependencyInfo)
+
+      # Finally update the cache if necessary
+      if useCacheForThisObject:
+        try:
+          digest = newDependencyInfo.calculateDigest(engine)
+          digestStr = binaryToHex(digest)
+          
+          cacheDepPath = cake.path.join(targetCacheDir, digestStr)
+          cacheObjectPath = cacheDepPath + '.object'
+
+          # Copy the object file first, then the dependency file
+          # so that other processes won't find the dependency until
+          # the object file is ready.
+          cake.filesys.makeDirs(targetCacheDir)
+          cake.filesys.copyFile(target, cacheObjectPath)
+          with open(cacheDepPath, 'wb') as f:
+            f.write(pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL))
+            
+        except EnvironmentError:
+          # Don't worry if we can't put the object in the cache
+          # The build shouldn't fail.
+          pass
+        
+    storeDependencyTask = engine.createTask(storeDependencyInfoAndCache)
+    storeDependencyTask.startAfter(compileTask, immediate=True)
   
-  def getObjectCommands(self, target, source, engine):
+  def getObjectCommand(self, target, source, engine):
     """Get the command-lines for compiling a source to a target.
     
-    @return: A (preprocess, scan, compile, cache) tuple of the commands
-    to execute for preprocessing, dependency scanning, compiling the source
-    file and a flag indicating whether the compile result can be cached
-    respectively.
+    @return: A (compile, args, canCache) tuple where 'compile' is a function that
+    takes no arguments returns a task that completes with the list of paths of
+    dependencies when the compilation succeeds. 'args' is a value that indicates
+    the parameters of the command, if the args changes then the target will
+    need to be rebuilt; typically args includes the compiler's command-line.
+    'canCache' is a boolean value that indicates whether the built object
+    file can be safely cached or not.
     """
     engine.raiseError("Don't know how to compile %s\n" % source)
   

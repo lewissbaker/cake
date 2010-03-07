@@ -182,7 +182,7 @@ class Engine(object):
     """
     def _wrapper():
       try:
-        func()
+        return func()
       except BuildError:
         # Assume build errors have already been reported
         raise
@@ -417,7 +417,7 @@ class Engine(object):
         return dependencyInfo, "'" + targetPath + ".dep' version has changed"
 
       if args != dependencyInfo.args:
-        return dependencyInfo, "'" + " ".join(args) + "' != '" + " ".join(dependencyInfo.args) + "'"
+        return dependencyInfo, "'" + repr(args) + "' != '" + repr(dependencyInfo.args) + "'"
       
       for target in dependencyInfo.targets:
         if not target.exists(self):

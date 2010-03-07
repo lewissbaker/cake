@@ -258,12 +258,9 @@ class MwcwCompiler(Compiler):
     args = list(self._getCompileArgs(language))
     args += [source, '-o', target]
     
-    @makeCommand(args)
-    def preprocess():
+    def compile():
       self._executeProcess(args, target, engine)
 
-    @makeCommand("obj-scan")
-    def scan():
       dependencyFile = cake.path.stripExtension(target) + '.d'
       engine.logger.outputDebug(
         "scan",
@@ -278,12 +275,13 @@ class MwcwCompiler(Compiler):
         ))
       return dependencies
 
-    @makeCommand("dummy-compile")
-    def compile():
-      pass
-      
+    def command():
+      task = engine.createTask(compile)
+      task.start(immediate=True)
+      return task
+
     canBeCached = True
-    return preprocess, scan, compile, canBeCached    
+    return command, args, canBeCached    
 
   @memoise
   def _getCommonLibraryArgs(self):

@@ -21,15 +21,52 @@ from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.gnu import parseDependencyFile
 from cake.system import getHostArchitecture
 
-def _findExecutable(name, paths):
-  """Find an executable given its name and a list of paths.  
-  """
-  for p in paths:
-    executable = cake.path.join(p, name)
-    if cake.filesys.isFile(executable):
-      return executable
-  else:
-    raise EnvironmentError("Could not find executable.");
+if platform.system().lower().startswith('cygwin'):
+  def _findExecutable(name, paths):
+    """Find an executable given its name and a list of paths.  
+    """
+    for p in paths:
+      executable = cake.path.join(p, name)
+      if cake.filesys.isFile(executable):
+        # On cygwin it can sometimes say a file exists at a path
+        # when its real filename includes a .exe on the end.
+        # We detect this by actually trying to open the path
+        # for read, if it fails we know it should have a .exe.
+        try:
+          with open(executable, 'rb'):
+            return executable
+        except EnvironmentError:
+          return executable + '.exe'
+    else:
+      raise EnvironmentError("Could not find executable.")
+    
+elif platform.system().lower().startswith('windows'):
+  def _findExecutable(name, paths):
+    """Find an executable given its name and a list of paths.  
+    """
+    # Windows executables could have any of a number of extensions
+    # We just search through standard extensions so that we're not
+    # dependent on the user's environment.
+    pathExt = ['', '.bat', '.exe', '.com', '.cmd']
+    for p in paths:
+      basePath = cake.path.join(p, name)
+      for ext in pathExt:
+        executable = basePath + ext
+        if cake.filesys.isFile(executable):
+          return executable
+    else:
+      raise EnvironmentError("Could not find executable.")
+    
+else:
+  def _findExecutable(name, paths):
+    """Find an executable given its name and a list of paths.  
+    """
+    for p in paths:
+      executable = cake.path.join(p, name)
+      if cake.filesys.isFile(executable):
+        return executable
+    else:
+      raise EnvironmentError("Could not find executable.")
 
 def _getMinGWInstallDir():
   """Returns the MinGW install directory.
@@ -283,12 +320,9 @@ class GccCompiler(Compiler):
     args = list(self._getCompileArgs(language))
     args += [source, '-o', target]
     
-    @makeCommand(args)
-    def preprocess():
+    def compile():
       self._executeProcess(args, target, engine)
-
-    @makeCommand("obj-scan")
-    def scan():
+      
       dependencyFile = cake.path.stripExtension(target) + '.d'
       engine.logger.outputDebug(
         "scan",
@@ -302,13 +336,14 @@ class GccCompiler(Compiler):
         self.objectSuffix
         ))
       return dependencies
-
-    @makeCommand("dummy-compile")
-    def compile():
-      pass
-      
+    
+    def command():
+      task = engine.createTask(compile)
+      task.start(immediate=True)
+      return task
+    
     canBeCached = True
-    return preprocess, scan, compile, canBeCached    
+    return command, args, canBeCached
 
   @memoise
   def _getCommonLibraryArgs(self):

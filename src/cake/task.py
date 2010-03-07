@@ -118,6 +118,19 @@ class Task(object):
     """
     return self._state is Task.State.FAILED
         
+  @property
+  def result(self):
+    """If the task has completed successfully then holds the
+    return value of the task, otherwise raises AttributeError.
+    """
+    if self.succeeded:
+      task = self
+      while isinstance(task._result, Task):
+        task = task._result
+      return task._result
+    else:
+      raise AttributeError("result only available on successful tasks")
+    
   def start(self, immediate=False):
     """Start this task now.
     
@@ -212,6 +225,13 @@ class Task(object):
           result = None
       finally:
         self._current.value = old
+
+      # If the result of the task was another task
+      # then our result will be the same as that other
+      # task's result. So make sure we don't complete
+      # before the other task does.
+      if isinstance(result, Task):
+        self.completeAfter(result)
         
       with self._lock:
         self._result = result

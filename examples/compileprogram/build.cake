@@ -1,6 +1,6 @@
-from cake.tools import compiler, env, filesys
+from cake.tools import compiler, env, script
 
-sources = filesys.cwd([
+sources = script.cwd([
   "main.cpp",
   ])
 

@@ -7,7 +7,7 @@
 
 from __future__ import with_statement
 
-__all__ = ["MsvcCompiler", "findCompiler"]
+__all__ = ["MsvcCompiler", "findMsvcCompiler"]
 
 import sys
 import os
@@ -19,13 +19,13 @@ import threading
 
 import cake.filesys
 import cake.path
-from cake.library.compilers import Compiler, makeCommand
+from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.library import memoise
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
 from cake.engine import getHostArchitecture
 
-def findCompiler(
+def findMsvcCompiler(
   version=None,
   architecture=None,
   ):
@@ -39,9 +39,9 @@ def findCompiler(
   @param architecture: The machine architecture to compile for. If
   architecture is None then the current architecture is used.
   
-  @raise ValueError: When an invalid architecture is passed in.
-  @raise EnvironmentError: When a valid compiler or Windows SDK could
-  not be found.
+  @raise ValueError: When an invalid version or architecture is passed in.
+  @raise CompilerNotFoundError: When a valid compiler or Windows SDK
+  could not be found.
   """
   # Valid architectures
   architectures = ['x86', 'x64', 'ia64']
@@ -101,7 +101,7 @@ def findCompiler(
     if found:
       break
   else:
-    raise EnvironmentError(
+    raise CompilerNotFoundError(
       "Could not find Microsoft Visual Studio C++ compiler."
       )
 

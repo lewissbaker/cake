@@ -23,6 +23,9 @@ from cake.engine import Script, DependencyInfo, FileInfo, BuildError
 from cake.library import Tool, FileTarget, getPathsAndTasks, getPathAndTask
 from cake.task import Task
 
+class CompilerNotFoundError(Exception):
+  pass
+
 class Command(object):
   
   def __init__(self, args, func):

@@ -17,7 +17,7 @@ import platform
 import cake.filesys
 import cake.path
 from cake.library import memoise
-from cake.library.compilers import Compiler, makeCommand
+from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.gnu import parseDependencyFile
 from cake.engine import getHostArchitecture
 
@@ -92,7 +92,7 @@ def findMinGWCompiler(architecture=None):
   @param architecture: The machine architecture to compile for. If
   architecture is None then the current architecture is used.
 
-  @raise EnvironmentError: When a valid MinGW compiler could not be found.
+  @raise CompilerNotFoundError: When a valid MinGW compiler could not be found.
   """
   if architecture is None:
     architecture = getHostArchitecture()
@@ -100,7 +100,7 @@ def findMinGWCompiler(architecture=None):
   try:
     installDir = getMinGWInstallDir()
   except WindowsError:
-    raise EnvironmentError("Could not find MinGW install directory.")
+    raise CompilerNotFoundError("Could not find MinGW install directory.")
 
   arExe = cake.path.join(installDir, "bin", "ar.exe")
   gccExe = cake.path.join(installDir, "bin", "gcc.exe")
@@ -119,7 +119,7 @@ def findGccCompiler(architecture=None):
   @param architecture: The machine architecture to compile for. If
   architecture is None then the current architecture is used.
 
-  @raise EnvironmentError: When a valid gcc compiler could not be found.
+  @raise CompilerNotFoundError: When a valid gcc compiler could not be found.
   """
   if architecture is None:
     architecture = getHostArchitecture()
@@ -130,7 +130,7 @@ def findGccCompiler(architecture=None):
     arExe = findExecutable("ar", paths)
     gccExe = findExecutable("gcc", paths)
   except EnvironmentError:
-    raise EnvironmentError("Could not find GCC compiler and AR archiver.")
+    raise CompilerNotFoundError("Could not find GCC compiler and AR archiver.")
     
   compiler = GccCompiler(
     arExe=arExe,
@@ -365,7 +365,10 @@ class GccCompiler(Compiler):
     args = [self.__gccExe]
 
     if dll:
-      args.append('-shared')
+      if self.__architecture == 'ppu':
+        args.append('-Wl,--oformat=fsprx')
+      else:
+        args.append('-shared')
     else:
       if self.__architecture == 'ppu':
         args.append('-Wl,--oformat=fself')

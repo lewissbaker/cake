@@ -1,16 +1,16 @@
 # Script to build printer library
-from cake.tools import compiler, env, filesys, script
+from cake.tools import compiler, env, script
 
 # Use printer library (only for include paths)
-script.include(filesys.cwd("use.cake"))
+script.include(script.cwd("use.cake"))
 
 # List of includes
-includes = filesys.cwd("include", [
+includes = script.cwd("include", [
   "printer.h",
   ])
 
 # List of sources
-sources = filesys.cwd("source", [
+sources = script.cwd("source", [
   "printer.cpp",
   ])
 

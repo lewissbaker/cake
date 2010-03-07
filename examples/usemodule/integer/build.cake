@@ -1,14 +1,13 @@
-from cake.tools import compiler, env, filesys, script
-import cake.path
+from cake.tools import compiler, env, script
 
-compiler.addIncludePath(filesys.cwd("include"))
+compiler.addIncludePath(script.cwd("include"))
 compiler.addDefine("EXPORT")
 
-includes = filesys.cwd("include", [
+includes = script.cwd("include", [
   "integer.h",
   ])
 
-sources = filesys.cwd("source", [
+sources = script.cwd("source", [
   "integer.cpp",
   ])
 

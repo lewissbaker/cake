@@ -41,22 +41,11 @@ class DummyCompiler(Compiler):
       args.append('/ex')
     if language:
       args.append('/lang:%s' % language)
-    return args
-
-  @memoise
-  def _getPreprocessArgs(self, language):
-    args = ['cc', '/e']
     args.extend('/I%s' % p for p in reversed(self.includePaths))
     args.extend('/D%s' % d for d in self.defines)
     args.extend('/FI%s' % p for p in self.forcedIncludes)
-    if self.enableRtti:
-      args.append('/rtti')
-    if self.enableExceptions:
-      args.append('/ex')
-    if language:
-      args.append('/lang:%s' % language)
     return args
-  
+
   def getObjectCommands(self, target, source, engine):
 
     language = self.language
@@ -66,34 +55,25 @@ class DummyCompiler(Compiler):
       else:
         language = 'c++'
 
-    preprocessTarget = target + '.i'
-
-    preprocessorArgs = list(self._getPreprocessArgs(language))
-    preprocessorArgs += [source, '/o' + preprocessTarget]
-    
     compilerArgs = list(self._getCompileArgs(language))
-    compilerArgs += [preprocessTarget, '/o' + target]
+    compilerArgs += [source, '/o' + target]
     
-    @makeCommand(preprocessorArgs)
-    def preprocess():
-      engine.logger.outputDebug("run", "%s\n" % " ".join(preprocessorArgs))
-      cake.filesys.makeDirs(cake.path.dirName(preprocessTarget))
-      with open(preprocessTarget, 'wb'):
-        pass
-
-    @makeCommand("dummy-scan")
-    def scan():
-      return [source] + self.forcedIncludes
-    
-    @makeCommand(compilerArgs)
     def compile():
       engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
       cake.filesys.makeDirs(cake.path.dirName(target))
-      with open(target, 'wb'):
-        pass
+      with open(target, 'wb') as f:
+        f.write("dummy object file")
+        
+      dependencies = [source]
+      return dependencies
+
+    def command():
+      task = engine.createTask(compile)
+      task.start(immediate=True)
+      return task
 
     canBeCached = True
-    return preprocess, scan, compile, canBeCached
+    return command, compilerArgs, canBeCached
 
   def getLibraryCommand(self, target, sources, engine):
     

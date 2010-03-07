@@ -7,29 +7,8 @@ from cake.engine import Variant
 
 import platform
 
-currentPlatform = platform.system().lower()
+hostPlatform = platform.system().lower()
 
-def setupVariant(variant):
-  platform = variant.keywords["platform"]
-  compilerName = variant.keywords["compiler"]
-  release = variant.keywords["release"]
-  compiler = variant.tools["compiler"]
-  
-  env = variant.tools["env"]
-  env["BUILD"] = "build/" + "_".join([
-    platform,
-    compilerName,
-    compiler.architecture,
-    release,
-    ])
-
-  if release == "debug":
-    compiler.debugSymbols = True
-  elif release == "release":
-    compiler.optimisation = compiler.FULL_OPTIMISATION
-
-  return variant
-  
 base = Variant()
 base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
@@ -37,59 +16,62 @@ base.tools["variant"] = VariantTool()
 env = base.tools["env"] = Environment()
 env["EXAMPLES"] = "."
 
+def createVariants(parent):
+  for release in ["debug", "release"]:
+    variant = parent.clone(release=release)
+  
+    platformName = variant.keywords["platform"]
+    compilerName = variant.keywords["compiler"]
+    compiler = variant.tools["compiler"]
+    
+    env = variant.tools["env"]
+    env["BUILD"] = "build/" + "_".join([
+      platformName,
+      compilerName,
+      compiler.architecture,
+      release,
+      ])
+  
+    if release == "debug":
+      compiler.debugSymbols = True
+    elif release == "release":
+      compiler.optimisation = compiler.FULL_OPTIMISATION
+
+    engine.addVariant(variant, default=True)
+
 # Dummy
 from cake.library.compilers.dummy import DummyCompiler
-dummy = base.clone(platform=currentPlatform, compiler="dummy")
+dummy = base.clone(platform=hostPlatform, compiler="dummy")
 dummy.tools["compiler"] = DummyCompiler()
-
-dummyDebug = dummy.clone(release="debug")
-engine.addVariant(setupVariant(dummyDebug), default=True)
-
-dummyRelease = dummy.clone(release="release")
-engine.addVariant(setupVariant(dummyRelease))
+createVariants(dummy)
 
 if platform.system() == 'Windows':
-  try:
-    # Msvc
-    from cake.library.compilers.msvc import findMsvcCompiler
-    msvc = base.clone(platform="windows", compiler="msvc")
-    msvc.tools["compiler"] = findMsvcCompiler() 
-    
-    msvcDebug = msvc.clone(release="debug")
-    engine.addVariant(setupVariant(msvcDebug), default=True)
-    
-    msvcRelease = msvc.clone(release="release")
-    engine.addVariant(setupVariant(msvcRelease))
-  except CompilerNotFoundError:
-    pass
+  # Msvc
+  from cake.library.compilers.msvc import findMsvcCompiler
+  for a in ["x86", "x64", "ia64"]:
+    try:
+      msvc = base.clone(platform="windows", compiler="msvc", architecture=a)
+      msvc.tools["compiler"] = findMsvcCompiler(architecture=a) 
+      createVariants(msvc)
+    except CompilerNotFoundError:
+      pass
 
   try:
     # MinGW
     from cake.library.compilers.gcc import findMinGWCompiler
     mingw = base.clone(platform="windows", compiler="mingw")
     compiler = mingw.tools["compiler"] = findMinGWCompiler()
-    
-    mingwDebug = mingw.clone(release="debug")
-    engine.addVariant(setupVariant(mingwDebug), default=True)
-    
-    mingwRelease = mingw.clone(release="release")
-    engine.addVariant(setupVariant(mingwRelease))
+    createVariants(mingw)
   except CompilerNotFoundError:
     pass
 
 try:
   # Gcc
   from cake.library.compilers.gcc import findGccCompiler
-  gcc = base.clone(platform=currentPlatform, compiler="gcc")
+  gcc = base.clone(platform=hostPlatform, compiler="gcc")
   compiler = gcc.tools["compiler"] = findGccCompiler()
-  
   # TODO: Should we move this to a runtimes.cake?
   compiler.addLibrary("supc++")
-  
-  gccDebug = gcc.clone(release="debug")
-  engine.addVariant(setupVariant(gccDebug), default=True)
-  
-  gccRelease = gcc.clone(release="release")
-  engine.addVariant(setupVariant(gccRelease))
+  createVariants(gcc)
 except CompilerNotFoundError:
   pass

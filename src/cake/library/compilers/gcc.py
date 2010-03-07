@@ -19,10 +19,9 @@ import cake.path
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.gnu import parseDependencyFile
-from cake.engine import getHostArchitecture
+from cake.system import getHostArchitecture
 
-
-def findExecutable(name, paths):
+def _findExecutable(name, paths):
   """Find an executable given its name and a list of paths.  
   """
   for p in paths:
@@ -32,7 +31,7 @@ def findExecutable(name, paths):
   else:
     raise EnvironmentError("Could not find executable.");
 
-def getMinGWInstallDir():
+def _getMinGWInstallDir():
   """Returns the MinGW install directory.
   
   Typically: 'C:\MinGW'.
@@ -62,20 +61,24 @@ def findMinGWCompiler(architecture=None):
     architecture = getHostArchitecture()
 
   try:
-    installDir = getMinGWInstallDir()
+    installDir = _getMinGWInstallDir()
+    arExe = cake.path.join(installDir, "bin", "ar.exe")
+    gccExe = cake.path.join(installDir, "bin", "gcc.exe")
+    
+    def checkFile(path):
+      if not cake.filesys.isFile(path):
+        raise WindowsError(path + " is not a file.")
+
+    checkFile(arExe)
+    checkFile(gccExe)
+      
+    return GccCompiler(
+      arExe=arExe,
+      gccExe=gccExe,
+      architecture=architecture,
+      )
   except WindowsError:
     raise CompilerNotFoundError("Could not find MinGW install directory.")
-
-  arExe = cake.path.join(installDir, "bin", "ar.exe")
-  gccExe = cake.path.join(installDir, "bin", "gcc.exe")
-  
-  compiler = GccCompiler(
-    arExe=arExe,
-    gccExe=gccExe,
-    architecture=architecture,
-    )
-
-  return compiler
 
 def findGccCompiler(architecture=None):
   """Returns a GCC compiler given an architecture.
@@ -91,18 +94,23 @@ def findGccCompiler(architecture=None):
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
   try:
-    arExe = findExecutable("ar", paths)
-    gccExe = findExecutable("gcc", paths)
+    arExe = _findExecutable("ar", paths)
+    gccExe = _findExecutable("gcc", paths)
+
+    def checkFile(path):
+      if not cake.filesys.isFile(path):
+        raise EnvironmentError(path + " is not a file.")
+
+    checkFile(arExe)
+    checkFile(gccExe)
+
+    return GccCompiler(
+      arExe=arExe,
+      gccExe=gccExe,
+      architecture=architecture,
+      )
   except EnvironmentError:
     raise CompilerNotFoundError("Could not find GCC compiler and AR archiver.")
-    
-  compiler = GccCompiler(
-    arExe=arExe,
-    gccExe=gccExe,
-    architecture=architecture,
-    )
-
-  return compiler
 
 class GccCompiler(Compiler):
 
@@ -117,7 +125,7 @@ class GccCompiler(Compiler):
     self.__gccExe = gccExe
     self.__architecture = architecture
     
-    if architecture == 'x86':
+    if architecture in ['x86', 'x64']:
       self.objectSuffix = '.obj'
       self.libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
       self.moduleSuffix = '.dll'
@@ -233,7 +241,7 @@ class GccCompiler(Compiler):
       args.append('-fexceptions')
     else:
       args.append('-fno-exceptions')
-      
+
     if self.optimisation == self.NO_OPTIMISATION:
       args.append('-O0')
     elif self.optimisation == self.PARTIAL_OPTIMISATION:
@@ -245,9 +253,9 @@ class GccCompiler(Compiler):
         '-fdata-sections',
         ])
 
-    if self.__architecture == 'x86':
+    if self.architecture == 'x86':
       args.append("-m32")
-    elif self.__architecture == 'x64':
+    elif self.architecture == 'x64':
       args.append("-m64")
       
     if self.useSse:
@@ -331,16 +339,16 @@ class GccCompiler(Compiler):
     args = [self.__gccExe]
 
     if dll:
-      if self.__architecture == 'ppu':
+      if self.architecture == 'ppu':
         args.append('-Wl,--oformat=fsprx')
       else:
         args.append('-shared')
     else:
-      if self.__architecture == 'ppu':
+      if self.architecture == 'ppu':
         args.append('-Wl,--oformat=fself')
 
     if self.optimisation == self.FULL_OPTIMISATION:
-      if self.__architecture == 'ppu':
+      if self.architecture == 'ppu':
         args.extend([
           '-Wl,-strip-unused',
           '-Wl,-strip-unused-data',

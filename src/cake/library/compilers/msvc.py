@@ -23,7 +23,123 @@ from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.library import memoise
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
-from cake.engine import getHostArchitecture
+from cake.system import getHostArchitecture
+
+def _toArchitectureDir(architecture):
+  """Re-map 'x64' to 'amd64' to match MSVC directory names.
+  """
+  return {'x64' : 'amd64'}.get(architecture, architecture)
+
+def _createMsvcCompiler(
+  version,
+  edition,
+  architecture,
+  hostArchitecture,
+  ):
+  """Attempt to create an MSVC compiler.
+  
+  @raise WindowsError: If the compiler could not be created.
+  @return: The newly created compiler.
+  @rtype: L{MsvcCompiler}
+  """
+  registryPath = edition + '\\' + version
+  msvsInstallDir = getMsvsInstallDir(registryPath)
+  msvcProductDir = getMsvcProductDir(registryPath)
+
+  # Use the compilers platform SDK if installed
+  platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
+  if not cake.filesys.isDir(platformSdkDir):
+    platformSdkDir = getPlatformSdkDir()
+
+  if architecture == 'x86':
+    # Root bin directory is always used for the x86 compiler
+    msvcBinDir = cake.path.join(msvcProductDir, "bin")
+  elif architecture != hostArchitecture:
+    # Determine the bin directory for cross-compilers
+    msvcBinDir = cake.path.join(
+      msvcProductDir,
+      "bin",
+      "%s_%s" % (
+        _toArchitectureDir(hostArchitecture),
+        _toArchitectureDir(architecture),
+        ),
+      )
+  else:
+    # Determine the bin directory for 64-bit compilers
+    msvcBinDir = cake.path.join(
+      msvcProductDir,
+      "bin",
+      "%s" % _toArchitectureDir(architecture),
+      )
+  
+  msvcIncludeDir = cake.path.join(msvcProductDir, "include")
+  platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
+
+  if architecture == 'x86':
+    defines = ['WIN32']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib")
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
+  elif architecture == 'x64':
+    defines = ['WIN32', 'WIN64']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
+    # External Platform SDKs may use 'x64' instead of 'amd64'
+    if not cake.filesys.isDir(platformSdkLibDir):
+      platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
+  elif architecture == 'ia64':
+    defines = ['WIN32', 'WIN64']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "IA64")
+
+  clExe = cake.path.join(msvcBinDir, "cl.exe")
+  libExe = cake.path.join(msvcBinDir, "lib.exe")
+  linkExe = cake.path.join(msvcBinDir, "link.exe")
+  rcExe = cake.path.join(msvcBinDir, "rc.exe")
+  mtExe = cake.path.join(msvcBinDir, "mt.exe")
+
+  if not cake.filesys.isFile(rcExe):
+    rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
+  if not cake.filesys.isFile(mtExe):
+    mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
+
+  def checkFile(path):
+    if not cake.filesys.isFile(path):
+      raise WindowsError(path + " is not a file.")
+
+  def checkDirectory(path):
+    if not cake.filesys.isDir(path):
+      raise WindowsError(path + " is not a directory.")
+
+  checkFile(clExe)
+  checkFile(libExe)
+  checkFile(linkExe)
+  checkFile(rcExe)
+  checkFile(mtExe)
+
+  checkDirectory(msvcIncludeDir)
+  checkDirectory(platformSdkIncludeDir)
+  checkDirectory(msvcLibDir)
+  checkDirectory(platformSdkLibDir)
+
+  compiler = MsvcCompiler(
+    clExe=clExe,
+    libExe=libExe,
+    linkExe=linkExe,
+    rcExe=rcExe,
+    mtExe=mtExe,
+    dllPaths=[msvsInstallDir],
+    architecture=architecture,
+    )
+
+  compiler.addIncludePath(msvcIncludeDir)
+  compiler.addLibraryPath(msvcLibDir)
+  compiler.addIncludePath(platformSdkIncludeDir)
+  compiler.addLibraryPath(platformSdkLibDir)
+  
+  for d in defines:
+    compiler.addDefine(d)
+
+  return compiler
 
 def findMsvcCompiler(
   version=None,
@@ -38,6 +154,9 @@ def findMsvcCompiler(
   latest version is found instead. 
   @param architecture: The machine architecture to compile for. If
   architecture is None then the current architecture is used.
+  
+  @return: A newly created MSVC compiler.
+  @rtype: L{MsvcCompiler}
   
   @raise ValueError: When an invalid version or architecture is passed in.
   @raise CompilerNotFoundError: When a valid compiler or Windows SDK
@@ -80,107 +199,16 @@ def findMsvcCompiler(
     versions = [version]
 
   for v in versions:
-    found = False
     for e in editions:
       try:
-        registryPath = e + '\\' + v
-        msvsInstallDir = getMsvsInstallDir(registryPath)
-        msvcProductDir = getMsvcProductDir(registryPath)
-      
-        # Use the compilers platform SDK if installed
-        platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
-        if not cake.filesys.isDir(platformSdkDir):
-          platformSdkDir = getPlatformSdkDir()
-
-        # Break when we have found all compiler dirs
-        found = True
-        break
+        return _createMsvcCompiler(v, e, architecture, hostArchitecture)
       except WindowsError:
         # Try the next version/edition
-        continue
-    if found:
-      break
+        pass
   else:
     raise CompilerNotFoundError(
       "Could not find Microsoft Visual Studio C++ compiler."
       )
-
-  def toArchitectureDir(architecture):
-    """Re-map 'x64' to 'amd64' to match MSVC directory names.
-    """
-    return {'x64' : 'amd64'}.get(architecture, architecture)
-
-  if architecture == 'x86':
-    # Root bin directory is always used for the x86 compiler
-    msvcBinDir = cake.path.join(msvcProductDir, "bin")
-  elif architecture != hostArchitecture:
-    # Determine the bin directory for cross-compilers
-    msvcBinDir = cake.path.join(
-      msvcProductDir,
-      "bin",
-      "%s_%s" % (
-        toArchitectureDir(hostArchitecture),
-        toArchitectureDir(architecture),
-        ),
-      )
-  else:
-    # Determine the bin directory for 64-bit compilers
-    msvcBinDir = cake.path.join(
-      msvcProductDir,
-      "bin",
-      "%s" % toArchitectureDir(architecture),
-      )
-    
-  clExe = cake.path.join(msvcBinDir, "cl.exe")
-  libExe = cake.path.join(msvcBinDir, "lib.exe")
-  linkExe = cake.path.join(msvcBinDir, "link.exe")
-  rcExe = cake.path.join(msvcBinDir, "rc.exe")
-  mtExe = cake.path.join(msvcBinDir, "mt.exe")
-
-  if not cake.filesys.isFile(rcExe):
-    rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
-  if not cake.filesys.isFile(mtExe):
-    mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
-  
-  dllPaths = [msvsInstallDir]
-    
-  compiler = MsvcCompiler(
-    clExe=clExe,
-    libExe=libExe,
-    linkExe=linkExe,
-    rcExe=rcExe,
-    mtExe=mtExe,
-    dllPaths=dllPaths,
-    architecture=architecture,
-    )
-
-  msvcIncludeDir = cake.path.join(msvcProductDir, "include")
-  platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
-
-  if architecture == 'x86':
-    defines = ['WIN32']
-    msvcLibDir = cake.path.join(msvcProductDir, "lib")
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
-  elif architecture == 'x64':
-    defines = ['WIN32', 'WIN64']
-    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
-    # External Platform SDKs may use 'x64' instead of 'amd64'
-    if not cake.filesys.isDir(platformSdkLibDir):
-      platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
-  elif architecture == 'ia64':
-    defines = ['WIN32', 'WIN64']
-    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "IA64")
-
-  compiler.addIncludePath(msvcIncludeDir)
-  compiler.addLibraryPath(msvcLibDir)
-  compiler.addIncludePath(platformSdkIncludeDir)
-  compiler.addLibraryPath(platformSdkLibDir)
-  for d in defines:
-    compiler.addDefine(d)
-
-  return compiler
 
 def _escapeArg(arg):
   if ' ' in arg:

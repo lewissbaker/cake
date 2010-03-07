@@ -13,6 +13,7 @@ import threading
 import datetime
 import time
 import traceback
+import platform
 
 import cake.logging
 import cake.engine
@@ -46,6 +47,88 @@ def searchUpForFile(path, file):
     
     path = parent
 
+def _overrideOpen():
+  """
+  Override the built-in open() and os.open() to set the no-inherit
+  flag on files to prevent processes from inheriting file handles.
+  """
+  import __builtin__
+  
+  def new_open(filename, mode="r", bufsize=0):
+    if mode.startswith("r"):
+      flags = os.O_RDONLY
+    elif mode.startswith("w"):
+      flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    elif mode.startswith("a"):
+      flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+    else:
+      flags = os.O_RDONLY
+      mode = "r" + mode
+    
+    for ch in mode[1:]:
+      if ch == "+":
+        flags |= os.O_RDWR
+        flags &= ~(os.O_RDONLY | os.O_WRONLY)
+      elif ch == "t" and hasattr(os, "O_TEXT"):
+        flags |= os.O_TEXT
+      elif ch == "b" and hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+      elif ch in " ,":
+        pass
+      elif ch == "U":
+        pass # Universal newline support
+      elif ch == "N" and hasattr(os, "O_NOINHERIT"):
+        flags |= os.O_NOINHERIT
+      elif ch == "D" and hasattr(os, "O_TEMPORARY"):
+        flags |= os.O_TEMPORARY
+      elif ch == "T" and hasattr(os, "O_SHORT_LIVED"):
+        flags |= os.O_SHORT_LIVED
+      elif ch == "S" and hasattr(os, "O_SEQUENTIAL"):
+        flags |= os.O_SEQUENTIAL
+      elif ch == "R" and hasattr(os, "O_RANDOM"):
+        flags |= os.O_RANDOM
+      else:
+        raise ValueError("unknown flag '%s' in mode" % ch)
+
+    #if hasattr(os, "O_BINARY") and hasattr(os, "O_TEXT") and flags & os.O_BINARY and flags & os.O_TEXT:
+    #  raise ValueError("Cannot specify both 't' and 'b' in mode")
+    #if hasattr(os, "O_SEQUENTIAL") and hasattr(os, "O_RANDOM") and flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
+    #  raise ValueError("Cannot specify both 'S' and 'R' in mode")
+
+    try:
+      fd = os.open(filename, flags)
+      return os.fdopen(fd, mode, bufsize)
+    except OSError, e:
+      raise IOError(str(e))
+  __builtin__.open = new_open
+
+  old_os_open = os.open
+  def new_os_open(filename, flag, mode=0777):
+    if hasattr(os, "O_NOINHERIT"):
+      flag |= os.O_NOINHERIT
+    return old_os_open(filename, flag, mode)
+  os.open = new_os_open
+
+def _speedUp():
+  """
+  Speed up execution by importing Psyco and binding the slowest functions
+  with it.
+  """
+  try:
+    import psyco
+    psyco.bind(cake.engine.DependencyInfo.isUpToDate)
+    #psyco.full()
+    #psyco.profile()
+    #psyco.log()
+  except ImportError:
+    # Only report import failures on systems we know Psyco supports.
+    version = platform.python_version_tuple()
+    supportsVersion = version[0] == "2" and version[1] in ["5", "6"]
+    if platform.system() == "Windows" and supportsVersion:
+      sys.stderr.write(
+        "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
+        )
+
 def run(args=None, cwd=None):
   """Run a cake build with the specified command-line args.
   
@@ -60,7 +143,13 @@ def run(args=None, cwd=None):
   if exited with success.
   @rtype: int
   """
-  
+  # Only override if there is a no-inherit flag
+  if hasattr(os, "O_NOINHERIT"):
+    _overrideOpen()
+
+  # Speed up builds if Psyco is installed
+  _speedUp()
+ 
   if args is None:
     args = sys.argv[1:]
   

@@ -1,8 +1,6 @@
 """Path Unit Tests.
 """
 
-from __future__ import with_statement
-
 import unittest
 import os.path
 import os
@@ -124,8 +122,9 @@ class PathTests(unittest.TestCase):
     self.assertEqual(fileSystemPath("."), ".")
     
     fileName = "aBcD.tXt"
-    with open(fileName, "wt"):
-      pass
+    f = open(fileName, "wt")
+    f.close()
+
     self.assertEqual(fileSystemPath("abcd.txt"), fileName)
     self.assertEqual(fileSystemPath("./abcd.txt"), "./" + fileName)
     os.remove(fileName)
@@ -133,8 +132,9 @@ class PathTests(unittest.TestCase):
     dirName = "WhaT" 
     os.mkdir(dirName)
     path = dirName + "/" + fileName
-    with open(path, "wt"):
-      pass
+    f = open(path, "wt")
+    f.close()
+
     self.assertEqual(fileSystemPath("whAT/aBCd.txt"), path)
     self.assertEqual(fileSystemPath("./whAT/aBCd.txt"), "./" + path)
     self.assertEqual(fileSystemPath("whAT/.."), dirName + "/..")

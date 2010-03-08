@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 import os
 import os.path
 import re
@@ -33,8 +31,9 @@ if platform.system().lower().startswith('cygwin'):
         # We detect this by actually trying to open the path
         # for read, if it fails we know it should have a .exe.
         try:
-          with open(executable, 'rb'):
-            return executable
+          f = open(executable, 'rb')
+          f.close()
+          return executable
         except EnvironmentError:
           return executable + '.exe'
     else:

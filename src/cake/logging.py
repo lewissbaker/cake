@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
- 
 import sys
 import threading
 
@@ -34,10 +32,13 @@ class Logger(object):
     @param message: The message to output.
     @type message: string
     """
-    with self._lock:
+    self._lock.acquire()
+    try:
       self.errorCount += 1
       sys.stderr.write(message)
       sys.stderr.flush()
+    finally:
+      self._lock.release()
       
   def outputWarning(self, message):
     """Output a warning message.
@@ -45,10 +46,13 @@ class Logger(object):
     @param message: The message to output.
     @type message: string
     """
-    with self._lock:
+    self._lock.acquire()
+    try:
       self.warningCount += 1
       sys.stderr.write(message)
       sys.stderr.flush()
+    finally:
+      self._lock.release()
       
   def outputInfo(self, message):
     """Output an informative message.
@@ -56,9 +60,12 @@ class Logger(object):
     @param message: The message to output.
     @type message: string
     """
-    with self._lock:
+    self._lock.acquire()
+    try:
       sys.stdout.write(message)
       sys.stdout.flush()
+    finally:
+      self._lock.release()
       
   def outputDebug(self, keyword, message):
     """Output a debug message.
@@ -72,6 +79,9 @@ class Logger(object):
     @type message: string
     """
     if keyword in self.debugComponents:
-      with self._lock:
+      self._lock.acquire()
+      try:
         sys.stdout.write(message)
         sys.stdout.flush()
+      finally:
+        self._lock.release()

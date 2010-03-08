@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 __all__ = ["MsvcCompiler", "findMsvcCompiler"]
 
 import sys
@@ -417,7 +415,8 @@ class MsvcCompiler(Compiler):
 
       cake.filesys.makeDirs(cake.path.dirName(target))
       
-      with tempfile.TemporaryFile() as errFile:
+      errFile = tempfile.TemporaryFile()
+      try:
         # Launch the process
         try:
           p = subprocess.Popen(
@@ -462,11 +461,14 @@ class MsvcCompiler(Compiler):
 
         if exitCode != 0:
           raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
+      finally:
+        errFile.close()        
       
       return dependencies
       
     def compileWhenPdbIsFree():
-      with self._pdbQueueLock:
+      self._pdbQueueLock.acquire()
+      try:
         predecessor = self._pdbQueue.get(pdbFile, None)
         if predecessor is None or predecessor.completed:
           # No prior compiles using this .pdb can start this
@@ -480,6 +482,8 @@ class MsvcCompiler(Compiler):
           predecessor.addCallback(compileTask.start)
           compileNow = False
         self._pdbQueue[pdbFile] = compileTask
+      finally:
+        self._pdbQueueLock.release()
         
       if compileNow:
         return compile()
@@ -538,9 +542,12 @@ class MsvcCompiler(Compiler):
       
       argsFile = target + '.args'
       cake.filesys.makeDirs(cake.path.dirName(argsFile))
-      with open(argsFile, 'wt') as f:
+      f = open(argsFile, 'wt')
+      try:
         for arg in args[2:]:
           f.write(arg + '\n')
+      finally:
+        f.close()            
 
       try:
         p = subprocess.Popen(
@@ -674,7 +681,10 @@ class MsvcCompiler(Compiler):
       if not self.__mtExe:
         engine.raiseError("You must set path to mt.exe with embedManifest=True\n")
       
-      manifestResourceId = 2 if dll else 1
+      if dll:
+        manifestResourceId = 2
+      else:
+        manifestResourceId = 1
       embeddedManifest = target + '.embed.manifest'
       if self.useIncrementalLinking:
         if not self.__rcExe:
@@ -700,9 +710,12 @@ class MsvcCompiler(Compiler):
       
       argFile = target + '.args'
       cake.filesys.makeDirs(cake.path.dirName(argFile))
-      with open(argFile, 'wt') as f:
+      f = open(argFile, 'wt')
+      try:      
         for arg in args[1:]:
           f.write(_escapeArg(arg) + '\n')
+      finally:
+        f.close()
 
       if self.importLibrary:
         cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
@@ -844,13 +857,16 @@ class MsvcCompiler(Compiler):
       
       # Generate .embed.manifest.rc
       engine.logger.outputInfo("Creating %s\n" % embeddedRc)
-      with open(embeddedRc, 'w') as f:
+      f = open(embeddedRc, 'w')
+      try:
         # Use numbers so we don't have to include any headers
         # 24 - RT_MANIFEST
         f.write('%i 24 "%s"\n' % (
           manifestResourceId,
           embeddedManifest.replace("\\", "\\\\")
           ))
+      finally:
+        f.close()
       
       compileRcToRes()
       link()

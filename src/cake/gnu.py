@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 def parseDependencyFile(path, targetSuffix):
   """Parse a .d file and return the list of dependencies.
   
@@ -26,7 +24,8 @@ def parseDependencyFile(path, targetSuffix):
       path = path.replace('\\ ', ' ') # fix escaped spaces
       dependencies.append(path)
 
-  with open(path, 'rt') as f:
+  f = open(path, 'rt')
+  try:
     text = f.read()
     text = text.replace('\\\n', ' ') # join escaped lines
     text = text.replace('\n', ' ') # join other lines
@@ -50,6 +49,8 @@ def parseDependencyFile(path, targetSuffix):
         else:
           addPath(text[:i])
           text = text[i:]
+  finally:
+    f.close()
   
   return dependencies
   

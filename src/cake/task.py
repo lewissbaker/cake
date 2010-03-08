@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 import sys
 import threading
 
@@ -153,12 +151,15 @@ class Task(object):
     """
     otherTasks = _makeTasks(other)
     
-    with self._lock:
+    self._lock.acquire()
+    try:
       if self._state is not Task.State.NEW:
         raise TaskError("task already started")
       self._state = Task.State.WAITING_FOR_START
       self._startAfterCount = len(otherTasks) + 1
       self._immediate = immediate
+    finally:
+      self._lock.release()
     
     for t in otherTasks:
       t.addCallback(lambda t=t: self._startAfterCallback(t))
@@ -170,7 +171,8 @@ class Task(object):
     """
     callbacks = None
     
-    with self._lock:
+    self._lock.acquire()
+    try:
       # If one task fails we should fail too
       if task.failed:
         self._startAfterFailures = True
@@ -190,6 +192,8 @@ class Task(object):
         self._callbacks = None
       else:
         self._state = Task.State.RUNNING
+    finally:
+      self._lock.release()
 
     if callbacks is None:
       _threadPool.queueJob(self._execute, front=self._immediate)          
@@ -233,7 +237,8 @@ class Task(object):
       if isinstance(result, Task):
         self.completeAfter(result)
         
-      with self._lock:
+      self._lock.acquire()
+      try:
         self._result = result
         if self._state is Task.State.RUNNING:
           if not self._completeAfterCount:
@@ -247,10 +252,13 @@ class Task(object):
             self._state = Task.State.WAITING_FOR_COMPLETE
         else:
           assert self._state is Task.State.FAILED, "should have been cancelled"
+      finally:
+        self._lock.release()
         
     except Exception, e:
       trace = sys.exc_info()[2]
-      with self._lock:
+      self._lock.acquire()
+      try:
         self._exception = e
         self._trace = trace
         if self._state is Task.State.RUNNING:
@@ -262,6 +270,8 @@ class Task(object):
             self._state = Task.State.WAITING_FOR_COMPLETE
         else:
           assert self._state is Task.State.FAILED, "should have been cancelled"
+      finally:
+        self._lock.release()
      
     if callbacks:
       for callback in callbacks:
@@ -281,10 +291,13 @@ class Task(object):
     """
     otherTasks = _makeTasks(other)
 
-    with self._lock:
+    self._lock.acquire()
+    try:
       if self.completed:
         raise TaskError("Task function has already finished executing.")
       self._completeAfterCount += len(otherTasks)
+    finally:
+      self._lock.release()
       
     for t in otherTasks:      
       t.addCallback(lambda t=t: self._completeAfterCallback(t))
@@ -294,7 +307,8 @@ class Task(object):
     """
     callbacks = None
     
-    with self._lock:
+    self._lock.acquire()
+    try:
       self._completeAfterCount -= 1
       if task.failed:
         self._completeAfterFailures = True
@@ -306,6 +320,8 @@ class Task(object):
           self._state = Task.State.FAILED
         callbacks = self._callbacks
         self._callbacks = None
+    finally:
+      self._lock.release()
         
     if callbacks:
       for callback in callbacks:
@@ -322,13 +338,16 @@ class Task(object):
     
     @raise TaskError: if the task has already completed.
     """
-    with self._lock:
+    self._lock.acquire()
+    try:
       if self.completed:
         raise TaskError("Task already completed")
       
       self._state = Task.State.FAILED
       callbacks = self._callbacks
       self._callbacks = None
+    finally:
+      self._lock.release()
     
     for callback in callbacks:
       try:
@@ -342,7 +361,8 @@ class Task(object):
     @param callback: The callback to add.
     @type callback: any callable
     """
-    with self._lock:
+    self._lock.acquire()
+    try:
       if self._callbacks is not None:
         self._callbacks.append(callback)
       else:
@@ -350,3 +370,5 @@ class Task(object):
           callback()
         except Exception:
           pass
+    finally:
+      self._lock.release()

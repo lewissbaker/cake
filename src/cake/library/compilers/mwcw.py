@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 import os
 import os.path
 import sys
@@ -128,9 +126,12 @@ class MwcwCompiler(Compiler):
     cake.filesys.makeDirs(cake.path.dirName(target))
 
     argsFile = target + '.args'
-    with open(argsFile, 'wt') as f:
+    f = open(argsFile, 'wt')
+    try:
       for arg in args[1:]:
         f.write('"' + arg + '"\n')
+    finally:
+      f.close()
 
     try:
       p = subprocess.Popen(

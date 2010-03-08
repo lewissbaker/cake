@@ -23,6 +23,7 @@ def createVariants(parent):
     platformName = variant.keywords["platform"]
     compilerName = variant.keywords["compiler"]
     compiler = variant.tools["compiler"]
+    compiler.objectCachePath = "cache"
     
     env = variant.tools["env"]
     env["BUILD"] = "build/" + "_".join([

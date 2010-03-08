@@ -5,11 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 __all__ = ["Compiler"]
 
-import hashlib
 import weakref
 import os.path
 try:
@@ -19,6 +16,7 @@ except ImportError:
 
 import cake.path
 import cake.filesys
+import cake.hash
 from cake.engine import Script, DependencyInfo, FileInfo, BuildError
 from cake.library import Tool, FileTarget, getPathsAndTasks, getPathAndTask
 from cake.task import Task
@@ -533,7 +531,7 @@ class Compiler(Tool):
       # Find the directory that will contain all cache entries for
       # this particular target object file.
       
-      targetDigest = hashlib.sha1()
+      targetDigest = cake.hash.sha1()
 
       # We either need to make all paths that form the cache digest relative
       # to the workspace root or  
@@ -545,7 +543,7 @@ class Compiler(Tool):
         if cake.path.commonPath(targetDigestPathNorm, workspaceRoot) == workspaceRoot:
           targetDigestPath = targetDigestPath[len(workspaceRoot)+1:]
           
-      targetDigest = binaryToHex(hashlib.sha1(targetDigestPath.encode("utf8")).digest())
+      targetDigest = binaryToHex(cake.hash.sha1(targetDigestPath.encode("utf8")).digest())
       targetCacheDir = cake.path.join(
         self.objectCachePath,
         targetDigest[0],
@@ -569,7 +567,14 @@ class Compiler(Tool):
       # Try to find the dependency files
       for entry in entries:
         # Skip any entry that's not a SHA-1 hash
-        if len(entry) != 40 or any(c not in hexChars for c in entry):
+        if len(entry) != 40:
+          continue
+        skip = False
+        for c in entry:
+          if c not in hexChars:
+            skip = True
+            break
+        if skip:
           continue
 
         # Make sure the .object exists too
@@ -582,8 +587,11 @@ class Compiler(Tool):
         cacheDigest = hexToBinary(entry)
         
         try:
-          with open(cacheDepPath) as f:
+          f = open(cacheDepPath)
+          try:
             cacheDepContents = f.read()
+          finally:
+            f.close()
         except EnvironmentError:
           continue
         
@@ -683,8 +691,11 @@ class Compiler(Tool):
           # the object file is ready.
           cake.filesys.makeDirs(targetCacheDir)
           cake.filesys.copyFile(target, cacheObjectPath)
-          with open(cacheDepPath, 'wb') as f:
+          f = open(cacheDepPath, 'wb')
+          try:
             f.write(pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL))
+          finally:
+            f.close()
             
         except EnvironmentError:
           # Don't worry if we can't put the object in the cache

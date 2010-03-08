@@ -194,7 +194,11 @@ class MwcwCompiler(Compiler):
       ]
     args.extend(self._getCommonArgs())
 
-    args.extend(['-lang', language])
+    args.append('-lang')
+    if language == 'c':
+      args.append('c99')
+    else:
+      args.append(language)
 
     if language == 'c++':
       if self.enableRtti:
@@ -251,7 +255,7 @@ class MwcwCompiler(Compiler):
     language = self.language
     if not language:
       if source.lower().endswith('.c'):
-        language = 'c99'
+        language = 'c'
       else:
         language = 'c++'
    

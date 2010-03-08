@@ -241,9 +241,9 @@ class MwcwCompiler(Compiler):
     for p in reversed(self.includePaths):
       args.extend(['-i', p])
 
-    args.extend('-D' + d for d in reversed(self.defines))
+    args.extend('-D' + d for d in self.defines)
     
-    for p in reversed(self.forcedIncludes):
+    for p in self.forcedIncludes:
       args.extend(['-include', p])
     
     return args
@@ -315,6 +315,7 @@ class MwcwCompiler(Compiler):
     if self.linkerScript is not None:
       args.extend(['-lcf', self.linkerScript])
 
+    args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
   def getProgramCommands(self, target, sources, engine):
@@ -325,11 +326,10 @@ class MwcwCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+    sources = sources + resolvedPaths
     
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
-    args.extend(resolvedPaths)    
-    args.extend('-L' + p for p in reversed(self.libraryPaths))
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
 
@@ -345,6 +345,6 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + resolvedPaths
+      return [args[0]] + sources
     
     return link, scan

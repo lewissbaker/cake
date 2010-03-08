@@ -187,23 +187,41 @@ class Compiler(Tool):
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
     
-    Include paths added later in the list are searched earlier
-    by the preprocessor.
+    The newly added path will have search precedence over any
+    existing paths.
+    
+    @param path: The path to add.
+    @type path: string
     """
     self.includePaths.append(path)
     self._clearCache()
     
-  def addDefine(self, define, value=None):
+  def addDefine(self, name, value=None):
     """Add a define to the preprocessor command-line.
+
+    The newly added define will have precedence over any
+    existing defines with the same name.
+    
+    @param name: The name of the define to set.
+    @type name: string
+    @param value: An optional value for the define.
+    @type value: string or None
     """
     if value is None:
-      self.defines.append(define)
+      self.defines.append(name)
     else:
-      self.defines.append("{0}={1}".format(define, value))
+      self.defines.append("{0}={1}".format(name, value))
     self._clearCache()
-    
+
   def addForcedInclude(self, path):
     """Add a file to be forcibly included on the command-line.
+
+    The newly added forced include will be included after any
+    previous forced includes.
+
+    @param path: The path to the forced include file. This may need
+    to be relative to a previously defined includePath. 
+    @type path: string
     """
     self.forcedIncludes.append(path)
     self._clearCache()
@@ -211,13 +229,23 @@ class Compiler(Tool):
   def addLibrary(self, name):
     """Add a library to the list of libraries to link with.
     
+    The newly added library will have search precedence over any
+    existing libraries.
+
     @param name: Name/path of the library to link with.
+    @type name: string
     """
     self.libraries.append(name)
     self._clearCache()
 
   def addLibraryPath(self, path):
-    """Add a path to the library search path.
+    """Add a path to the list of library search paths.
+    
+    The newly added path will have search precedence over any
+    existing paths.
+    
+    @param path: The path to add.
+    @type path: string
     """
     self.libraryPaths.append(path)
     self._clearCache()

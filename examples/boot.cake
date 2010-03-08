@@ -24,6 +24,7 @@ def createVariants(parent):
     compilerName = variant.keywords["compiler"]
     compiler = variant.tools["compiler"]
     compiler.objectCachePath = "cache"
+    compiler.outputMapFile = True
     
     env = variant.tools["env"]
     env["BUILD"] = "build/" + "_".join([

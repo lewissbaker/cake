@@ -1,8 +1,8 @@
 # Script to build printer library
 from cake.tools import compiler, env, script
 
-# Use printer library (only for include paths)
-script.include(script.cwd("use.cake"))
+# Add the .h include path
+compiler.addIncludePath(script.cwd("include"))
 
 # List of includes
 includes = script.cwd("include", [

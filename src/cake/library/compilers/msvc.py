@@ -336,7 +336,7 @@ class MsvcCompiler(Compiler):
     
     args.append("/c")
  
-    args.extend("/D" + define for define in reversed(self.defines))
+    args.extend("/D" + define for define in self.defines)
     args.extend("/I" + path for path in reversed(self.includePaths))
     args.extend("/FI" + path for path in self.forcedIncludes)
 
@@ -647,7 +647,7 @@ class MsvcCompiler(Compiler):
     elif self.__architecture == 'ia64':
       args.append('/MACHINE:IA64')
     
-    args.extend('/LIBPATH:' + path for path in self.libraryPaths)
+    args.extend('/LIBPATH:' + path for path in reversed(self.libraryPaths))
     
     return args
 
@@ -659,8 +659,8 @@ class MsvcCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     
-    libraryPaths, _ = self._resolveLibraries(engine)
-    sources = sources + libraryPaths
+    resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+    sources = sources + resolvedPaths
     
     args = list(self._getLinkCommonArgs(dll))
 
@@ -700,6 +700,7 @@ class MsvcCompiler(Compiler):
     
     args.append('/OUT:' + target)
     args.extend(sources)
+    args.extend(unresolvedLibs)
     
     @makeCommand(args)
     def link():

@@ -303,9 +303,9 @@ class GccCompiler(Compiler):
     for p in reversed(self.includePaths):
       args.extend(['-I', p])
 
-    args.extend('-D' + d for d in reversed(self.defines))
+    args.extend('-D' + d for d in self.defines)
     
-    for p in reversed(self.forcedIncludes):
+    for p in self.forcedIncludes:
       args.extend(['-include', p])
     
     return args
@@ -373,7 +373,9 @@ class GccCompiler(Compiler):
 
   @memoise
   def _getCommonLinkArgs(self, dll):
-    return [self.__gccExe]
+    args = [self.__gccExe]
+    args.extend('-L' + p for p in reversed(self.libraryPaths))
+    return args
   
   def getProgramCommands(self, target, sources, engine):
     return self._getLinkCommands(target, sources, engine, dll=False)
@@ -384,16 +386,18 @@ class GccCompiler(Compiler):
   def _getLinkCommands(self, target, sources, engine, dll):
     
     resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+    sources = sources + resolvedPaths
 
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
-    args.extend(resolvedPaths)    
-    args.extend('-L' + p for p in reversed(self.libraryPaths))
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
 
     if dll and self.importLibrary is not None:
       args.append('-Wl,--out-implib=' + self.importLibrary)
+
+    if self.outputMapFile:
+      args.append('-Wl,-Map=' + cake.path.stripExtension(target) + '.map')
     
     @makeCommand(args)
     def link():
@@ -406,7 +410,7 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + resolvedPaths
+      return [args[0]] + sources
     
     return link, scan
 

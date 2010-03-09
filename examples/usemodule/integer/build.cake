@@ -17,7 +17,7 @@ objects = compiler.objects(
   )
 
 module = compiler.module(
-  target=env.expand("${BUILD}/usemodule/main/bin/integer"),
+  target=env.expand("${BUILD}/usemodule/integer/lib/integer"),
   importLibrary=env.expand("${BUILD}/usemodule/integer/lib/integer"),
   sources=objects,
   )

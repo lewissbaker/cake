@@ -148,6 +148,8 @@ class Compiler(Tool):
     self.libraryScripts = []
     self.libraryPaths = []
     self.libraries = []
+    self.moduleScripts = []
+    self.modules = []
 
   @classmethod
   def _getObjectsInLibrary(cls, engine, path):
@@ -261,7 +263,93 @@ class Compiler(Tool):
     """
     self.libraryScripts.append(path)
     self._clearCache()
+
+  def addModule(self, name):
+    """Add a module to the list of modules to copy.
     
+    @param name: Name/path of the module to copy.
+    @type name: string
+    """
+    self.modules.append(name)
+    self._clearCache()
+    
+  def addModuleScript(self, path):
+    """Add a script to be executed before copying modules.
+    
+    The script will be executed by the copyModulesTo()
+    function.
+    
+    @param path: Path of the script to execute.
+    @type path: string
+    """
+    self.moduleScripts.append(path)
+    self._clearCache()
+    
+  def copyModulesTo(self, targetDir, **kwargs):
+    """Copy modules to the given target directory.
+    
+    The modules copied are those previously specified by the
+    addModule() function.
+    
+    @param targetDir: The directory to copy modules to.
+    @type targetDir: string
+
+    @return: A list of Task objects, one for each module being
+    copied.
+    @rtype: list of L{Task}
+    """
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+
+    script = Script.getCurrent()
+    engine = Script.getCurrent().engine
+
+    tasks = []
+    for moduleScript in compiler.moduleScripts:
+      tasks.append(engine.execute(moduleScript, script.variant))
+
+    def doCopy(source, targetDir):
+      # Try without and with the extension
+      if not cake.filesys.isFile(source):
+        source = cake.path.forceExtension(source, compiler.moduleSuffix)
+      target = cake.path.join(targetDir, cake.path.baseName(source))
+      
+      if engine.forceBuild:
+        reasonToBuild = "rebuild has been forced"
+      elif not cake.filesys.isFile(target):
+        reasonToBuild = "'%s' does not exist" % target
+      elif engine.getTimestamp(source) > engine.getTimestamp(target):
+        reasonToBuild = "'%s' is newer than '%s'" % (source, target)
+      else:
+        # up-to-date
+        return
+
+      engine.logger.outputDebug(
+        "reason",
+        "Rebuilding '%s' because %s.\n" % (target, reasonToBuild),
+        )
+      engine.logger.outputInfo("Copying %s to %s\n" % (source, target))
+      
+      try:
+        cake.filesys.makeDirs(targetDir)
+        cake.filesys.copyFile(source, target)
+      except EnvironmentError, e:
+        engine.raiseError("%s: %s\n" % (target, str(e)))
+
+      engine.notifyFileChanged(target)
+
+    moduleTasks = []
+    for module in compiler.modules:
+      copyTask = engine.createTask(
+        lambda s=module,t=targetDir:
+          doCopy(s, t)
+        )
+      copyTask.startAfter(tasks)
+      moduleTasks.append(copyTask)
+    
+    return moduleTasks
+
   def object(self, target, source, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
     
@@ -384,7 +472,6 @@ class Compiler(Tool):
       setattr(compiler, k, v)
   
     # And a copy of the current build engine
-    
     script = Script.getCurrent()
     engine = script.engine
 
@@ -473,31 +560,24 @@ class Compiler(Tool):
     libraryPaths = []
     unresolvedLibs = []
     for library in reversed(self.libraries):
-      if not cake.path.dirName(library):
+      fileNames = [library]
 
-        fileNames = [library]
+      libraryExtension = os.path.normcase(cake.path.extension(library))
+      for prefix, suffix in self.libraryPrefixSuffixes:
+        if libraryExtension != os.path.normcase(suffix):
+          fileNames.append(cake.path.addPrefix(library, prefix) + suffix)
 
-        libraryExtension = os.path.normcase(cake.path.extension(library))
-        for prefix, suffix in self.libraryPrefixSuffixes:
-          if libraryExtension != os.path.normcase(suffix):
-            fileNames.append(cake.path.addPrefix(library, prefix) + suffix)
-                  
-        for candidate in cake.path.join(reversed(self.libraryPaths), fileNames):
-          if cake.filesys.isFile(candidate):
-            libraryPaths.append(candidate)
-            break
-        else:
-          engine.logger.outputDebug(
-            "scan",
-            "scan: Ignoring missing library '" + library + "'\n",
-            )
-          unresolvedLibs.append(library)
+      # Add [""] so we search for the full path first 
+      for candidate in cake.path.join(reversed(self.libraryPaths + [""]), fileNames):
+        if cake.filesys.isFile(candidate):
+          libraryPaths.append(candidate)
+          break
       else:
-        if not cake.filesys.isFile(library):
-          engine.raiseError(
-            "cake: library '%s' does not exist.\n" % library
-            )
-        libraryPaths.append(library)
+        engine.logger.outputDebug(
+          "scan",
+          "scan: Ignoring missing library '" + library + "'\n",
+          )
+        unresolvedLibs.append(library)
       
     if self.linkObjectsInLibrary:
       results = []

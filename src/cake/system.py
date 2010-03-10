@@ -6,21 +6,25 @@
 """
 
 import os
-import platform
+import platform as platty
 
-def getHostArchitecture():
+try:
+  _architecture = os.environ['PROCESSOR_ARCHITECTURE']
+except KeyError:
+  _architecture = platty.machine()
+  if not _architecture:
+    _architecture = 'unknown'
+
+def platform():
+  """Returns the current operating system (platform).
+  """
+  return platty.system()
+
+def architecture():
   """Returns the current machines architecture.
   
   @return: The host architecture, or 'unknown' if the host
   architecture could not be determined.
   @rtype: string
   """
-  try:
-    architecture = os.environ['PROCESSOR_ARCHITECTURE'].lower()
-    return {"amd64":"x64"}.get(architecture, architecture)
-  except KeyError:
-    architecture = platform.machine()
-    if architecture:
-      return architecture
-    else:
-      return 'unknown'
+  return _architecture

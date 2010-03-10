@@ -9,6 +9,7 @@ __all__ = ["Compiler"]
 
 import weakref
 import os.path
+import binascii
 try:
   import cPickle as pickle
 except ImportError:
@@ -40,42 +41,6 @@ def makeCommand(args):
   def run(func):
     return Command(args, func)
   return run
-
-def binaryToHex(value):
-  """Convert a byte string to a hex string.
-  
-  Example::
-    binaryToHex('\x3a\x8c\x07') -> '3a8c07'
-  
-  @param value: A string of bytes.
-  @type value: str
-  
-  @return: The bytes converted to a hexadecimal string.
-  @rtype: str
-  """
-  return "".join("%02x" % ord(c) for c in value)
-
-def hexToBinary(value):
-  """Convert a hex string to a binary string.
-  
-  Example::
-    hexToBinary("a37f92") -> '\xa3\x7f\x92'
-    
-  @param value: A hex string.
-  @type value: str
-  
-  @return: The string of bytes.
-  @rtype: str
-  """
-  valueLen = len(value)
-  if valueLen % 2 != 0:
-    raise ValueError("value must have an even number of hex chars")
-  value = value.lower()
-  hexCharsIndex = "0123456789abcdef".index
-  return "".join(
-    chr(16 * hexCharsIndex(value[i]) + hexCharsIndex(value[i+1]))
-    for i in xrange(0, valueLen, 2)
-    )
 
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
@@ -636,11 +601,6 @@ class Compiler(Tool):
           if dep.timestamp is not None and dep.digest is not None:
             engine.updateFileDigestCache(dep.path, dep.timestamp, dep.digest)
       
-      # Find the directory that will contain all cache entries for
-      # this particular target object file.
-      
-      targetDigest = cake.hash.sha1()
-
       # We either need to make all paths that form the cache digest relative
       # to the workspace root or  
       targetDigestPath = os.path.abspath(target)
@@ -651,12 +611,15 @@ class Compiler(Tool):
         if cake.path.commonPath(targetDigestPathNorm, workspaceRoot) == workspaceRoot:
           targetDigestPath = targetDigestPath[len(workspaceRoot)+1:]
           
-      targetDigest = binaryToHex(cake.hash.sha1(targetDigestPath.encode("utf8")).digest())
+      # Find the directory that will contain all cache entries for
+      # this particular target object file.
+      targetDigest = cake.hash.sha1(targetDigestPath.encode("utf8")).digest()
+      targetDigestStr = binascii.hexlify(targetDigest).decode("utf8")
       targetCacheDir = cake.path.join(
         self.objectCachePath,
-        targetDigest[0],
-        targetDigest[1],
-        targetDigest
+        targetDigestStr[0],
+        targetDigestStr[1],
+        targetDigestStr
         )
       
       # Find all entries in the directory
@@ -692,10 +655,10 @@ class Compiler(Tool):
         
         cacheDepPath = cake.path.join(targetCacheDir, entry)
         cacheObjectPath = cake.path.join(targetCacheDir, objectEntry)
-        cacheDigest = hexToBinary(entry)
+        cacheDigest = binascii.unhexlify(entry)
         
         try:
-          f = open(cacheDepPath)
+          f = open(cacheDepPath, 'rb')
           try:
             cacheDepContents = f.read()
           finally:
@@ -789,7 +752,7 @@ class Compiler(Tool):
       if useCacheForThisObject:
         try:
           digest = newDependencyInfo.calculateDigest(engine)
-          digestStr = binaryToHex(digest)
+          digestStr = binascii.hexlify(digest).decode("utf8")
           
           cacheDepPath = cake.path.join(targetCacheDir, digestStr)
           cacheObjectPath = cacheDepPath + '.object'

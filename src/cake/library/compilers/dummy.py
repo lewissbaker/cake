@@ -60,10 +60,7 @@ class DummyCompiler(Compiler):
       engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
       cake.filesys.makeDirs(cake.path.dirName(target))
       f = open(target, 'wb')
-      try:
-        f.write("dummy object file")
-      finally:
-        f.close()
+      f.close()
         
       dependencies = [source]
       return dependencies

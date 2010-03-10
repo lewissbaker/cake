@@ -256,7 +256,7 @@ class GccCompiler(Compiler):
     exitCode = p.wait()
     
     if output:
-      sys.stderr.write(self._formatMessage(output))
+      sys.stderr.write(self._formatMessage(output.decode("latin1")))
         
     if exitCode != 0:
       engine.raiseError(

@@ -438,6 +438,7 @@ class MsvcCompiler(Compiler):
         sourceName = cake.path.baseName(source)
 
         errFile.seek(0)
+        output = errFile.read()
 
         includePrefix = ('Note: including file:')
         includePrefixLen = len(includePrefix)
@@ -445,7 +446,7 @@ class MsvcCompiler(Compiler):
         dependencies = [self.__clExe, source]
         dependenciesSet = set()
         
-        for line in errFile:
+        for line in output.decode("latin1").splitlines():
           line = line.rstrip()
           if not line or line == sourceName:
             continue
@@ -736,10 +737,10 @@ class MsvcCompiler(Compiler):
           )
 
       p.stdin.close()
-      output = p.stdout.readlines()
+      output = p.stdout.read()
       exitCode = p.wait()
       
-      for line in output:
+      for line in output.decode("latin1").splitlines():
         if not line.rstrip():
           continue
         sys.stderr.write(line)

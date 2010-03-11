@@ -10,15 +10,15 @@ import os.path
 import re
 import sys
 import subprocess
-import platform
 
 import cake.filesys
 import cake.path
+import cake.system
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.gnu import parseDependencyFile
 
-if platform.system().lower().startswith('cygwin'):
+if cake.system.isCygwin():
   def _findExecutable(name, paths):
     """Find an executable given its name and a list of paths.  
     """
@@ -38,7 +38,7 @@ if platform.system().lower().startswith('cygwin'):
     else:
       raise EnvironmentError("Could not find executable.")
     
-elif platform.system().lower().startswith('windows'):
+elif cake.system.isWindows():
   def _findExecutable(name, paths):
     """Find an executable given its name and a list of paths.  
     """
@@ -108,9 +108,6 @@ def findMinGWCompiler():
   except WindowsError:
     raise CompilerNotFoundError("Could not find MinGW install directory.")
 
-def _hostPlatform():
-  return platform.system().lower()
-
 def findGccCompiler(platform=None):
   """Returns a GCC compiler if found.
 
@@ -120,7 +117,8 @@ def findGccCompiler(platform=None):
   @raise CompilerNotFoundError: When a valid gcc compiler could not be found.
   """
   if platform is None:
-    platform = _hostPlatform()
+    platform = cake.system.platform()
+  platform = platform.lower()
     
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
@@ -135,11 +133,11 @@ def findGccCompiler(platform=None):
     checkFile(arExe)
     checkFile(gccExe)
 
-    if platform == "windows" or platform.startswith("cygwin"):
+    if platform.startswith("windows") or platform.startswith("cygwin"):
       constructor = WindowsGccCompiler
-    elif platform == "darwin":
+    elif platform.startswith("darwin"):
       constructor = MacGccCompiler
-    elif platform == "ps3":
+    elif platform.startswith("ps3"):
       constructor = Ps3GccCompiler
     else:
       constructor = GccCompiler 
@@ -184,7 +182,7 @@ class GccCompiler(Compiler):
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
-    if platform.system() != "Windows":
+    if not cake.system.isWindows():
       return inputText
     
     outputText = ""

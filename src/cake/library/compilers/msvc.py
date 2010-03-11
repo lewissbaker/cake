@@ -17,16 +17,16 @@ import threading
 
 import cake.filesys
 import cake.path
+import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.library import memoise
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
-from cake.system import getHostArchitecture
 
 def _toArchitectureDir(architecture):
   """Re-map 'x64' to 'amd64' to match MSVC directory names.
   """
-  return {'x64' : 'amd64'}.get(architecture, architecture)
+  return {'x64':'amd64'}.get(architecture, architecture)
 
 def _createMsvcCompiler(
   version,
@@ -52,23 +52,27 @@ def _createMsvcCompiler(
   if architecture == 'x86':
     # Root bin directory is always used for the x86 compiler
     msvcBinDir = cake.path.join(msvcProductDir, "bin")
-  elif architecture != hostArchitecture:
-    # Determine the bin directory for cross-compilers
-    msvcBinDir = cake.path.join(
-      msvcProductDir,
-      "bin",
-      "%s_%s" % (
-        _toArchitectureDir(hostArchitecture),
-        _toArchitectureDir(architecture),
-        ),
-      )
   else:
-    # Determine the bin directory for 64-bit compilers
-    msvcBinDir = cake.path.join(
-      msvcProductDir,
-      "bin",
-      "%s" % _toArchitectureDir(architecture),
-      )
+    msvcArchitecture = _toArchitectureDir(architecture)
+    msvcHostArchitecture = _toArchitectureDir(hostArchitecture)
+    
+    if msvcArchitecture != msvcHostArchitecture:
+      # Determine the bin directory for cross-compilers
+      msvcBinDir = cake.path.join(
+        msvcProductDir,
+        "bin",
+        "%s_%s" % (
+          msvcHostArchitecture,
+          msvcArchitecture,
+          ),
+        )
+    else:
+      # Determine the bin directory for 64-bit compilers
+      msvcBinDir = cake.path.join(
+        msvcProductDir,
+        "bin",
+        "%s" % msvcArchitecture,
+        )
   
   msvcIncludeDir = cake.path.join(msvcProductDir, "include")
   platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
@@ -77,7 +81,7 @@ def _createMsvcCompiler(
     defines = ['WIN32']
     msvcLibDir = cake.path.join(msvcProductDir, "lib")
     platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
-  elif architecture == 'x64':
+  elif architecture in ['x64', 'amd64']:
     defines = ['WIN32', 'WIN64']
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
     platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
@@ -161,7 +165,7 @@ def findMsvcCompiler(
   could not be found.
   """
   # Valid architectures
-  architectures = ['x86', 'x64', 'ia64']
+  architectures = ['x86', 'x64', 'amd64', 'ia64']
 
   # Valid versions - prefer later versions over earlier ones
   versions = [
@@ -179,15 +183,17 @@ def findMsvcCompiler(
     ]
 
   # Determine host architecture
-  hostArchitecture = getHostArchitecture()
+  hostArchitecture = cake.system.architecture().lower()
   if hostArchitecture not in architectures:
     raise ValueError("Unknown host architecture '%s'." % hostArchitecture)
 
   # Default architecture is hostArchitecture
   if architecture is None:
     architecture = hostArchitecture
-  elif architecture not in architectures:
-    raise ValueError("Unknown architecture '%s'." % architecture)
+  else:
+    architecture = architecture.lower()
+    if architecture not in architectures:
+      raise ValueError("Unknown architecture '%s'." % architecture)
 
   if version is not None:
     # Validate version
@@ -299,6 +305,8 @@ class MsvcCompiler(Compiler):
       args.append('/GF') # Eliminate duplicate strings
  
     if language == 'c++':
+      args.extend(self.cppFlags)
+
       if self.enableRtti:
         args.append('/GR') # Enable RTTI
       else:
@@ -310,6 +318,8 @@ class MsvcCompiler(Compiler):
         args.append('/EHsc') # Enable exceptions
       else:
         args.append('/EHsc-') # Disable exceptions
+    else:
+      args.extend(self.cFlags)
 
     if self.optimisation == self.FULL_OPTIMISATION:
       args.append('/GL') # Global optimisation
@@ -598,6 +608,9 @@ class MsvcCompiler(Compiler):
       
     if dll:
       args.append('/DLL')
+      args.extend(self.moduleFlags)
+    else:
+      args.extend(self.programFlags)
       
     if self.useFunctionLevelLinking:
       args.append('/OPT:REF') # Eliminate unused functions (COMDATs)

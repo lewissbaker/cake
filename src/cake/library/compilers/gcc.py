@@ -17,7 +17,6 @@ import cake.path
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.gnu import parseDependencyFile
-from cake.system import getHostArchitecture
 
 if platform.system().lower().startswith('cygwin'):
   def _findExecutable(name, paths):
@@ -85,17 +84,11 @@ def _getMinGWInstallDir():
   finally:
     _winreg.CloseKey(key)
 
-def findMinGWCompiler(architecture=None):
-  """Returns a MinGW compiler given an architecture.
+def findMinGWCompiler():
+  """Returns a MinGW compiler if found.
   
-  @param architecture: The machine architecture to compile for. If
-  architecture is None then the current architecture is used.
-
   @raise CompilerNotFoundError: When a valid MinGW compiler could not be found.
   """
-  if architecture is None:
-    architecture = getHostArchitecture()
-
   try:
     installDir = _getMinGWInstallDir()
     arExe = cake.path.join(installDir, "bin", "ar.exe")
@@ -111,7 +104,6 @@ def findMinGWCompiler(architecture=None):
     return WindowsGccCompiler(
       arExe=arExe,
       gccExe=gccExe,
-      architecture=architecture,
       )
   except WindowsError:
     raise CompilerNotFoundError("Could not find MinGW install directory.")
@@ -119,22 +111,17 @@ def findMinGWCompiler(architecture=None):
 def _hostPlatform():
   return platform.system().lower()
 
-def findGccCompiler(platform=None, architecture=None):
-  """Returns a GCC compiler given an architecture.
+def findGccCompiler(platform=None):
+  """Returns a GCC compiler if found.
 
   @param platform: The platform/operating system to compile for. If
   platform is None then the current platform is used.
-  @param architecture: The machine architecture to compile for. If
-  architecture is None then the current architecture is used.
 
   @raise CompilerNotFoundError: When a valid gcc compiler could not be found.
   """
   if platform is None:
     platform = _hostPlatform()
     
-  if architecture is None:
-    architecture = getHostArchitecture()
-
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
   try:
@@ -160,7 +147,6 @@ def findGccCompiler(platform=None, architecture=None):
     return constructor(
       arExe=arExe,
       gccExe=gccExe,
-      architecture=architecture,
       )
   except EnvironmentError:
     raise CompilerNotFoundError("Could not find GCC compiler and AR archiver.")
@@ -171,17 +157,11 @@ class GccCompiler(Compiler):
     self,
     arExe=None,
     gccExe=None,
-    architecture=None,
     ):
     Compiler.__init__(self)
     self.__arExe = arExe
     self.__gccExe = gccExe
-    self.__architecture = architecture
   
-  @property
-  def architecture(self):
-    return self.__architecture
-
   @memoise
   def _getProcessEnv(self, executable):
     temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
@@ -276,10 +256,16 @@ class GccCompiler(Compiler):
       args.append('-g')
 
     if language == 'c++':
+      args.extend(self.cppFlags)
+
       if self.enableRtti:
         args.append('-frtti')
       else:
         args.append('-fno-rtti')
+    elif language == 'c':
+      args.extend(self.cFlags)
+    elif language == 'objective-c':
+      args.extend(self.mFlags)
 
     if self.enableExceptions:
       args.append('-fexceptions')
@@ -311,13 +297,12 @@ class GccCompiler(Compiler):
     return args
 
   def getObjectCommands(self, target, source, engine):
-    
     language = self.language
     if not language:
-      if source.lower().endswith('.c'):
-        language = 'c'
-      else:
-        language = 'c++'
+      language = {
+        '.c':'c',
+        '.m':'objective-c',
+        }.get(cake.path.extension(source).lower(), 'c++')
    
     args = list(self._getCompileArgs(language))
     args += [source, '-o', target]
@@ -374,6 +359,10 @@ class GccCompiler(Compiler):
   @memoise
   def _getCommonLinkArgs(self, dll):
     args = [self.__gccExe]
+    if dll:
+      args.extend(self.moduleFlags)
+    else:
+      args.extend(self.programFlags)
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   

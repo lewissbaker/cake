@@ -107,6 +107,11 @@ class Compiler(Tool):
   
   def __init__(self):
     super(Compiler, self).__init__()
+    self.cFlags = []
+    self.cppFlags = []
+    self.mFlags = []
+    self.moduleFlags = []
+    self.programFlags = []
     self.includePaths = []
     self.defines = []
     self.forcedIncludes = []
@@ -150,6 +155,96 @@ class Compiler(Tool):
     path = os.path.normcase(os.path.normpath(path))
     libraryObjects = cls.__libraryObjects.setdefault(engine, {})
     libraryObjects[path] = tuple(objectPaths)
+
+  def addCFlag(self, flag):
+    """Add a flag to be used during .c compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.cFlags.append(flag)
+    self._clearCache()
+    
+  def addCFlags(self, flags):
+    """Add a list of flags to be used during .c compilation.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.cFlags.extend(flags)
+    self._clearCache()
+
+  def addCppFlag(self, flag):
+    """Add a flag to be used during .cpp compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.cppFlags.append(flag)
+    self._clearCache()
+    
+  def addCppFlags(self, flags):
+    """Add a list of flags to be used during .cpp compilation.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.cppFlags.extend(flags)
+    self._clearCache()
+
+  def addMFlag(self, flag):
+    """Add a flag to be used during Objective C compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.mFlags.append(flag)
+    self._clearCache()
+    
+  def addMFlags(self, flags):
+    """Add a list of flags to be used during Objective C compilation.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.mFlags.extend(flags)
+    self._clearCache()
+
+  def addModuleFlag(self, flag):
+    """Add a flag to be used during linking of modules.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.moduleFlags.append(flag)
+    self._clearCache()
+    
+  def addModuleFlags(self, flags):
+    """Add a list of flags to be used during linking of modules.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.moduleFlags.extend(flags)
+    self._clearCache()
+
+  def addProgramFlag(self, flag):
+    """Add a flag to be used during linking of programs.
+
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.programFlags.append(flag)
+    self._clearCache()
+    
+  def addProgramFlags(self, flags):
+    """Add a list of flags to be used during linking of programs.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.programFlags.extend(flags)
+    self._clearCache()
 
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.

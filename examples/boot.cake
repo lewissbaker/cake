@@ -4,10 +4,10 @@ from cake.library.variant import VariantTool
 from cake.library.env import Environment
 from cake.library.compilers import CompilerNotFoundError
 from cake.engine import Variant
+import cake.system
 
-import platform
-
-hostPlatform = platform.system().lower()
+hostPlatform = cake.system.platform().lower()
+hostArchitecture = cake.system.architecture().lower()
 
 base = Variant()
 base.tools["script"] = ScriptTool()
@@ -19,21 +19,22 @@ env["EXAMPLES"] = "."
 def createVariants(parent):
   for release in ["debug", "release"]:
     variant = parent.clone(release=release)
-  
-    platformName = variant.keywords["platform"]
-    compilerName = variant.keywords["compiler"]
-    compiler = variant.tools["compiler"]
-    compiler.objectCachePath = "cache/obj"
-    compiler.outputMapFile = True
+
+    platform = variant.keywords["platform"]
+    compiler = variant.keywords["compiler"]
+    architecture = variant.keywords["architecture"]
     
     env = variant.tools["env"]
     env["BUILD"] = "build/" + "_".join([
-      platformName,
-      compilerName,
-      compiler.architecture,
+      platform,
+      compiler,
+      architecture,
       release,
       ])
   
+    compiler = variant.tools["compiler"]
+    compiler.objectCachePath = "cache/obj"
+    compiler.outputMapFile = True
     if release == "debug":
       compiler.debugSymbols = True
     elif release == "release":
@@ -43,11 +44,11 @@ def createVariants(parent):
 
 # Dummy
 from cake.library.compilers.dummy import DummyCompiler
-dummy = base.clone(platform=hostPlatform, compiler="dummy")
+dummy = base.clone(platform=hostPlatform, compiler="dummy", architecture=hostArchitecture)
 dummy.tools["compiler"] = DummyCompiler()
 createVariants(dummy)
 
-if platform.system() == 'Windows':
+if cake.system.platform() == 'Windows':
   # MSVC
   from cake.library.compilers.msvc import findMsvcCompiler
   for a in ["x86", "x64", "ia64"]:
@@ -61,8 +62,8 @@ if platform.system() == 'Windows':
   try:
     # MinGW
     from cake.library.compilers.gcc import findMinGWCompiler
-    mingw = base.clone(platform="windows", compiler="mingw")
-    compiler = mingw.tools["compiler"] = findMinGWCompiler()
+    mingw = base.clone(platform="windows", compiler="mingw", architecture=hostArchitecture)
+    mingw.tools["compiler"] = findMinGWCompiler()
     createVariants(mingw)
   except CompilerNotFoundError:
     pass
@@ -70,7 +71,7 @@ if platform.system() == 'Windows':
 try:
   # GCC
   from cake.library.compilers.gcc import findGccCompiler
-  gcc = base.clone(platform=hostPlatform, compiler="gcc")
+  gcc = base.clone(platform=hostPlatform, compiler="gcc", architecture=hostArchitecture)
   compiler = gcc.tools["compiler"] = findGccCompiler()
   compiler.addLibrary("stdc++")
   createVariants(gcc)

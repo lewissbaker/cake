@@ -25,17 +25,11 @@ class MwcwCompiler(Compiler):
     self,
     ccExe=None,
     ldExe=None,
-    architecture=None,
     ):
     Compiler.__init__(self)
     self.__ccExe = ccExe
     self.__ldExe = ldExe
-    self.__architecture = architecture
 
-  @property
-  def architecture(self):
-    return self.__architecture
-  
   @memoise
   def _getProcessEnv(self, executable):
     temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
@@ -164,8 +158,6 @@ class MwcwCompiler(Compiler):
     args = [
       '-msgstyle', 'parseable',  # Use parseable message output
       '-nowraplines',            # Don't wrap long lines
-      '-sdatathreshold', '0',    # Max size for objects in small data section
-      '-sdata2threshold', '0',   # Ditto for const small data section
       ]
     
     if self.warningsAsErrors:
@@ -173,12 +165,6 @@ class MwcwCompiler(Compiler):
 
     if self.debugSymbols:
       args.extend(['-sym', 'dwarf-2'])
-
-    if self.__architecture == 'gekko':
-      args.extend([
-        '-processor', 'gekko',   # Target the Gekko processor
-        '-fp', 'fmadd',          # Use fmadd instructions where possible
-        ])
     
     return args
   
@@ -197,11 +183,17 @@ class MwcwCompiler(Compiler):
 
     args.extend(['-lang', language])
 
-    if language == 'c++':
+    if language in ['c++', 'cplus', 'ec++']:
+      args.extend(self.cppFlags)
+
       if self.enableRtti:
         args.extend(['-RTTI', 'on'])
       else:
         args.extend(['-RTTI', 'off'])
+    elif language in ['c', 'c99']:
+      args.extend(self.cFlags)
+    elif language == 'objc':
+      args.extend(self.mFlags)
 
     # Note: Exceptions are allowed for 'c' language
     if self.enableExceptions:
@@ -251,10 +243,10 @@ class MwcwCompiler(Compiler):
   def getObjectCommands(self, target, source, engine):
     language = self.language
     if not language:
-      if source.lower().endswith('.c'):
-        language = 'c99'
-      else:
-        language = 'c++'
+      language = {
+        '.c':'c99',
+        '.m':'objc',
+        }.get(cake.path.extension(source).lower(), 'c++')
    
     args = list(self._getCompileArgs(language))
     args += [source, '-o', target]
@@ -312,9 +304,11 @@ class MwcwCompiler(Compiler):
     args = [self.__ldExe, '-application']
     args.extend(self._getCommonArgs())
     
-    if self.linkerScript is not None:
-      args.extend(['-lcf', self.linkerScript])
-
+    if dll:
+      args.extend(self.moduleFlags)
+    else:
+      args.extend(self.programFlags)
+    
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
@@ -329,6 +323,10 @@ class MwcwCompiler(Compiler):
     sources = sources + resolvedPaths
     
     args = list(self._getCommonLinkArgs(dll))
+
+    if self.linkerScript is not None:
+      args.extend(['-lcf', self.linkerScript])
+    
     args.extend(sources)
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
@@ -348,3 +346,17 @@ class MwcwCompiler(Compiler):
       return [args[0]] + sources
     
     return link, scan
+
+class WiiMwcwCompiler(MwcwCompiler):
+
+  @memoise
+  def _getCommonArgs(self):
+    args = MwcwCompiler._getCommonArgs(self)
+    args.extend([
+      '-processor', 'gekko',   # Target the Gekko processor
+      '-fp', 'fmadd',          # Use fmadd instructions where possible
+      '-sdatathreshold', '0',  # Max size for objects in small data section
+      '-sdata2threshold', '0', # Ditto for const small data section
+      ])
+    return args
+  

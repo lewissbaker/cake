@@ -22,10 +22,6 @@ class DummyCompiler(Compiler):
   def __init__(self):
     Compiler.__init__(self)
 
-  @property
-  def architecture(self):
-    return 'unknown'
-  
   @memoise
   def _getCompileArgs(self, language):
     args = ['cc', '/c']

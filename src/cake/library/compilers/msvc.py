@@ -20,10 +20,10 @@ import threading
 import cake.filesys
 import cake.path
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
-from cake.library import memoise
+from cake.library import memoise, getPathAndTask, getPathsAndTasks, FileTarget
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
-from cake.engine import getHostArchitecture
+from cake.engine import getHostArchitecture, Script
 
 def findMsvcCompiler(
   version=None,
@@ -216,6 +216,10 @@ class MsvcCompiler(Compiler):
   
   errorReport = 'queue'
   
+  # Set to 'pure' to allow native data types but only managed functions
+  # Set to 'safe' to only allow managed types and functions 
+  clrMode = None
+
   def __init__(
     self,
     clExe=None,
@@ -234,10 +238,50 @@ class MsvcCompiler(Compiler):
     self.__rcExe = rcExe
     self.__dllPaths = dllPaths
     self.__architecture = architecture
+    self.forcedUsings = []
+    self.forcedUsingScripts = []
     
   @property
   def architecture(self):
     return self.__architecture
+
+  def addForcedUsing(self, assembly):
+    """Add a .NET assembly to be forcibly referenced on the command-line.
+    
+    @param assembly: A path or FileTarget
+    """
+    self.forcedUsings.append(assembly)
+    self._clearCache()
+    
+  def addForcedUsingScript(self, script):
+    """Add a script that should be executed prior to any operation
+    that makes use of the forcedUsings list of .NET assemblies.
+    
+    These scripts will typically build the .NET assembly that will
+    be referenced on the command-line.
+    """
+    self.forcedUsingScripts.append(script)
+    self._clearCache()
+    
+  @memoise
+  def _getObjectPrerequisiteTasks(self):
+    tasks = super(MsvcCompiler, self)._getObjectPrerequisiteTasks()
+    
+    if self.language == 'c++/cli':
+      # Take a copy so we're not modifying the potentially cached
+      # base version.
+      tasks = list(tasks)
+      
+      if self.forcedUsingScripts:
+        script = Script.getCurrent()
+        variant = script.variant
+        engine = script.engine
+        for path in self.forcedUsingScripts:
+          tasks.append(engine.execute(path, variant))
+          
+      tasks.extend(getPathsAndTasks(self.forcedUsings)[1])
+    
+    return tasks
     
   @memoise
   def _getCompileCommonArgs(self, language):
@@ -246,6 +290,7 @@ class MsvcCompiler(Compiler):
       "/nologo",
       "/bigobj",
       "/showIncludes",
+      "/c",
       ]
 
     if self.errorReport:
@@ -284,6 +329,17 @@ class MsvcCompiler(Compiler):
         args.append('/EHsc') # Enable exceptions
       else:
         args.append('/EHsc-') # Disable exceptions
+        
+    elif language == 'c++/cli':
+      if self.clrMode == 'safe':
+        args.append('/clr:safe') # Compile to verifiable CLR code
+      elif self.clrMode == 'pure':
+        args.append('/clr:pure') # Compile to pure CLR code 
+      else:
+        args.append('/clr') # Compile to mixed CLR/native code
+        
+      for assembly in getPathsAndTasks(self.forcedUsings)[0]:
+        args.append('/FU' + assembly)
 
     if self.optimisation == self.FULL_OPTIMISATION:
       args.append('/GL') # Global optimisation
@@ -307,13 +363,12 @@ class MsvcCompiler(Compiler):
     
     if self.useMinimalRebuild:
       args.append("/Gm") # Enable minimal rebuild
-    
-    args.append("/c")
  
     args.extend("/D" + define for define in reversed(self.defines))
     args.extend("/I" + path for path in reversed(self.includePaths))
-    args.extend("/FI" + path for path in self.forcedIncludes)
-
+    
+    forcedIncludes, _ = getPathsAndTasks(self.forcedIncludes)
+    args.extend("/FI" + path for path in forcedIncludes)
  
     return args 
     
@@ -416,6 +471,8 @@ class MsvcCompiler(Compiler):
         includePrefixLen = len(includePrefix)
 
         dependencies = [self.__clExe, source]
+        if self.language == 'c++/cli':
+          dependencies.extend(getPathsAndTasks(self.forcedUsings)[0])
         dependenciesSet = set()
         
         for line in errFile:
@@ -593,8 +650,19 @@ class MsvcCompiler(Compiler):
     if self.outputMapFile:
       args.append('/MAP')
     
+    if self.clrMode is not None:
+      if self.clrMode == "pure":
+        args.append('/CLRIMAGETYPE:PURE')
+      elif self.clrMode == "safe":
+        args.append('/CLRIMAGETYPE:SAFE')
+      else:
+        args.append('/CLRIMAGETYPE:IJW')
+    
     if self.debugSymbols:
       args.append('/DEBUG')
+      
+      if self.clrMode is not None:
+        args.append('/ASSEMBLYDEBUG')
       
       if self.pdbFile is not None:
         args.append('/PDB:' + self.pdbFile)

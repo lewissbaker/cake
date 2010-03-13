@@ -20,7 +20,9 @@ except ImportError:
 import cake.path
 import cake.filesys
 from cake.engine import Script, DependencyInfo, FileInfo, BuildError
-from cake.library import Tool, FileTarget, getPathsAndTasks, getPathAndTask
+from cake.library import (
+  Tool, FileTarget, getPathsAndTasks, getPathAndTask, memoise
+  )
 from cake.task import Task
 
 class CompilerNotFoundError(Exception):
@@ -268,15 +270,28 @@ class Compiler(Tool):
     if forceExtension:
       target = cake.path.forceExtension(target, self.objectSuffix)
     
+    prerequisiteTasks = self._getObjectPrerequisiteTasks()
+    
     source, sourceTask = getPathAndTask(source)
+    if sourceTask:
+      # Take a copy of the value before modifying it
+      prerequisiteTasks = list(prerequisiteTasks)
+      prerequisiteTasks.append(sourceTask)
     
     objectTask = engine.createTask(
       lambda t=target, s=source, e=engine, c=self:
         c.buildObject(t, s, e)
       )
-    objectTask.startAfter(sourceTask)
+    objectTask.startAfter(prerequisiteTasks)
     
     return FileTarget(path=target, task=objectTask)
+    
+  @memoise
+  def _getObjectPrerequisiteTasks(self):
+    """Return a list of the tasks that are prerequisites for
+    building an object file.
+    """
+    return getPathsAndTasks(self.forcedIncludes)[1]
     
   def objects(self, targetDir, sources, **kwargs):
     """Build a collection of objects to a target directory.

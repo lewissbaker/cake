@@ -313,6 +313,9 @@ class MwcwCompiler(Compiler):
     else:
       args.extend(self.programFlags)
     
+    if self.linkerScript is not None:
+      args.extend(['-lcf', self.linkerScript])
+
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
@@ -327,10 +330,6 @@ class MwcwCompiler(Compiler):
     sources = sources + resolvedPaths
     
     args = list(self._getCommonLinkArgs(dll))
-
-    if self.linkerScript is not None:
-      args.extend(['-lcf', self.linkerScript])
-    
     args.extend(sources)
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])

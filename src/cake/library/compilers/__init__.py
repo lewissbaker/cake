@@ -689,8 +689,6 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    engine.logger.outputInfo("Compiling %s\n" % source)
-      
     newDependencyInfo = DependencyInfo(
       targets=[FileInfo(path=target)],
       args=args,
@@ -803,7 +801,7 @@ class Compiler(Tool):
           cachedObjectDigestStr
           )
         if cake.filesys.isFile(cachedObjectPath):
-          engine.logger.outputInfo("from cache: %s\n" % target)
+          engine.logger.outputInfo("Cached %s\n" % source)
           cake.filesys.copyFile(
             target=target,
             source=cachedObjectPath,
@@ -813,7 +811,7 @@ class Compiler(Tool):
 
     # If we get to here then we didn't find the object in the cache
     # so we need to actually execute the build.
-    
+    engine.logger.outputInfo("Compiling %s\n" % source)
     compileTask = compile()
 
     def storeDependencyInfoAndCache():

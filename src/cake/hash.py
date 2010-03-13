@@ -7,9 +7,9 @@
 
 try:
   import hashlib
-  def sha1(*args):
-    return hashlib.sha1(*args)
+  def sha1(*args, **kwargs):
+    return hashlib.sha1(*args, **kwargs)
 except ImportError:
   import sha
-  def sha1(*args):
-    return sha.new(*args) 
+  def sha1(*args, **kwargs):
+    return sha.new(*args, **kwargs) 

@@ -9,25 +9,37 @@ in parallel on separate threads.
 """
 
 import threading
+import os
 import sys
 import platform
 import traceback
 import atexit
 
 if platform.system() == 'Windows':
-  import win32api
-  def getProcessorCount():
-    """Return the number of processors/cores in the current system.
-    
-    Useful for determining the maximum parallelism of the current system.
-    
-    @return: The number of processors/cores in the current system.
-    @rtype: int
-    """
-    return win32api.GetSystemInfo()[5]
+  try:
+    import win32api
+    def getProcessorCount():
+      """Return the number of processors/cores in the current system.
+      
+      Useful for determining the maximum parallelism of the current system.
+      
+      @return: The number of processors/cores in the current system.
+      @rtype: int
+      """
+      return win32api.GetSystemInfo()[5]
+  except ImportError:
+    def getProcessorCount():
+      try:
+        return int(os.environ["NUMBER_OF_PROCESSORS"])
+      except KeyError:
+        return 1
 else:
   def getProcessorCount():
-    return 1
+    try:
+      import multiprocessing
+      return multiprocessing.cpu_count()
+    except ImportError:
+      return 1
 
 class _JobQueue(object):
   """A lightweight job queue class, similar to Queue.Queue.

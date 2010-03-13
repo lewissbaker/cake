@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 __all__ = ["loadCode"]
 
 import __builtin__
@@ -57,24 +55,30 @@ def loadCode(file, cfile=None, dfile=None):
    
   # Try to load the cache file if possible, don't sweat if we can't
   try:
-    with open(cfile, 'rb') as f:
+    f = open(cfile, 'rb')
+    try:
       if f.read(_MAGIC_LEN) == _MAGIC:
         cacheTimestamp = struct.unpack('<I', f.read(4))[0]
         timestamp = long(os.stat(file).st_mtime)
         if timestamp == cacheTimestamp:
           return marshal.load(f)
+    finally:
+      f.close()
   except Exception:
     # Failed to load the cache file
     pass
   
   # Load the source file
-  with open(file, 'rU') as f:
+  f = open(file, 'rU')
+  try:
     if timestamp is None:
       try:
         timestamp = long(os.fstat(f.fileno()).st_mtime)
       except AttributeError:
         timestamp = long(os.stat(file).st_mtime)
     codestring = f.read()
+  finally:
+    f.close()
     
   # Source needs a trailing newline to compile correctly
   if not codestring.endswith('\n'):
@@ -85,13 +89,16 @@ def loadCode(file, cfile=None, dfile=None):
   
   # Try to save the cache file if possible, don't sweat if we can't
   try:
-    with open(cfile, 'wb') as f:
+    f = open(cfile, 'wb')
+    try:
       f.write(_NOTMAGIC)
       f.write(struct.pack('<I', timestamp))
       marshal.dump(codeobject, f)
       f.flush()
       f.seek(0, 0)
       f.write(_MAGIC)
+    finally:
+      f.close()
     _setCreatorType(cfile)
   except Exception:
     pass

@@ -5,24 +5,21 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 import os
 import os.path
 import re
 import sys
 import subprocess
-import platform
 
 import cake.filesys
 import cake.path
+import cake.system
 from cake.library import memoise
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.gnu import parseDependencyFile
-from cake.engine import getHostArchitecture
 
-if platform.system().lower().startswith('cygwin'):
-  def findExecutable(name, paths):
+if cake.system.isCygwin():
+  def _findExecutable(name, paths):
     """Find an executable given its name and a list of paths.  
     """
     for p in paths:
@@ -33,15 +30,16 @@ if platform.system().lower().startswith('cygwin'):
         # We detect this by actually trying to open the path
         # for read, if it fails we know it should have a .exe.
         try:
-          with open(executable, 'rb'):
-            return executable
+          f = open(executable, 'rb')
+          f.close()
+          return executable
         except EnvironmentError:
           return executable + '.exe'
     else:
       raise EnvironmentError("Could not find executable.")
     
-elif platform.system().lower().startswith('windows'):
-  def findExecutable(name, paths):
+elif cake.system.isWindows():
+  def _findExecutable(name, paths):
     """Find an executable given its name and a list of paths.  
     """
     # Windows executables could have any of a number of extensions
@@ -58,7 +56,7 @@ elif platform.system().lower().startswith('windows'):
       raise EnvironmentError("Could not find executable.")
     
 else:
-  def findExecutable(name, paths):
+  def _findExecutable(name, paths):
     """Find an executable given its name and a list of paths.  
     """
     for p in paths:
@@ -68,7 +66,7 @@ else:
     else:
       raise EnvironmentError("Could not find executable.")
 
-def getMinGWInstallDir():
+def _getMinGWInstallDir():
   """Returns the MinGW install directory.
   
   Typically: 'C:\MinGW'.
@@ -86,59 +84,70 @@ def getMinGWInstallDir():
   finally:
     _winreg.CloseKey(key)
 
-def findMinGWCompiler(architecture=None):
-  """Returns a MinGW compiler given an architecture.
+def findMinGWCompiler():
+  """Returns a MinGW compiler if found.
   
-  @param architecture: The machine architecture to compile for. If
-  architecture is None then the current architecture is used.
-
   @raise CompilerNotFoundError: When a valid MinGW compiler could not be found.
   """
-  if architecture is None:
-    architecture = getHostArchitecture()
-
   try:
-    installDir = getMinGWInstallDir()
+    installDir = _getMinGWInstallDir()
+    arExe = cake.path.join(installDir, "bin", "ar.exe")
+    gccExe = cake.path.join(installDir, "bin", "gcc.exe")
+    
+    def checkFile(path):
+      if not cake.filesys.isFile(path):
+        raise WindowsError(path + " is not a file.")
+
+    checkFile(arExe)
+    checkFile(gccExe)
+
+    return WindowsGccCompiler(
+      arExe=arExe,
+      gccExe=gccExe,
+      )
   except WindowsError:
     raise CompilerNotFoundError("Could not find MinGW install directory.")
 
-  arExe = cake.path.join(installDir, "bin", "ar.exe")
-  gccExe = cake.path.join(installDir, "bin", "gcc.exe")
-  
-  compiler = GccCompiler(
-    arExe=arExe,
-    gccExe=gccExe,
-    architecture=architecture,
-    )
+def findGccCompiler(platform=None):
+  """Returns a GCC compiler if found.
 
-  return compiler
-
-def findGccCompiler(architecture=None):
-  """Returns a GCC compiler given an architecture.
-
-  @param architecture: The machine architecture to compile for. If
-  architecture is None then the current architecture is used.
+  @param platform: The platform/operating system to compile for. If
+  platform is None then the current platform is used.
 
   @raise CompilerNotFoundError: When a valid gcc compiler could not be found.
   """
-  if architecture is None:
-    architecture = getHostArchitecture()
-
+  if platform is None:
+    platform = cake.system.platform()
+  platform = platform.lower()
+    
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
   try:
-    arExe = findExecutable("ar", paths)
-    gccExe = findExecutable("gcc", paths)
+    arExe = _findExecutable("ar", paths)
+    gccExe = _findExecutable("gcc", paths)
+
+    def checkFile(path):
+      if not cake.filesys.isFile(path):
+        raise EnvironmentError(path + " is not a file.")
+
+    checkFile(arExe)
+    checkFile(gccExe)
+
+    if platform.startswith("windows") or platform.startswith("cygwin"):
+      constructor = WindowsGccCompiler
+    elif platform.startswith("darwin"):
+      constructor = MacGccCompiler
+    elif platform.startswith("ps3"):
+      constructor = Ps3GccCompiler
+    else:
+      constructor = GccCompiler 
+    
+    return constructor(
+      arExe=arExe,
+      gccExe=gccExe,
+      )
   except EnvironmentError:
     raise CompilerNotFoundError("Could not find GCC compiler and AR archiver.")
-    
-  compiler = GccCompiler(
-    arExe=arExe,
-    gccExe=gccExe,
-    architecture=architecture,
-    )
-
-  return compiler
 
 class GccCompiler(Compiler):
 
@@ -146,25 +155,10 @@ class GccCompiler(Compiler):
     self,
     arExe=None,
     gccExe=None,
-    architecture=None,
     ):
     Compiler.__init__(self)
     self.__arExe = arExe
     self.__gccExe = gccExe
-    self.__architecture = architecture
-    
-    if architecture == 'x86':
-      self.objectSuffix = '.obj'
-      self.libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
-      self.moduleSuffix = '.dll'
-      self.programSuffix = '.exe'
-    elif architecture == 'ppu':
-      self.moduleSuffix = '.sprx'
-      self.programSuffix = '.self'
-
-  @property
-  def architecture(self):
-    return self.__architecture
   
   @memoise
   def _getProcessEnv(self, executable):
@@ -188,7 +182,7 @@ class GccCompiler(Compiler):
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
-    if platform.system() != "Windows":
+    if not cake.system.isWindows():
       return inputText
     
     outputText = ""
@@ -240,7 +234,7 @@ class GccCompiler(Compiler):
     exitCode = p.wait()
     
     if output:
-      sys.stderr.write(self._formatMessage(output))
+      sys.stderr.write(self._formatMessage(output.decode("latin1")))
         
     if exitCode != 0:
       engine.raiseError(
@@ -260,16 +254,22 @@ class GccCompiler(Compiler):
       args.append('-g')
 
     if language == 'c++':
+      args.extend(self.cppFlags)
+
       if self.enableRtti:
         args.append('-frtti')
       else:
         args.append('-fno-rtti')
+    elif language == 'c':
+      args.extend(self.cFlags)
+    elif language == 'objective-c':
+      args.extend(self.mFlags)
 
     if self.enableExceptions:
       args.append('-fexceptions')
     else:
       args.append('-fno-exceptions')
-      
+
     if self.optimisation == self.NO_OPTIMISATION:
       args.append('-O0')
     elif self.optimisation == self.PARTIAL_OPTIMISATION:
@@ -280,11 +280,6 @@ class GccCompiler(Compiler):
         '-ffunction-sections',
         '-fdata-sections',
         ])
-
-    if self.__architecture == 'x86':
-      args.append("-m32")
-    elif self.__architecture == 'x64':
-      args.append("-m64")
       
     if self.useSse:
       args.append('-msse')
@@ -292,21 +287,20 @@ class GccCompiler(Compiler):
     for p in reversed(self.includePaths):
       args.extend(['-I', p])
 
-    args.extend('-D' + d for d in reversed(self.defines))
+    args.extend('-D' + d for d in self.defines)
     
-    for p in reversed(self.forcedIncludes):
+    for p in self.forcedIncludes:
       args.extend(['-include', p])
     
     return args
 
   def getObjectCommands(self, target, source, engine):
-    
     language = self.language
     if not language:
-      if source.lower().endswith('.c'):
-        language = 'c'
-      else:
-        language = 'c++'
+      language = {
+        '.c':'c',
+        '.m':'objective-c',
+        }.get(cake.path.extension(source).lower(), 'c++')
    
     args = list(self._getCompileArgs(language))
     args += [source, '-o', target]
@@ -363,25 +357,11 @@ class GccCompiler(Compiler):
   @memoise
   def _getCommonLinkArgs(self, dll):
     args = [self.__gccExe]
-
     if dll:
-      if self.__architecture == 'ppu':
-        args.append('-Wl,--oformat=fsprx')
-      else:
-        args.append('-shared')
+      args.extend(self.moduleFlags)
     else:
-      if self.__architecture == 'ppu':
-        args.append('-Wl,--oformat=fself')
-
-    if self.optimisation == self.FULL_OPTIMISATION:
-      if self.__architecture == 'ppu':
-        args.extend([
-          '-Wl,-strip-unused',
-          '-Wl,-strip-unused-data',
-          ])
-      else:
-        args.append('-Wl,--gc-sections')
-      
+      args.extend(self.programFlags)
+    args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
   def getProgramCommands(self, target, sources, engine):
@@ -393,16 +373,18 @@ class GccCompiler(Compiler):
   def _getLinkCommands(self, target, sources, engine, dll):
     
     resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+    sources = sources + resolvedPaths
 
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
-    args.extend(resolvedPaths)    
-    args.extend('-L' + p for p in reversed(self.libraryPaths))
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
 
     if dll and self.importLibrary is not None:
       args.append('-Wl,--out-implib=' + self.importLibrary)
+
+    if self.outputMapFile:
+      args.append('-Wl,-Map=' + cake.path.stripExtension(target) + '.map')
     
     @makeCommand(args)
     def link():
@@ -415,6 +397,59 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + resolvedPaths
+      return [args[0]] + sources
     
     return link, scan
+
+class WindowsGccCompiler(GccCompiler):
+  
+  objectSuffix = '.obj'
+  libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
+  moduleSuffix = '.dll'
+  programSuffix = '.exe'
+
+  @memoise
+  def _getCommonLinkArgs(self, dll):
+    args = GccCompiler._getCommonLinkArgs(self, dll)
+
+    if dll:
+      args.append('-shared')
+
+    if self.optimisation == self.FULL_OPTIMISATION:
+      args.append('-Wl,--gc-sections')
+      
+    return args
+
+class MacGccCompiler(GccCompiler):
+
+  @memoise
+  def _getCommonLinkArgs(self, dll):
+    args = GccCompiler._getCommonLinkArgs(self, dll)
+
+    if dll:
+      args.append('-shared')
+
+    return args
+  
+class Ps3GccCompiler(GccCompiler):
+
+  moduleSuffix = '.sprx'
+  programSuffix = '.self'
+
+  @memoise
+  def _getCommonLinkArgs(self, dll):
+    args = GccCompiler._getCommonLinkArgs(self, dll)
+
+    if dll:
+      args.append('-Wl,--oformat=fsprx')
+    else:
+      args.append('-Wl,--oformat=fself')
+
+    if self.optimisation == self.FULL_OPTIMISATION:
+      args.extend([
+        '-Wl,-strip-unused',
+        '-Wl,-strip-unused-data',
+        ])
+      
+    return args
+  

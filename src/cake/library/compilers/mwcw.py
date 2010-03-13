@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 import os
 import os.path
 import sys
@@ -27,17 +25,11 @@ class MwcwCompiler(Compiler):
     self,
     ccExe=None,
     ldExe=None,
-    architecture=None,
     ):
     Compiler.__init__(self)
     self.__ccExe = ccExe
     self.__ldExe = ldExe
-    self.__architecture = architecture
 
-  @property
-  def architecture(self):
-    return self.__architecture
-  
   @memoise
   def _getProcessEnv(self, executable):
     temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
@@ -128,9 +120,12 @@ class MwcwCompiler(Compiler):
     cake.filesys.makeDirs(cake.path.dirName(target))
 
     argsFile = target + '.args'
-    with open(argsFile, 'wt') as f:
+    f = open(argsFile, 'wt')
+    try:
       for arg in args[1:]:
         f.write('"' + arg + '"\n')
+    finally:
+      f.close()
 
     try:
       p = subprocess.Popen(
@@ -151,7 +146,7 @@ class MwcwCompiler(Compiler):
     exitCode = p.wait()
     
     if output:
-      sys.stderr.write(self._formatMessage(output))
+      sys.stderr.write(self._formatMessage(output.decode("latin1")))
         
     if exitCode != 0:
       engine.raiseError(
@@ -163,8 +158,6 @@ class MwcwCompiler(Compiler):
     args = [
       '-msgstyle', 'parseable',  # Use parseable message output
       '-nowraplines',            # Don't wrap long lines
-      '-sdatathreshold', '0',    # Max size for objects in small data section
-      '-sdata2threshold', '0',   # Ditto for const small data section
       ]
     
     if self.warningsAsErrors:
@@ -172,12 +165,6 @@ class MwcwCompiler(Compiler):
 
     if self.debugSymbols:
       args.extend(['-sym', 'dwarf-2'])
-
-    if self.__architecture == 'gekko':
-      args.extend([
-        '-processor', 'gekko',   # Target the Gekko processor
-        '-fp', 'fmadd',          # Use fmadd instructions where possible
-        ])
     
     return args
   
@@ -200,11 +187,17 @@ class MwcwCompiler(Compiler):
     else:
       args.append(language)
 
-    if language == 'c++':
+    if language in ['c++', 'cplus', 'ec++']:
+      args.extend(self.cppFlags)
+
       if self.enableRtti:
         args.extend(['-RTTI', 'on'])
       else:
         args.extend(['-RTTI', 'off'])
+    elif language in ['c', 'c99']:
+      args.extend(self.cFlags)
+    elif language == 'objc':
+      args.extend(self.mFlags)
 
     # Note: Exceptions are allowed for 'c' language
     if self.enableExceptions:
@@ -244,9 +237,9 @@ class MwcwCompiler(Compiler):
     for p in reversed(self.includePaths):
       args.extend(['-i', p])
 
-    args.extend('-D' + d for d in reversed(self.defines))
+    args.extend('-D' + d for d in self.defines)
     
-    for p in reversed(self.forcedIncludes):
+    for p in self.forcedIncludes:
       args.extend(['-include', p])
     
     return args
@@ -254,10 +247,10 @@ class MwcwCompiler(Compiler):
   def getObjectCommands(self, target, source, engine):
     language = self.language
     if not language:
-      if source.lower().endswith('.c'):
-        language = 'c'
-      else:
-        language = 'c++'
+      language = {
+        '.c':'c99',
+        '.m':'objc',
+        }.get(cake.path.extension(source).lower(), 'c++')
    
     args = list(self._getCompileArgs(language))
     args += [source, '-o', target]
@@ -315,9 +308,12 @@ class MwcwCompiler(Compiler):
     args = [self.__ldExe, '-application']
     args.extend(self._getCommonArgs())
     
-    if self.linkerScript is not None:
-      args.extend(['-lcf', self.linkerScript])
-
+    if dll:
+      args.extend(self.moduleFlags)
+    else:
+      args.extend(self.programFlags)
+    
+    args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
   def getProgramCommands(self, target, sources, engine):
@@ -328,11 +324,14 @@ class MwcwCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+    sources = sources + resolvedPaths
     
     args = list(self._getCommonLinkArgs(dll))
+
+    if self.linkerScript is not None:
+      args.extend(['-lcf', self.linkerScript])
+    
     args.extend(sources)
-    args.extend(resolvedPaths)    
-    args.extend('-L' + p for p in reversed(self.libraryPaths))
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
 
@@ -348,6 +347,20 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + resolvedPaths
+      return [args[0]] + sources
     
     return link, scan
+
+class WiiMwcwCompiler(MwcwCompiler):
+
+  @memoise
+  def _getCommonArgs(self):
+    args = MwcwCompiler._getCommonArgs(self)
+    args.extend([
+      '-processor', 'gekko',   # Target the Gekko processor
+      '-fp', 'fmadd',          # Use fmadd instructions where possible
+      '-sdatathreshold', '0',  # Max size for objects in small data section
+      '-sdata2threshold', '0', # Ditto for const small data section
+      ])
+    return args
+  

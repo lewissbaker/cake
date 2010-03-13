@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 __all__ = ["MsvcCompiler", "findMsvcCompiler"]
 
 import sys
@@ -19,11 +17,132 @@ import threading
 
 import cake.filesys
 import cake.path
+import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.library import memoise, getPathAndTask, getPathsAndTasks, FileTarget
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
-from cake.engine import getHostArchitecture, Script
+from cake.engine import Script
+
+def _toArchitectureDir(architecture):
+  """Re-map 'x64' to 'amd64' to match MSVC directory names.
+  """
+  return {'x64':'amd64'}.get(architecture, architecture)
+
+def _createMsvcCompiler(
+  version,
+  edition,
+  architecture,
+  hostArchitecture,
+  ):
+  """Attempt to create an MSVC compiler.
+  
+  @raise WindowsError: If the compiler could not be created.
+  @return: The newly created compiler.
+  @rtype: L{MsvcCompiler}
+  """
+  registryPath = edition + '\\' + version
+  msvsInstallDir = getMsvsInstallDir(registryPath)
+  msvcProductDir = getMsvcProductDir(registryPath)
+
+  # Use the compilers platform SDK if installed
+  platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
+  if not cake.filesys.isDir(platformSdkDir):
+    platformSdkDir = getPlatformSdkDir()
+
+  if architecture == 'x86':
+    # Root bin directory is always used for the x86 compiler
+    msvcBinDir = cake.path.join(msvcProductDir, "bin")
+  else:
+    msvcArchitecture = _toArchitectureDir(architecture)
+    msvcHostArchitecture = _toArchitectureDir(hostArchitecture)
+    
+    if msvcArchitecture != msvcHostArchitecture:
+      # Determine the bin directory for cross-compilers
+      msvcBinDir = cake.path.join(
+        msvcProductDir,
+        "bin",
+        "%s_%s" % (
+          msvcHostArchitecture,
+          msvcArchitecture,
+          ),
+        )
+    else:
+      # Determine the bin directory for 64-bit compilers
+      msvcBinDir = cake.path.join(
+        msvcProductDir,
+        "bin",
+        "%s" % msvcArchitecture,
+        )
+  
+  msvcIncludeDir = cake.path.join(msvcProductDir, "include")
+  platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
+
+  if architecture == 'x86':
+    defines = ['WIN32']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib")
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
+  elif architecture in ['x64', 'amd64']:
+    defines = ['WIN32', 'WIN64']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
+    # External Platform SDKs may use 'x64' instead of 'amd64'
+    if not cake.filesys.isDir(platformSdkLibDir):
+      platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
+  elif architecture == 'ia64':
+    defines = ['WIN32', 'WIN64']
+    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
+    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "IA64")
+
+  clExe = cake.path.join(msvcBinDir, "cl.exe")
+  libExe = cake.path.join(msvcBinDir, "lib.exe")
+  linkExe = cake.path.join(msvcBinDir, "link.exe")
+  rcExe = cake.path.join(msvcBinDir, "rc.exe")
+  mtExe = cake.path.join(msvcBinDir, "mt.exe")
+
+  if not cake.filesys.isFile(rcExe):
+    rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
+  if not cake.filesys.isFile(mtExe):
+    mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
+
+  def checkFile(path):
+    if not cake.filesys.isFile(path):
+      raise WindowsError(path + " is not a file.")
+
+  def checkDirectory(path):
+    if not cake.filesys.isDir(path):
+      raise WindowsError(path + " is not a directory.")
+
+  checkFile(clExe)
+  checkFile(libExe)
+  checkFile(linkExe)
+  checkFile(rcExe)
+  checkFile(mtExe)
+
+  checkDirectory(msvcIncludeDir)
+  checkDirectory(platformSdkIncludeDir)
+  checkDirectory(msvcLibDir)
+  checkDirectory(platformSdkLibDir)
+
+  compiler = MsvcCompiler(
+    clExe=clExe,
+    libExe=libExe,
+    linkExe=linkExe,
+    rcExe=rcExe,
+    mtExe=mtExe,
+    dllPaths=[msvsInstallDir],
+    architecture=architecture,
+    )
+
+  compiler.addIncludePath(msvcIncludeDir)
+  compiler.addLibraryPath(msvcLibDir)
+  compiler.addIncludePath(platformSdkIncludeDir)
+  compiler.addLibraryPath(platformSdkLibDir)
+  
+  for d in defines:
+    compiler.addDefine(d)
+
+  return compiler
 
 def findMsvcCompiler(
   version=None,
@@ -39,12 +158,15 @@ def findMsvcCompiler(
   @param architecture: The machine architecture to compile for. If
   architecture is None then the current architecture is used.
   
+  @return: A newly created MSVC compiler.
+  @rtype: L{MsvcCompiler}
+  
   @raise ValueError: When an invalid version or architecture is passed in.
   @raise CompilerNotFoundError: When a valid compiler or Windows SDK
   could not be found.
   """
   # Valid architectures
-  architectures = ['x86', 'x64', 'ia64']
+  architectures = ['x86', 'x64', 'amd64', 'ia64']
 
   # Valid versions - prefer later versions over earlier ones
   versions = [
@@ -62,15 +184,17 @@ def findMsvcCompiler(
     ]
 
   # Determine host architecture
-  hostArchitecture = getHostArchitecture()
+  hostArchitecture = cake.system.architecture().lower()
   if hostArchitecture not in architectures:
     raise ValueError("Unknown host architecture '%s'." % hostArchitecture)
 
   # Default architecture is hostArchitecture
   if architecture is None:
     architecture = hostArchitecture
-  elif architecture not in architectures:
-    raise ValueError("Unknown architecture '%s'." % architecture)
+  else:
+    architecture = architecture.lower()
+    if architecture not in architectures:
+      raise ValueError("Unknown architecture '%s'." % architecture)
 
   if version is not None:
     # Validate version
@@ -80,107 +204,16 @@ def findMsvcCompiler(
     versions = [version]
 
   for v in versions:
-    found = False
     for e in editions:
       try:
-        registryPath = e + '\\' + v
-        msvsInstallDir = getMsvsInstallDir(registryPath)
-        msvcProductDir = getMsvcProductDir(registryPath)
-      
-        # Use the compilers platform SDK if installed
-        platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
-        if not cake.filesys.isDir(platformSdkDir):
-          platformSdkDir = getPlatformSdkDir()
-
-        # Break when we have found all compiler dirs
-        found = True
-        break
+        return _createMsvcCompiler(v, e, architecture, hostArchitecture)
       except WindowsError:
         # Try the next version/edition
-        continue
-    if found:
-      break
+        pass
   else:
     raise CompilerNotFoundError(
       "Could not find Microsoft Visual Studio C++ compiler."
       )
-
-  def toArchitectureDir(architecture):
-    """Re-map 'x64' to 'amd64' to match MSVC directory names.
-    """
-    return {'x64' : 'amd64'}.get(architecture, architecture)
-
-  if architecture == 'x86':
-    # Root bin directory is always used for the x86 compiler
-    msvcBinDir = cake.path.join(msvcProductDir, "bin")
-  elif architecture != hostArchitecture:
-    # Determine the bin directory for cross-compilers
-    msvcBinDir = cake.path.join(
-      msvcProductDir,
-      "bin",
-      "%s_%s" % (
-        toArchitectureDir(hostArchitecture),
-        toArchitectureDir(architecture),
-        ),
-      )
-  else:
-    # Determine the bin directory for 64-bit compilers
-    msvcBinDir = cake.path.join(
-      msvcProductDir,
-      "bin",
-      "%s" % toArchitectureDir(architecture),
-      )
-    
-  clExe = cake.path.join(msvcBinDir, "cl.exe")
-  libExe = cake.path.join(msvcBinDir, "lib.exe")
-  linkExe = cake.path.join(msvcBinDir, "link.exe")
-  rcExe = cake.path.join(msvcBinDir, "rc.exe")
-  mtExe = cake.path.join(msvcBinDir, "mt.exe")
-
-  if not cake.filesys.isFile(rcExe):
-    rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
-  if not cake.filesys.isFile(mtExe):
-    mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
-  
-  dllPaths = [msvsInstallDir]
-    
-  compiler = MsvcCompiler(
-    clExe=clExe,
-    libExe=libExe,
-    linkExe=linkExe,
-    rcExe=rcExe,
-    mtExe=mtExe,
-    dllPaths=dllPaths,
-    architecture=architecture,
-    )
-
-  msvcIncludeDir = cake.path.join(msvcProductDir, "include")
-  platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
-
-  if architecture == 'x86':
-    defines = ['WIN32']
-    msvcLibDir = cake.path.join(msvcProductDir, "lib")
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
-  elif architecture == 'x64':
-    defines = ['WIN32', 'WIN64']
-    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
-    # External Platform SDKs may use 'x64' instead of 'amd64'
-    if not cake.filesys.isDir(platformSdkLibDir):
-      platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
-  elif architecture == 'ia64':
-    defines = ['WIN32', 'WIN64']
-    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "IA64")
-
-  compiler.addIncludePath(msvcIncludeDir)
-  compiler.addLibraryPath(msvcLibDir)
-  compiler.addIncludePath(platformSdkIncludeDir)
-  compiler.addLibraryPath(platformSdkLibDir)
-  for d in defines:
-    compiler.addDefine(d)
-
-  return compiler
 
 def _escapeArg(arg):
   if ' ' in arg:
@@ -318,6 +351,8 @@ class MsvcCompiler(Compiler):
       args.append('/GF') # Eliminate duplicate strings
  
     if language == 'c++':
+      args.extend(self.cppFlags)
+
       if self.enableRtti:
         args.append('/GR') # Enable RTTI
       else:
@@ -331,6 +366,7 @@ class MsvcCompiler(Compiler):
         args.append('/EHsc-') # Disable exceptions
         
     elif language == 'c++/cli':
+      args.extend(self.cppFlags)
       if self.clrMode == 'safe':
         args.append('/clr:safe') # Compile to verifiable CLR code
       elif self.clrMode == 'pure':
@@ -340,6 +376,9 @@ class MsvcCompiler(Compiler):
         
       for assembly in getPathsAndTasks(self.forcedUsings)[0]:
         args.append('/FU' + assembly)
+
+    else:
+      args.extend(self.cFlags)
 
     if self.optimisation == self.FULL_OPTIMISATION:
       args.append('/GL') # Global optimisation
@@ -364,7 +403,7 @@ class MsvcCompiler(Compiler):
     if self.useMinimalRebuild:
       args.append("/Gm") # Enable minimal rebuild
  
-    args.extend("/D" + define for define in reversed(self.defines))
+    args.extend("/D" + define for define in self.defines)
     args.extend("/I" + path for path in reversed(self.includePaths))
     
     forcedIncludes, _ = getPathsAndTasks(self.forcedIncludes)
@@ -444,7 +483,8 @@ class MsvcCompiler(Compiler):
 
       cake.filesys.makeDirs(cake.path.dirName(target))
       
-      with tempfile.TemporaryFile() as errFile:
+      errFile = tempfile.TemporaryFile()
+      try:
         # Launch the process
         try:
           p = subprocess.Popen(
@@ -466,6 +506,7 @@ class MsvcCompiler(Compiler):
         sourceName = cake.path.baseName(source)
 
         errFile.seek(0)
+        output = errFile.read()
 
         includePrefix = ('Note: including file:')
         includePrefixLen = len(includePrefix)
@@ -475,7 +516,7 @@ class MsvcCompiler(Compiler):
           dependencies.extend(getPathsAndTasks(self.forcedUsings)[0])
         dependenciesSet = set()
         
-        for line in errFile:
+        for line in output.decode("latin1").splitlines():
           line = line.rstrip()
           if not line or line == sourceName:
             continue
@@ -491,11 +532,14 @@ class MsvcCompiler(Compiler):
 
         if exitCode != 0:
           raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
+      finally:
+        errFile.close()        
       
       return dependencies
       
     def compileWhenPdbIsFree():
-      with self._pdbQueueLock:
+      self._pdbQueueLock.acquire()
+      try:
         predecessor = self._pdbQueue.get(pdbFile, None)
         if predecessor is None or predecessor.completed:
           # No prior compiles using this .pdb can start this
@@ -509,6 +553,8 @@ class MsvcCompiler(Compiler):
           predecessor.addCallback(compileTask.start)
           compileNow = False
         self._pdbQueue[pdbFile] = compileTask
+      finally:
+        self._pdbQueueLock.release()
         
       if compileNow:
         return compile()
@@ -567,9 +613,12 @@ class MsvcCompiler(Compiler):
       
       argsFile = target + '.args'
       cake.filesys.makeDirs(cake.path.dirName(argsFile))
-      with open(argsFile, 'wt') as f:
+      f = open(argsFile, 'wt')
+      try:
         for arg in args[2:]:
           f.write(arg + '\n')
+      finally:
+        f.close()            
 
       try:
         p = subprocess.Popen(
@@ -619,6 +668,9 @@ class MsvcCompiler(Compiler):
       
     if dll:
       args.append('/DLL')
+      args.extend(self.moduleFlags)
+    else:
+      args.extend(self.programFlags)
       
     if self.useFunctionLevelLinking:
       args.append('/OPT:REF') # Eliminate unused functions (COMDATs)
@@ -680,7 +732,7 @@ class MsvcCompiler(Compiler):
     elif self.__architecture == 'ia64':
       args.append('/MACHINE:IA64')
     
-    args.extend('/LIBPATH:' + path for path in self.libraryPaths)
+    args.extend('/LIBPATH:' + path for path in reversed(self.libraryPaths))
     
     return args
 
@@ -692,8 +744,8 @@ class MsvcCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     
-    libraryPaths, _ = self._resolveLibraries(engine)
-    sources = sources + libraryPaths
+    resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+    sources = sources + resolvedPaths
     
     args = list(self._getLinkCommonArgs(dll))
 
@@ -714,7 +766,10 @@ class MsvcCompiler(Compiler):
       if not self.__mtExe:
         engine.raiseError("You must set path to mt.exe with embedManifest=True\n")
       
-      manifestResourceId = 2 if dll else 1
+      if dll:
+        manifestResourceId = 2
+      else:
+        manifestResourceId = 1
       embeddedManifest = target + '.embed.manifest'
       if self.useIncrementalLinking:
         if not self.__rcExe:
@@ -730,6 +785,7 @@ class MsvcCompiler(Compiler):
     
     args.append('/OUT:' + target)
     args.extend(sources)
+    args.extend(unresolvedLibs)
     
     @makeCommand(args)
     def link():
@@ -740,9 +796,12 @@ class MsvcCompiler(Compiler):
       
       argFile = target + '.args'
       cake.filesys.makeDirs(cake.path.dirName(argFile))
-      with open(argFile, 'wt') as f:
+      f = open(argFile, 'wt')
+      try:      
         for arg in args[1:]:
           f.write(_escapeArg(arg) + '\n')
+      finally:
+        f.close()
 
       if self.importLibrary:
         cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
@@ -762,10 +821,10 @@ class MsvcCompiler(Compiler):
           )
 
       p.stdin.close()
-      output = p.stdout.readlines()
+      output = p.stdout.read()
       exitCode = p.wait()
       
-      for line in output:
+      for line in output.decode("latin1").splitlines():
         if not line.rstrip():
           continue
         sys.stderr.write(line)
@@ -884,13 +943,16 @@ class MsvcCompiler(Compiler):
       
       # Generate .embed.manifest.rc
       engine.logger.outputInfo("Creating %s\n" % embeddedRc)
-      with open(embeddedRc, 'w') as f:
+      f = open(embeddedRc, 'w')
+      try:
         # Use numbers so we don't have to include any headers
         # 24 - RT_MANIFEST
         f.write('%i 24 "%s"\n' % (
           manifestResourceId,
           embeddedManifest.replace("\\", "\\\\")
           ))
+      finally:
+        f.close()
       
       compileRcToRes()
       link()

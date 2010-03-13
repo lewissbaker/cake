@@ -5,16 +5,12 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
-import hashlib
 import threading
 import traceback
 import sys
 import os
 import os.path
 import time
-import platform
 
 import math
 try:
@@ -26,55 +22,7 @@ import cake.bytecode
 import cake.tools
 import cake.task
 import cake.path
-
-if platform.system() == 'Windows':
-  import ctypes
-  import ctypes.wintypes
-  
-  kernel32 = ctypes.windll.kernel32
-  IsWow64Process = kernel32.IsWow64Process
-  IsWow64Process.restype = ctypes.wintypes.BOOL
-  IsWow64Process.argtypes = (ctypes.wintypes.HANDLE,
-                             ctypes.POINTER(ctypes.wintypes.BOOL))
-  
-  GetCurrentProcess = kernel32.GetCurrentProcess
-  GetCurrentProcess.restype = ctypes.wintypes.HANDLE
-  GetCurrentProcess.argtypes = ()
-  
-  def getHostArchitecture():
-    """Returns the current machines architecture.
-    
-    @return: The host architecture, or 'unknown' if the host
-    architecture could not be determined.
-    @rtype: string
-    """
-    if platform.architecture()[0] == '32bit':
-      # Could be a 32-bit process running under 64-bit OS
-      result = ctypes.wintypes.BOOL()
-      ok = IsWow64Process(GetCurrentProcess(), ctypes.byref(result))
-      if not ok:
-        raise WindowsError("IsWow64Process")
-  
-      if result.value == 1:
-        return "x64"
-      else:
-        return "x86"
-    else:
-      # Could be IA-64 but who uses that these days?
-      return "x64"
-else:
-  # Non-windows platforms (should Cygwin be handled by above?)
-  def getHostArchitecture():
-    """Returns the current machines architecture.
-    
-    @return: The host architecture, or 'unknown' if the host
-    architecture could not be determined.
-    @rtype: string
-    """
-    try:
-      return os.environ['PROCESSOR_ARCHITECTURE']
-    except KeyError:
-      return 'unknown'
+import cake.hash
 
 class BuildError(Exception):
   """Exception raised when a build fails.
@@ -293,9 +241,13 @@ class Engine(object):
     key = (os.path.normcase(path), variant)
 
     currentScript = Script.getCurrent()
-    currentVariant = currentScript.variant if currentScript else None
+    if currentScript:
+      currentVariant = currentScript.variant
+    else:
+      currentVariant = None
     
-    with self._executedLock:
+    self._executedLock.acquire()
+    try:
       if key in self._executed:
         script = self._executed[key]
         task = script.task
@@ -323,6 +275,8 @@ class Engine(object):
             )
           )
         task.start()
+    finally:
+      self._executedLock.release()
 
     return task
 
@@ -396,13 +350,16 @@ class Engine(object):
     key = (path, timestamp)
     digest = self._digestCache.get(key, None)
     if digest is None:
-      hasher = hashlib.sha1()
-      with open(path, 'rb') as f:
+      hasher = cake.hash.sha1()
+      f = open(path, 'rb')
+      try:
         blockSize = 512 * 1024
         data = f.read(blockSize)
         while data:
           hasher.update(data)
           data = f.read(blockSize)
+      finally:
+        f.close()
       digest = hasher.digest()
       self._digestCache[key] = digest
       
@@ -428,8 +385,11 @@ class Engine(object):
       
       # Read entire file at once otherwise thread-switching will kill
       # performance
-      with open(depPath, 'rb') as f:
+      f = open(depPath, 'rb')
+      try:
         dependencyString = f.read()
+      finally:
+        f.close()
         
       dependencyInfo = pickle.loads(dependencyString) 
       
@@ -496,8 +456,11 @@ class Engine(object):
     dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
     
     cake.filesys.makeDirs(cake.path.dirName(depPath))
-    with open(depPath, 'wb') as f:
+    f = open(depPath, 'wb')
+    try:
       f.write(dependencyString)
+    finally:
+      f.close()
     
 class DependencyInfo(object):
   """Object that holds the dependency info for a target.
@@ -552,7 +515,7 @@ class DependencyInfo(object):
     @return: The current digest of the dependency info.
     @rtype: string of 20 bytes
     """
-    hasher = hashlib.sha1()
+    hasher = cake.hash.sha1()
     
     # Include the paths of the targets in the digest
     for t in self.targets:

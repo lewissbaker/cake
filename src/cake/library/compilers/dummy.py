@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 __all__ = ["DummyCompiler"]
 
 import cake.filesys
@@ -24,10 +22,6 @@ class DummyCompiler(Compiler):
   def __init__(self):
     Compiler.__init__(self)
 
-  @property
-  def architecture(self):
-    return 'unknown'
-  
   @memoise
   def _getCompileArgs(self, language):
     args = ['cc', '/c']
@@ -61,8 +55,8 @@ class DummyCompiler(Compiler):
     def compile():
       engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
       cake.filesys.makeDirs(cake.path.dirName(target))
-      with open(target, 'wb') as f:
-        f.write("dummy object file")
+      f = open(target, 'wb')
+      f.close()
         
       dependencies = [source]
       return dependencies
@@ -83,8 +77,8 @@ class DummyCompiler(Compiler):
     def archive():
       engine.logger.outputDebug("run", "%s\n" % " ".join(args))
       cake.filesys.makeDirs(cake.path.dirName(target))
-      with open(target, 'wb'):
-        pass
+      f = open(target, 'wb')
+      f.close()
       
     @makeCommand("dummy-scanner")
     def scan():
@@ -99,8 +93,8 @@ class DummyCompiler(Compiler):
     def link():
       engine.logger.outputDebug("run", "%s\n" % " ".join(args))
       cake.filesys.makeDirs(cake.path.dirName(target))
-      with open(target, 'wb'):
-        pass
+      f = open(target, 'wb')
+      f.close()
     
     @makeCommand("dummy-scanner")
     def scan():

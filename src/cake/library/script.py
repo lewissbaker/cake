@@ -17,28 +17,40 @@ class ScriptTool(Tool):
     """The path of the currently executing script.
     """
     script = Script.getCurrent()
-    return script.path if script else None
+    if script:
+      return script.path
+    else:
+      return None
   
   @property
   def dir(self):
     """The path of the directory of the currently executing script.
     """
     script = Script.getCurrent()
-    return script.dir if script else None
+    if script:
+      return script.dir
+    else:
+      return None
   
   @property
   def engine(self):
     """The Engine the currently executing script belongs to.
     """
     script = Script.getCurrent()
-    return script.engine if script else None
+    if script:
+      return script.engine
+    else:
+      return None
   
   @property
   def variant(self):
     """The Variant the currently executing script is being built with.
     """
     script = Script.getCurrent()
-    return script.variant if script else None
+    if script:
+      return script.variant
+    else:
+      return None
 
   def cwd(self, *args):
     """Return the path prefixed with the this script's directory.

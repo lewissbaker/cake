@@ -5,13 +5,11 @@
 @license: Licensed under the MIT license.
 """
 
-from __future__ import with_statement
-
 __all__ = ["Compiler"]
 
-import hashlib
 import weakref
 import os.path
+import binascii
 try:
   import cPickle as pickle
 except ImportError:
@@ -19,6 +17,7 @@ except ImportError:
 
 import cake.path
 import cake.filesys
+import cake.hash
 from cake.engine import Script, DependencyInfo, FileInfo, BuildError
 from cake.library import (
   Tool, FileTarget, getPathsAndTasks, getPathAndTask, memoise
@@ -44,42 +43,6 @@ def makeCommand(args):
   def run(func):
     return Command(args, func)
   return run
-
-def binaryToHex(value):
-  """Convert a byte string to a hex string.
-  
-  Example::
-    binaryToHex('\x3a\x8c\x07') -> '3a8c07'
-  
-  @param value: A string of bytes.
-  @type value: str
-  
-  @return: The bytes converted to a hexadecimal string.
-  @rtype: str
-  """
-  return "".join("%02x" % ord(c) for c in value)
-
-def hexToBinary(value):
-  """Convert a hex string to a binary string.
-  
-  Example::
-    hexToBinary("a37f92") -> '\xa3\x7f\x92'
-    
-  @param value: A hex string.
-  @type value: str
-  
-  @return: The string of bytes.
-  @rtype: str
-  """
-  valueLen = len(value)
-  if valueLen % 2 != 0:
-    raise ValueError("value must have an even number of hex chars")
-  value = value.lower()
-  hexCharsIndex = "0123456789abcdef".index
-  return "".join(
-    chr(16 * hexCharsIndex(value[i]) + hexCharsIndex(value[i+1]))
-    for i in xrange(0, valueLen, 2)
-    )
 
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
@@ -146,12 +109,19 @@ class Compiler(Tool):
   
   def __init__(self):
     super(Compiler, self).__init__()
+    self.cFlags = []
+    self.cppFlags = []
+    self.mFlags = []
+    self.moduleFlags = []
+    self.programFlags = []
     self.includePaths = []
     self.defines = []
     self.forcedIncludes = []
     self.libraryScripts = []
     self.libraryPaths = []
     self.libraries = []
+    self.moduleScripts = []
+    self.modules = []
 
   @classmethod
   def _getObjectsInLibrary(cls, engine, path):
@@ -188,26 +158,134 @@ class Compiler(Tool):
     libraryObjects = cls.__libraryObjects.setdefault(engine, {})
     libraryObjects[path] = tuple(objectPaths)
 
+  def addCFlag(self, flag):
+    """Add a flag to be used during .c compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.cFlags.append(flag)
+    self._clearCache()
+    
+  def addCFlags(self, flags):
+    """Add a list of flags to be used during .c compilation.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.cFlags.extend(flags)
+    self._clearCache()
+
+  def addCppFlag(self, flag):
+    """Add a flag to be used during .cpp compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.cppFlags.append(flag)
+    self._clearCache()
+    
+  def addCppFlags(self, flags):
+    """Add a list of flags to be used during .cpp compilation.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.cppFlags.extend(flags)
+    self._clearCache()
+
+  def addMFlag(self, flag):
+    """Add a flag to be used during Objective C compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.mFlags.append(flag)
+    self._clearCache()
+    
+  def addMFlags(self, flags):
+    """Add a list of flags to be used during Objective C compilation.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.mFlags.extend(flags)
+    self._clearCache()
+
+  def addModuleFlag(self, flag):
+    """Add a flag to be used during linking of modules.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.moduleFlags.append(flag)
+    self._clearCache()
+    
+  def addModuleFlags(self, flags):
+    """Add a list of flags to be used during linking of modules.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.moduleFlags.extend(flags)
+    self._clearCache()
+
+  def addProgramFlag(self, flag):
+    """Add a flag to be used during linking of programs.
+
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.programFlags.append(flag)
+    self._clearCache()
+    
+  def addProgramFlags(self, flags):
+    """Add a list of flags to be used during linking of programs.
+
+    @param flags: The flags to add.
+    @type flags: list of string
+    """
+    self.programFlags.extend(flags)
+    self._clearCache()
+
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
     
-    Include paths added later in the list are searched earlier
-    by the preprocessor.
+    The newly added path will have search precedence over any
+    existing paths.
+    
+    @param path: The path to add.
+    @type path: string
     """
     self.includePaths.append(path)
     self._clearCache()
     
-  def addDefine(self, define, value=None):
+  def addDefine(self, name, value=None):
     """Add a define to the preprocessor command-line.
+
+    The newly added define will have precedence over any
+    existing defines with the same name.
+    
+    @param name: The name of the define to set.
+    @type name: string
+    @param value: An optional value for the define.
+    @type value: string or None
     """
     if value is None:
-      self.defines.append(define)
+      self.defines.append(name)
     else:
-      self.defines.append("{0}={1}".format(define, value))
+      self.defines.append("{0}={1}".format(name, value))
     self._clearCache()
-    
+
   def addForcedInclude(self, path):
     """Add a file to be forcibly included on the command-line.
+
+    The newly added forced include will be included after any
+    previous forced includes.
+
+    @param path: The path to the forced include file. This may need
+    to be relative to a previously defined includePath. 
+    @type path: string
     """
     self.forcedIncludes.append(path)
     self._clearCache()
@@ -215,13 +293,23 @@ class Compiler(Tool):
   def addLibrary(self, name):
     """Add a library to the list of libraries to link with.
     
+    The newly added library will have search precedence over any
+    existing libraries.
+
     @param name: Name/path of the library to link with.
+    @type name: string
     """
     self.libraries.append(name)
     self._clearCache()
 
   def addLibraryPath(self, path):
-    """Add a path to the library search path.
+    """Add a path to the list of library search paths.
+    
+    The newly added path will have search precedence over any
+    existing paths.
+    
+    @param path: The path to add.
+    @type path: string
     """
     self.libraryPaths.append(path)
     self._clearCache()
@@ -237,7 +325,93 @@ class Compiler(Tool):
     """
     self.libraryScripts.append(path)
     self._clearCache()
+
+  def addModule(self, name):
+    """Add a module to the list of modules to copy.
     
+    @param name: Name/path of the module to copy.
+    @type name: string
+    """
+    self.modules.append(name)
+    self._clearCache()
+    
+  def addModuleScript(self, path):
+    """Add a script to be executed before copying modules.
+    
+    The script will be executed by the copyModulesTo()
+    function.
+    
+    @param path: Path of the script to execute.
+    @type path: string
+    """
+    self.moduleScripts.append(path)
+    self._clearCache()
+    
+  def copyModulesTo(self, targetDir, **kwargs):
+    """Copy modules to the given target directory.
+    
+    The modules copied are those previously specified by the
+    addModule() function.
+    
+    @param targetDir: The directory to copy modules to.
+    @type targetDir: string
+
+    @return: A list of Task objects, one for each module being
+    copied.
+    @rtype: list of L{Task}
+    """
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+
+    script = Script.getCurrent()
+    engine = Script.getCurrent().engine
+
+    tasks = []
+    for moduleScript in compiler.moduleScripts:
+      tasks.append(engine.execute(moduleScript, script.variant))
+
+    def doCopy(source, targetDir):
+      # Try without and with the extension
+      if not cake.filesys.isFile(source):
+        source = cake.path.forceExtension(source, compiler.moduleSuffix)
+      target = cake.path.join(targetDir, cake.path.baseName(source))
+      
+      if engine.forceBuild:
+        reasonToBuild = "rebuild has been forced"
+      elif not cake.filesys.isFile(target):
+        reasonToBuild = "'%s' does not exist" % target
+      elif engine.getTimestamp(source) > engine.getTimestamp(target):
+        reasonToBuild = "'%s' is newer than '%s'" % (source, target)
+      else:
+        # up-to-date
+        return
+
+      engine.logger.outputDebug(
+        "reason",
+        "Rebuilding '%s' because %s.\n" % (target, reasonToBuild),
+        )
+      engine.logger.outputInfo("Copying %s to %s\n" % (source, target))
+      
+      try:
+        cake.filesys.makeDirs(targetDir)
+        cake.filesys.copyFile(source, target)
+      except EnvironmentError, e:
+        engine.raiseError("%s: %s\n" % (target, str(e)))
+
+      engine.notifyFileChanged(target)
+
+    moduleTasks = []
+    for module in compiler.modules:
+      copyTask = engine.createTask(
+        lambda s=module,t=targetDir:
+          doCopy(s, t)
+        )
+      copyTask.startAfter(tasks)
+      moduleTasks.append(copyTask)
+    
+    return moduleTasks
+
   def object(self, target, source, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
     
@@ -373,7 +547,6 @@ class Compiler(Tool):
       setattr(compiler, k, v)
   
     # And a copy of the current build engine
-    
     script = Script.getCurrent()
     engine = script.engine
 
@@ -462,31 +635,24 @@ class Compiler(Tool):
     libraryPaths = []
     unresolvedLibs = []
     for library in reversed(self.libraries):
-      if not cake.path.dirName(library):
+      fileNames = [library]
 
-        fileNames = [library]
+      libraryExtension = os.path.normcase(cake.path.extension(library))
+      for prefix, suffix in self.libraryPrefixSuffixes:
+        if libraryExtension != os.path.normcase(suffix):
+          fileNames.append(cake.path.addPrefix(library, prefix) + suffix)
 
-        libraryExtension = os.path.normcase(cake.path.extension(library))
-        for prefix, suffix in self.libraryPrefixSuffixes:
-          if libraryExtension != os.path.normcase(suffix):
-            fileNames.append(cake.path.addPrefix(library, prefix) + suffix)
-                  
-        for candidate in cake.path.join(reversed(self.libraryPaths), fileNames):
-          if cake.filesys.isFile(candidate):
-            libraryPaths.append(candidate)
-            break
-        else:
-          engine.logger.outputDebug(
-            "scan",
-            "scan: Ignoring missing library '" + library + "'\n",
-            )
-          unresolvedLibs.append(library)
+      # Add [""] so we search for the full path first 
+      for candidate in cake.path.join(reversed(self.libraryPaths + [""]), fileNames):
+        if cake.filesys.isFile(candidate):
+          libraryPaths.append(candidate)
+          break
       else:
-        if not cake.filesys.isFile(library):
-          engine.raiseError(
-            "cake: library '%s' does not exist.\n" % library
-            )
-        libraryPaths.append(library)
+        engine.logger.outputDebug(
+          "scan",
+          "scan: Ignoring missing library '" + library + "'\n",
+          )
+        unresolvedLibs.append(library)
       
     if self.linkObjectsInLibrary:
       results = []
@@ -545,11 +711,6 @@ class Compiler(Tool):
           if dep.timestamp is not None and dep.digest is not None:
             engine.updateFileDigestCache(dep.path, dep.timestamp, dep.digest)
       
-      # Find the directory that will contain all cache entries for
-      # this particular target object file.
-      
-      targetDigest = hashlib.sha1()
-
       # We either need to make all paths that form the cache digest relative
       # to the workspace root or  
       targetDigestPath = os.path.abspath(target)
@@ -560,12 +721,15 @@ class Compiler(Tool):
         if cake.path.commonPath(targetDigestPathNorm, workspaceRoot) == workspaceRoot:
           targetDigestPath = targetDigestPath[len(workspaceRoot)+1:]
           
-      targetDigest = binaryToHex(hashlib.sha1(targetDigestPath.encode("utf8")).digest())
+      # Find the directory that will contain all cache entries for
+      # this particular target object file.
+      targetDigest = cake.hash.sha1(targetDigestPath.encode("utf8")).digest()
+      targetDigestStr = binascii.hexlify(targetDigest).decode("utf8")
       targetCacheDir = cake.path.join(
         self.objectCachePath,
-        targetDigest[0],
-        targetDigest[1],
-        targetDigest
+        targetDigestStr[0],
+        targetDigestStr[1],
+        targetDigestStr
         )
       
       # Find all entries in the directory
@@ -584,7 +748,14 @@ class Compiler(Tool):
       # Try to find the dependency files
       for entry in entries:
         # Skip any entry that's not a SHA-1 hash
-        if len(entry) != 40 or any(c not in hexChars for c in entry):
+        if len(entry) != 40:
+          continue
+        skip = False
+        for c in entry:
+          if c not in hexChars:
+            skip = True
+            break
+        if skip:
           continue
 
         # Make sure the .object exists too
@@ -594,11 +765,14 @@ class Compiler(Tool):
         
         cacheDepPath = cake.path.join(targetCacheDir, entry)
         cacheObjectPath = cake.path.join(targetCacheDir, objectEntry)
-        cacheDigest = hexToBinary(entry)
+        cacheDigest = binascii.unhexlify(entry)
         
         try:
-          with open(cacheDepPath) as f:
+          f = open(cacheDepPath, 'rb')
+          try:
             cacheDepContents = f.read()
+          finally:
+            f.close()
         except EnvironmentError:
           continue
         
@@ -688,7 +862,7 @@ class Compiler(Tool):
       if useCacheForThisObject:
         try:
           digest = newDependencyInfo.calculateDigest(engine)
-          digestStr = binaryToHex(digest)
+          digestStr = binascii.hexlify(digest).decode("utf8")
           
           cacheDepPath = cake.path.join(targetCacheDir, digestStr)
           cacheObjectPath = cacheDepPath + '.object'
@@ -698,8 +872,11 @@ class Compiler(Tool):
           # the object file is ready.
           cake.filesys.makeDirs(targetCacheDir)
           cake.filesys.copyFile(target, cacheObjectPath)
-          with open(cacheDepPath, 'wb') as f:
+          f = open(cacheDepPath, 'wb')
+          try:
             f.write(pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL))
+          finally:
+            f.close()
             
         except EnvironmentError:
           # Don't worry if we can't put the object in the cache

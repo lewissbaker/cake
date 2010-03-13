@@ -16,3 +16,7 @@ compiler.program(
   target=env.expand("${BUILD}/usemodule/main/bin/main"),
   sources=objects,
   )
+
+compiler.copyModulesTo(
+  targetDir=env.expand("${BUILD}/usemodule/main/bin"),
+  )

@@ -5,6 +5,7 @@
 @license: Licensed under the MIT license.
 """
 
+import os
 import os.path
 import platform
 
@@ -211,6 +212,19 @@ def commonPath(path1, path2):
   return path1[:safeCount]
 
 if platform.system() == "Windows":
+  try:
+    import win32file
+    def _fileSystemBaseName(path, stem, leaf):
+      findData = win32file.FindFilesIterator(path).next()
+      return str(findData[8])
+  except ImportError:
+    def _fileSystemBaseName(path, stem, leaf):
+      leafNorm = os.path.normcase(leaf)
+      for f in os.listdir(stem):
+        if os.path.normcase(f) == leafNorm:
+          return f
+      return leaf
+
   def fileSystemPath(path):
     """Look up the correctly cased path from the file system.
   
@@ -229,18 +243,14 @@ if platform.system() == "Windows":
     @return: The correctly cased file system path.
     @rtype: string
     """
-  
-    import win32file
-  
     seps = frozenset([os.path.sep, os.path.altsep])
-    
+
     parts = list()
     while path:
       stem, leaf = os.path.split(path)
       if leaf != '.' and leaf != '..':
         try:
-          findData = win32file.FindFilesIterator(path).next()
-          leaf = str(findData[8])
+          leaf = _fileSystemBaseName(path, stem, leaf)
         except Exception:
           pass
       parts.append(leaf)

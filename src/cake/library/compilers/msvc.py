@@ -456,6 +456,7 @@ class MsvcCompiler(Compiler):
         dependencies = [self.__clExe, source]
         dependenciesSet = set()
         
+        outputLines = []
         for line in output.decode("latin1").splitlines():
           line = line.rstrip()
           if not line or line == sourceName:
@@ -467,8 +468,10 @@ class MsvcCompiler(Compiler):
               dependenciesSet.add(normPath)
               dependencies.append(path)
           else:
-            sys.stderr.write(line + '\n')
-        sys.stderr.flush()
+            outputLines.append(line)
+        if outputLines:
+          sys.stderr.write("\n".join(outputLines) + "\n")
+          sys.stderr.flush()
 
         if exitCode != 0:
           raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
@@ -573,14 +576,17 @@ class MsvcCompiler(Compiler):
         engine.raiseError("cake: failed to launch %s: %s\n" % (self.__libExe, str(e)))
     
       p.stdin.close()
-      output = p.stdout.readlines()
+      output = p.stdout.read()
       exitCode = p.wait()
     
-      for line in output:
+      outputLines = []
+      for line in output.decode("latin1").splitlines():
         if not line.rstrip():
           continue
-        sys.stderr.write(line)
-      sys.stderr.flush()
+        outputLines.append(line)
+      if outputLines:
+        sys.stderr.write("\n".join(outputLines) + "\n")
+        sys.stderr.flush()
           
       if exitCode != 0:
         engine.raiseError("lib: failed with exit code %i\n" % exitCode)
@@ -753,11 +759,14 @@ class MsvcCompiler(Compiler):
       output = p.stdout.read()
       exitCode = p.wait()
       
+      outputLines = []
       for line in output.decode("latin1").splitlines():
         if not line.rstrip():
           continue
-        sys.stderr.write(line)
-      sys.stderr.flush()
+        outputLines.append(line)
+      if outputLines:
+        sys.stderr.write("\n".join(outputLines) + "\n")
+        sys.stderr.flush()
 
       if exitCode != 0:
         engine.raiseError("link: failed with exit code %i\n" % exitCode)
@@ -794,7 +803,7 @@ class MsvcCompiler(Compiler):
             ))
           
         p.stdin.close()
-        output = [line for line in p.stdout.readlines() if line.strip()]
+        output = [line for line in p.stdout.read().decode("latin1").splitlines() if line.strip()]
         exitCode = p.wait()
 
         # Skip any leading logo output by some of the later versions of rc.exe
@@ -803,9 +812,12 @@ class MsvcCompiler(Compiler):
            output[1].startswith('Copyright (C) Microsoft Corporation.  All rights reserved.'):
           output = output[2:]
 
+        outputLines = []
         for line in output:
-          sys.stderr.write(line)
-        sys.stderr.flush()
+          outputLines.append(line)
+        if outputLines:
+          sys.stderr.write("\n".join(outputLines) + "\n")
+          sys.stderr.flush()
         
         if exitCode != 0:
           engine.raiseError("rc: failed with exit code %i" % exitCode)
@@ -847,14 +859,17 @@ class MsvcCompiler(Compiler):
             ))
           
         p.stdin.close()
-        output = p.stdout.readlines()
+        output = p.stdout.read()
         exitCode = p.wait()
         
-        for line in output:
+        outputLines = []
+        for line in output.decode("latin1").splitlines():
           if not line.rstrip():
             continue
-          sys.stderr.write(line)
-        sys.stderr.flush()
+          outputLines.append(line)
+        if outputLines:
+          sys.stderr.write("\n".join(outputLines) + "\n")
+          sys.stderr.flush()
         
         # The magic number here is the exit code output by the mt.exe
         # tool when the manifest file hasn't actually changed. We can
@@ -935,14 +950,17 @@ class MsvcCompiler(Compiler):
           ))
         
       p.stdin.close()
-      output = p.stdout.readlines()
+      output = p.stdout.read()
       exitCode = p.wait()
       
-      for line in output:
+      outputLines = []
+      for line in output.decode("latin1").splitlines():
         if not line.rstrip():
           continue
-        sys.stderr.write(line)
-      sys.stderr.flush()
+        outputLines.append(line)
+      if outputLines:
+        sys.stderr.write("\n".join(outputLines) + "\n")
+        sys.stderr.flush()
 
       if exitCode != 0:
         engine.raiseError("mt: failed with exit code %i\n" % exitCode)

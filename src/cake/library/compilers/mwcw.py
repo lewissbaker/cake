@@ -12,7 +12,7 @@ import subprocess
 
 import cake.filesys
 import cake.path
-from cake.library import memoise
+from cake.library import memoise, getPathsAndTasks
 from cake.library.compilers import Compiler, makeCommand
 from cake.gnu import parseDependencyFile
 
@@ -239,7 +239,7 @@ class MwcwCompiler(Compiler):
 
     args.extend('-D' + d for d in self.defines)
     
-    for p in self.forcedIncludes:
+    for p in getPathsAndTasks(self.forcedIncludes)[0]:
       args.extend(['-include', p])
     
     return args

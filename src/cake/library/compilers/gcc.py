@@ -361,6 +361,10 @@ class GccCompiler(Compiler):
       args.extend(self.moduleFlags)
     else:
       args.extend(self.programFlags)
+
+    if dll and self.importLibrary is not None:
+      args.append('-Wl,--out-implib=' + self.importLibrary)
+    
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
@@ -379,9 +383,6 @@ class GccCompiler(Compiler):
     args.extend(sources)
     args.extend('-l' + l for l in unresolvedLibs)    
     args.extend(['-o', target])
-
-    if dll and self.importLibrary is not None:
-      args.append('-Wl,--out-implib=' + self.importLibrary)
 
     if self.outputMapFile:
       args.append('-Wl,-Map=' + cake.path.stripExtension(target) + '.map')

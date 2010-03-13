@@ -712,7 +712,7 @@ class Compiler(Tool):
             engine.updateFileDigestCache(dep.path, dep.timestamp, dep.digest)
       
       # We either need to make all paths that form the cache digest relative
-      # to the workspace root or  
+      # to the workspace root or all of them absolute.
       targetDigestPath = os.path.abspath(target)
       if self.objectCacheWorkspaceRoot is not None:
         workspaceRoot = os.path.abspath(self.objectCacheWorkspaceRoot)
@@ -721,8 +721,8 @@ class Compiler(Tool):
         if cake.path.commonPath(targetDigestPathNorm, workspaceRoot) == workspaceRoot:
           targetDigestPath = targetDigestPath[len(workspaceRoot)+1:]
           
-      # Find the directory that will contain all cache entries for
-      # this particular target object file.
+      # Find the directory that will contain all cached dependency
+      # entries for this particular target object file.
       targetDigest = cake.hash.sha1(targetDigestPath.encode("utf8")).digest()
       targetDigestStr = binascii.hexlify(targetDigest).decode("utf8")
       targetCacheDir = cake.path.join(
@@ -758,14 +758,7 @@ class Compiler(Tool):
         if skip:
           continue
 
-        # Make sure the .object exists too
-        objectEntry = entry + '.object'
-        if objectEntry not in entries:
-          continue
-        
         cacheDepPath = cake.path.join(targetCacheDir, entry)
-        cacheObjectPath = cake.path.join(targetCacheDir, objectEntry)
-        cacheDigest = binascii.unhexlify(entry)
         
         try:
           f = open(cacheDepPath, 'rb')
@@ -799,13 +792,21 @@ class Compiler(Tool):
           # One of the dependencies didn't exist
           continue
         
-        # Check if the state of our files matches that of the cached
-        # object dependencies.
-        if newDependencyInfo.calculateDigest(engine) == cacheDigest:
+        # Check if the state of our files matches that of a cached
+        # object file.
+        cachedObjectDigest = newDependencyInfo.calculateDigest(engine)
+        cachedObjectDigestStr = binascii.hexlify(cachedObjectDigest).decode("utf8")
+        cachedObjectPath = cake.path.join(
+          self.objectCachePath,
+          cachedObjectDigestStr[0],
+          cachedObjectDigestStr[1],
+          cachedObjectDigestStr
+          )
+        if cake.filesys.isFile(cachedObjectPath):
           engine.logger.outputInfo("from cache: %s\n" % target)
           cake.filesys.copyFile(
             target=target,
-            source=cacheObjectPath,
+            source=cachedObjectPath,
             )
           engine.storeDependencyInfo(newDependencyInfo)
           return
@@ -861,22 +862,39 @@ class Compiler(Tool):
       # Finally update the cache if necessary
       if useCacheForThisObject:
         try:
-          digest = newDependencyInfo.calculateDigest(engine)
-          digestStr = binascii.hexlify(digest).decode("utf8")
+          objectDigest = newDependencyInfo.calculateDigest(engine)
+          objectDigestStr = binascii.hexlify(objectDigest).decode("utf8")
           
-          cacheDepPath = cake.path.join(targetCacheDir, digestStr)
-          cacheObjectPath = cacheDepPath + '.object'
+          dependencyDigest = cake.hash.sha1()
+          for dep in dependencies:
+            dependencyDigest.update(dep.encode("utf8"))
+          dependencyDigest = dependencyDigest.digest()
+          dependencyDigestStr = binascii.hexlify(dependencyDigest).decode("utf8")
+          
+          cacheDepPath = cake.path.join(
+            targetCacheDir,
+            dependencyDigestStr
+            )
+          cacheObjectPath = cake.path.join(
+            self.objectCachePath,
+            objectDigestStr[0],
+            objectDigestStr[1],
+            objectDigestStr,
+            )
 
           # Copy the object file first, then the dependency file
           # so that other processes won't find the dependency until
           # the object file is ready.
-          cake.filesys.makeDirs(targetCacheDir)
+          cake.filesys.makeDirs(cake.path.dirName(cacheObjectPath))
           cake.filesys.copyFile(target, cacheObjectPath)
-          f = open(cacheDepPath, 'wb')
-          try:
-            f.write(pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL))
-          finally:
-            f.close()
+          
+          if not cake.filesys.isFile(cacheDepPath):
+            cake.filesys.makeDirs(targetCacheDir)
+            f = open(cacheDepPath, 'wb')
+            try:
+              f.write(pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL))
+            finally:
+              f.close()
             
         except EnvironmentError:
           # Don't worry if we can't put the object in the cache

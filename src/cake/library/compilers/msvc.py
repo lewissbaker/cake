@@ -551,6 +551,8 @@ class MsvcCompiler(Compiler):
         includePrefixLen = len(includePrefix)
 
         dependencies = [self.__clExe, source]
+        if deps is not None:
+          dependencies.extend(deps)
         if self.language == 'c++/cli':
           dependencies.extend(getPathsAndTasks(self.forcedUsings)[0])
         dependenciesSet = set()

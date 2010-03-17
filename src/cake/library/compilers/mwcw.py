@@ -146,7 +146,7 @@ class MwcwCompiler(Compiler):
     exitCode = p.wait()
     
     if output:
-      sys.stderr.write(self._formatMessage(output.decode("latin1")))
+      sys.stderr.write(self._formatMessage(str(output)))
         
     if exitCode != 0:
       engine.raiseError(
@@ -240,7 +240,7 @@ class MwcwCompiler(Compiler):
     
     return args
 
-  def getObjectCommands(self, target, source, engine):
+  def getObjectCommands(self, target, source, pch, engine):
     language = self.language
     if not language:
       language = {
@@ -264,7 +264,7 @@ class MwcwCompiler(Compiler):
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
         dependencyFile,
-        self.objectSuffix
+        cake.path.extension(target),
         ))
       return dependencies
 

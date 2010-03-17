@@ -18,6 +18,7 @@ class DummyCompiler(Compiler):
   libraryPrefixSuffixes = [('', '.lib')]
   moduleSuffix = '.dll'
   programSuffix = '.exe'
+  pchSuffix = '.pch'
   
   def __init__(self):
     Compiler.__init__(self)
@@ -40,7 +41,7 @@ class DummyCompiler(Compiler):
     args.extend('/FI%s' % p for p in self.forcedIncludes)
     return args
 
-  def getObjectCommands(self, target, source, engine):
+  def getObjectCommands(self, target, source, pch, engine):
 
     language = self.language
     if not language:

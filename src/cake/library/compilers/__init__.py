@@ -25,6 +25,12 @@ from cake.task import Task
 class CompilerNotFoundError(Exception):
   pass
 
+class PchTarget(FileTarget):
+  def __init__(self, path, header, task):
+    self.path = path
+    self.header = header
+    self.task = task
+
 class Command(object):
   
   def __init__(self, args, func):
@@ -73,6 +79,7 @@ class Compiler(Tool):
   libraryPrefixSuffixes = [('lib', '.a')]
   moduleSuffix = '.so'
   programSuffix = ''
+  pchSuffix = '.gch'
   
   linkObjectsInLibrary = False
   outputMapFile = False
@@ -410,7 +417,52 @@ class Compiler(Tool):
     
     return moduleTasks
 
-  def object(self, target, source, forceExtension=True, **kwargs):
+  def pch(self, target, source, header, forceExtension=True, **kwargs):
+    """Compile an individual header to a pch file.
+    
+    @param target: Path to the target pch file.
+    @type target: string
+    
+    @param header: Path to the header as it would be included
+    by other source files.
+    @type header: string.
+    
+    @param forceExtension: If true then the target path will have
+    the default pch file extension appended if it doesn't already
+    have it.
+    @type forceExtension: bool
+    
+    @return: A PchTarget containing the path of the pch file
+    that will be built and the task that will build it.
+    @rtype: L{PchTarget}
+    """
+     
+    # Take a snapshot of the build settings at this point and use that.
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+      
+    return compiler._pch(target, source, header, forceExtension)
+
+  def _pch(self, target, source, header, forceExtension=True):
+    
+    # Make note of which build engine we're using too
+    engine = Script.getCurrent().engine
+
+    if forceExtension:
+      target = cake.path.forceExtension(target, self.pchSuffix)
+    
+    source, sourceTask = getPathAndTask(source)
+    
+    pchTask = engine.createTask(
+      lambda t=target, s=source, h=header, e=engine, c=self:
+        c.buildPch(t, s, h, e)
+      )
+    pchTask.startAfter(sourceTask)
+    
+    return PchTarget(path=target, header=header, task=pchTask)
+  
+  def object(self, target, source, pch=None, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
     
     @param target: Path of the target object file.
@@ -419,12 +471,18 @@ class Compiler(Tool):
     @param source: Path of the source file.
     @type source: string or FileTarget.
     
+    @param pch: A precompiled header file to use. This file can be built
+    with the pch() function.
+    @type pch: L{PchTarget}
+    
     @param forceExtension: If true then the target path will have
     the default object file extension appended if it doesn't already
     have it.
+    @type forceExtension: bool
     
     @return: A FileTarget containing the path of the object file
     that will be built and the task that will build it.
+    @rtype: L{FileTarget}
     """
      
     # Take a snapshot of the build settings at this point and use that.
@@ -432,9 +490,9 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
       
-    return compiler._object(target, source, forceExtension)
+    return compiler._object(target, source, pch, forceExtension)
     
-  def _object(self, target, source, forceExtension=True):
+  def _object(self, target, source, pch=None, forceExtension=True):
     
     # Make note of which build engine we're using too
     engine = Script.getCurrent().engine
@@ -443,16 +501,23 @@ class Compiler(Tool):
       target = cake.path.forceExtension(target, self.objectSuffix)
     
     source, sourceTask = getPathAndTask(source)
+    _, pchTask = getPathAndTask(pch)
+    
+    sourceTasks = []
+    if sourceTask is not None:
+      sourceTasks.append(sourceTask)
+    if pchTask is not None:
+      sourceTasks.append(pchTask)
     
     objectTask = engine.createTask(
-      lambda t=target, s=source, e=engine, c=self:
-        c.buildObject(t, s, e)
+      lambda t=target, s=source, p=pch, e=engine, c=self:
+        c.buildObject(t, s, p, e)
       )
-    objectTask.startAfter(sourceTask)
+    objectTask.startAfter(sourceTasks)
     
     return FileTarget(path=target, task=objectTask)
     
-  def objects(self, targetDir, sources, **kwargs):
+  def objects(self, targetDir, sources, pch=None, **kwargs):
     """Build a collection of objects to a target directory.
     
     @param targetDir: Path to the target directory where the built objects
@@ -461,6 +526,10 @@ class Compiler(Tool):
     
     @param sources: A list of source files to compile to object files.
     @type sources: sequence of string or FileTarget objects
+    
+    @param pch: A precompiled header file to use. This file can be built
+    with the pch() function.
+    @type pch: L{PchTarget}
     
     @return: A list of FileTarget objects, one for each object being
     built.
@@ -474,7 +543,11 @@ class Compiler(Tool):
       sourcePath, _ = getPathAndTask(source)
       sourceName = cake.path.baseNameWithoutExtension(sourcePath)
       targetPath = cake.path.join(targetDir, sourceName)
-      results.append(compiler._object(targetPath, source, forceExtension=True))
+      results.append(compiler._object(
+        targetPath,
+        source,
+        pch=pch,
+        ))
     return results
     
   def library(self, target, sources, forceExtension=True, **kwargs):
@@ -651,7 +724,38 @@ class Compiler(Tool):
     else:
       return libraryPaths, unresolvedLibs
   
-  def buildObject(self, target, source, engine):
+  def buildPch(self, target, source, header, engine):
+    commands = self.getPchCommands(
+      target,
+      source,
+      header,
+      engine,
+      )
+    
+    self.buildCachedObject(
+      target,
+      source,
+      commands,
+      engine,
+      )
+
+  def buildObject(self, target, source, pch, engine):
+    commands = self.getObjectCommands(
+      target,
+      source,
+      pch,
+      engine,
+      )
+    
+    self.buildCachedObject(
+      target,
+      source,
+      commands,
+      engine,
+      )
+    
+
+  def buildCachedObject(self, target, source, commands, engine):
     """Perform the actual build of an object.
     
     @param target: Path of the target object file.
@@ -662,8 +766,7 @@ class Compiler(Tool):
     
     @param engine: The build Engine to use when building this object.
     """
-    
-    compile, args, canBeCached = self.getObjectCommands(target, source, engine)
+    compile, args, canBeCached = commands
     
     # Check if the target needs building
     oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(target, args)
@@ -869,7 +972,20 @@ class Compiler(Tool):
     storeDependencyTask = engine.createTask(storeDependencyInfoAndCache)
     storeDependencyTask.startAfter(compileTask, immediate=True)
   
-  def getObjectCommand(self, target, source, engine):
+  def getPchCommands(self, target, source, header, engine):
+    """Get the command-lines for compiling a precompiled header.
+    
+    @return: A (compile, args, canCache) tuple where 'compile' is a function that
+    takes no arguments returns a task that completes with the list of paths of
+    dependencies when the compilation succeeds. 'args' is a value that indicates
+    the parameters of the command, if the args changes then the target will
+    need to be rebuilt; typically args includes the compiler's command-line.
+    'canCache' is a boolean value that indicates whether the built object
+    file can be safely cached or not.
+    """
+    engine.raiseError("Don't know how to compile %s\n" % source)
+
+  def getObjectCommands(self, target, source, pch, engine):
     """Get the command-lines for compiling a source to a target.
     
     @return: A (compile, args, canCache) tuple where 'compile' is a function that

@@ -236,6 +236,7 @@ class MsvcCompiler(Compiler):
   libraryPrefixSuffixes = [('', '.lib')]
   moduleSuffix = '.dll'
   programSuffix = '.exe'
+  pchSuffix = '.pch'
   
   outputFullPath = True
   memoryLimit = None
@@ -388,7 +389,7 @@ class MsvcCompiler(Compiler):
       
     return env
     
-  def getObjectCommands(self, target, source, engine):
+  def getObjectCommands(self, target, source, pch, engine):
     
     language = self.language
     if language is None:

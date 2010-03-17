@@ -185,7 +185,7 @@ class GccCompiler(Compiler):
     if not cake.system.isWindows():
       return inputText
     
-    outputText = ""
+    outputLines = []
     lines = inputText.split('\n')
     for line in lines:
       line = line.rstrip('\r')
@@ -196,11 +196,14 @@ class GccCompiler(Compiler):
         sourceFile = os.path.abspath(os.path.normpath(sourceFile))
         lineNumber = linenum[1:]
         message = line[m.end()+2:]
-        outputText += "%s(%s): %s\n" % (sourceFile, lineNumber, message)
+        outputLines.append('%s(%s): %s' % (sourceFile, lineNumber, message))
       elif line.strip(): # Don't print blank lines
-        outputText += line + '\n'
-    return outputText
-      
+        outputLines.append(line)
+    if outputLines:
+      return '\n'.join(outputLines) + '\n'
+    else:
+      return ''
+
   def _executeProcess(self, args, target, engine):
     engine.logger.outputDebug(
       "run",
@@ -234,7 +237,7 @@ class GccCompiler(Compiler):
     exitCode = p.wait()
     
     if output:
-      sys.stderr.write(self._formatMessage(output.decode("latin1")))
+      sys.stderr.write(self._formatMessage(str(output)))
         
     if exitCode != 0:
       engine.raiseError(
@@ -253,16 +256,16 @@ class GccCompiler(Compiler):
     if self.debugSymbols:
       args.append('-g')
 
-    if language == 'c++':
+    if language in ['c++', 'c++-header', 'c++-cpp-output']:
       args.extend(self.cppFlags)
 
       if self.enableRtti:
         args.append('-frtti')
       else:
         args.append('-fno-rtti')
-    elif language == 'c':
+    elif language in ['c', 'c-header', 'cpp-output']:
       args.extend(self.cFlags)
-    elif language == 'objective-c':
+    elif language in ['objective-c', 'objective-c-header', 'objc-cpp-output']:
       args.extend(self.mFlags)
 
     if self.enableExceptions:
@@ -294,20 +297,28 @@ class GccCompiler(Compiler):
     
     return args
 
-  def getObjectCommands(self, target, source, engine):
+  def getLanguage(self, path):
     language = self.language
     if not language:
       language = {
         '.c':'c',
         '.m':'objective-c',
-        }.get(cake.path.extension(source).lower(), 'c++')
-   
+        }.get(cake.path.extension(path).lower(), 'c++')
+    return language
+  
+  def getPchCommands(self, target, source, header, engine):
+    language = self.getLanguage(source)
+    
+    # Pch must be compiled as eg: 'c++-header'
+    if not language.endswith('-header'):
+      language += '-header'
+
     args = list(self._getCompileArgs(language))
     args += [source, '-o', target]
     
     def compile():
       self._executeProcess(args, target, engine)
-      
+
       dependencyFile = cake.path.stripExtension(target) + '.d'
       engine.logger.outputDebug(
         "scan",
@@ -318,8 +329,47 @@ class GccCompiler(Compiler):
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
         dependencyFile,
-        self.objectSuffix
+        cake.path.extension(target),
         ))
+      return dependencies
+    
+    def command():
+      task = engine.createTask(compile)
+      task.start(immediate=True)
+      return task
+    
+    canBeCached = True
+    return command, args, canBeCached
+
+  def getObjectCommands(self, target, source, pch, engine):
+    language = self.getLanguage(source)
+    args = list(self._getCompileArgs(language))
+  
+    if pch is not None:
+      args.extend([
+        '-Winvalid-pch',
+        '-include', cake.path.stripExtension(pch.path),
+        ])
+      
+    args += [source, '-o', target]
+    
+    def compile():
+      self._executeProcess(args, target, engine)
+
+      dependencyFile = cake.path.stripExtension(target) + '.d'
+      engine.logger.outputDebug(
+        "scan",
+        "scan: %s\n" % dependencyFile,
+        )
+      
+      # TODO: Add dependencies on DLLs used by gcc.exe
+      dependencies = [args[0]]
+      dependencies.extend(parseDependencyFile(
+        dependencyFile,
+        cake.path.extension(target),
+        ))
+      if pch is not None:
+        dependencies.append(pch.path)
       return dependencies
     
     def command():

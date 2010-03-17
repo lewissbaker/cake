@@ -108,7 +108,7 @@ class ScriptTool(Tool):
 
     Only executes the function after the sources have been built and only
     if the target exists, args is the same as last run and the sources
-    havent changed.
+    haven't changed.
 
     @note: I couldn't think of a better class to put this function in so
     for now it's here although it doesn't really belong.
@@ -123,27 +123,34 @@ class ScriptTool(Tool):
       if targets:
         buildArgs = (args, sourcePaths)
         try:
-          oldDependencyInfo = engine.getDependencyInfo(targets[0])
-          if oldDependencyInfo.isUpToDate(engine, buildArgs):
+          oldDependencyInfo, reason = engine.checkDependencyInfo(targets[0], buildArgs)
+          if reason is None:
+            # Up to date
             return
+          
+          engine.logger.outputDebug(
+            "reason",
+            "Building '%s' because '%s'\n" % (targets[0], reason),
+            )
         except EnvironmentError:
           pass
 
-      func()
-
-      if targets:
-        newDependencyInfo = DependencyInfo(
-          targets=[FileInfo(path=t) for t in targets],
-          args=buildArgs,
-          dependencies=[
-            FileInfo(
-              path=s,
-              timestamp=engine.getTimestamp(s),
-              )
-            for s in sourcePaths
-            ],
-          )
-        engine.storeDependencyInfo(newDependencyInfo)
+      try:
+        return func()
+      finally:
+        if targets:
+          newDependencyInfo = DependencyInfo(
+            targets=[FileInfo(path=t) for t in targets],
+            args=buildArgs,
+            dependencies=[
+              FileInfo(
+                path=s,
+                timestamp=engine.getTimestamp(s),
+                )
+              for s in sourcePaths
+              ],
+            )
+          engine.storeDependencyInfo(newDependencyInfo)
 
     task = engine.createTask(_run)
     task.startAfter(sourceTasks)

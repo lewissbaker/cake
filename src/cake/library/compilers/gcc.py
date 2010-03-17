@@ -14,7 +14,7 @@ import subprocess
 import cake.filesys
 import cake.path
 import cake.system
-from cake.library import memoise
+from cake.library import memoise, getPathsAndTasks
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.gnu import parseDependencyFile
 
@@ -292,7 +292,7 @@ class GccCompiler(Compiler):
 
     args.extend('-D' + d for d in self.defines)
     
-    for p in self.forcedIncludes:
+    for p in getPathsAndTasks(self.forcedIncludes)[0]:
       args.extend(['-include', p])
     
     return args

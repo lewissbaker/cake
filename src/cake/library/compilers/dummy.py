@@ -9,7 +9,7 @@ __all__ = ["DummyCompiler"]
 
 import cake.filesys
 import cake.path
-from cake.library import memoise
+from cake.library import memoise, getPathsAndTasks
 from cake.library.compilers import Compiler, makeCommand
 
 class DummyCompiler(Compiler):
@@ -38,7 +38,7 @@ class DummyCompiler(Compiler):
       args.append('/lang:%s' % language)
     args.extend('/I%s' % p for p in reversed(self.includePaths))
     args.extend('/D%s' % d for d in self.defines)
-    args.extend('/FI%s' % p for p in self.forcedIncludes)
+    args.extend('/FI%s' % p for p in getPathsAndTasks(self.forcedIncludes)[0])
     return args
 
   def getObjectCommands(self, target, source, pch, engine):

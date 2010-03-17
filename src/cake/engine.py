@@ -664,6 +664,6 @@ class Script(object):
     old = Script.getCurrent()
     Script._current.value = self
     try:
-      exec byteCode
+      exec byteCode in {}
     finally:
       Script._current.value = old

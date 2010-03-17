@@ -458,7 +458,7 @@ class MsvcCompiler(Compiler):
         dependenciesSet = set()
         
         outputLines = []
-        for line in output.decode("latin1").splitlines():
+        for line in str(output).splitlines():
           line = line.rstrip()
           if not line or line == sourceName:
             continue
@@ -581,7 +581,7 @@ class MsvcCompiler(Compiler):
       exitCode = p.wait()
     
       outputLines = []
-      for line in output.decode("latin1").splitlines():
+      for line in str(output).splitlines():
         if not line.rstrip():
           continue
         outputLines.append(line)
@@ -761,7 +761,7 @@ class MsvcCompiler(Compiler):
       exitCode = p.wait()
       
       outputLines = []
-      for line in output.decode("latin1").splitlines():
+      for line in str(output).splitlines():
         if not line.rstrip():
           continue
         outputLines.append(line)
@@ -804,7 +804,7 @@ class MsvcCompiler(Compiler):
             ))
           
         p.stdin.close()
-        output = [line for line in p.stdout.read().decode("latin1").splitlines() if line.strip()]
+        output = [line for line in str(p.stdout.read()).splitlines() if line.strip()]
         exitCode = p.wait()
 
         # Skip any leading logo output by some of the later versions of rc.exe
@@ -864,7 +864,7 @@ class MsvcCompiler(Compiler):
         exitCode = p.wait()
         
         outputLines = []
-        for line in output.decode("latin1").splitlines():
+        for line in str(output).splitlines():
           if not line.rstrip():
             continue
           outputLines.append(line)
@@ -955,7 +955,7 @@ class MsvcCompiler(Compiler):
       exitCode = p.wait()
       
       outputLines = []
-      for line in output.decode("latin1").splitlines():
+      for line in str(output).splitlines():
         if not line.rstrip():
           continue
         outputLines.append(line)

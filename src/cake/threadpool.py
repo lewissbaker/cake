@@ -14,6 +14,7 @@ import sys
 import platform
 import traceback
 import atexit
+import collections
 
 if platform.system() == 'Windows':
   try:
@@ -47,28 +48,29 @@ class _JobQueue(object):
   def __init__(self):
     """Construct the job queue.
     """    
-    self._jobSemaphore = threading.Semaphore(0)
-    self._jobs = []
+    self._jobs = collections.deque()
 
   def get(self):
     """Get the next job from the front of the queue.
     
-    Blocks until a job is available.
+    Returns an empty job if no jobs are available.
     """
-    self._jobSemaphore.acquire() # Wait for next job
-    return self._jobs.pop(0)
+    try:
+      return self._jobs.popleft()
+    except IndexError:
+      def emptyJob():
+        pass
+      return emptyJob
 
   def putBack(self, job):
     """Put a job on the end of the queue.
     """
     self._jobs.append(job)
-    self._jobSemaphore.release() # Signal a new job
     
   def putFront(self, job):
     """Put a job on the front of the queue.
     """
-    self._jobs.insert(0, job)
-    self._jobSemaphore.release() # Signal a new job 
+    self._jobs.appendleft(job)
 
 class ThreadPool(object):
   """Manages a pool of worker threads that it delegates jobs to.

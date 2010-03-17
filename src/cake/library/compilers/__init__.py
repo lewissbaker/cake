@@ -26,10 +26,26 @@ class CompilerNotFoundError(Exception):
   pass
 
 class PchTarget(FileTarget):
-  def __init__(self, path, header, task):
+  def __init__(self, path, header, object, task):
     self.path = path
     self.header = header
+    self.object = object
     self.task = task
+
+def getLinkPathsAndTasks(files):
+  paths = []
+  tasks = []
+  for f in files:
+    if isinstance(f, PchTarget):
+      if f.object is not None:
+        paths.append(f.object)
+        tasks.append(f.task)
+    elif isinstance(f, FileTarget):
+      paths.append(f.path)
+      tasks.append(f.task)
+    else:
+      paths.append(f)
+  return paths, tasks
 
 class Command(object):
   
@@ -47,7 +63,7 @@ def makeCommand(args):
   def run(func):
     return Command(args, func)
   return run
-
+      
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
   
@@ -451,17 +467,30 @@ class Compiler(Tool):
 
     if forceExtension:
       target = cake.path.forceExtension(target, self.pchSuffix)
+    object = self._getPchObject(target)
     
     source, sourceTask = getPathAndTask(source)
     
     pchTask = engine.createTask(
-      lambda t=target, s=source, h=header, e=engine, c=self:
-        c.buildPch(t, s, h, e)
+      lambda t=target, s=source, h=header, o=object, e=engine, c=self:
+        c.buildPch(t, s, h, o, e)
       )
     pchTask.startAfter(sourceTask)
     
-    return PchTarget(path=target, header=header, task=pchTask)
-  
+    return PchTarget(path=target, header=header, object=object, task=pchTask)
+    
+  def _getPchObject(self, path):
+    """Return the path to the pch object file given a pch target path.
+    
+    @param path: Path to the target pch file.
+    @type path: string
+    
+    @return: Path to the pch object file or None if not supported by this
+    compiler.
+    @rtype: string or None
+    """
+    return None
+
   def object(self, target, source, pch=None, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
     
@@ -608,7 +637,7 @@ class Compiler(Tool):
     script = Script.getCurrent()
     engine = script.engine
 
-    paths, tasks = getPathsAndTasks(sources)
+    paths, tasks = getLinkPathsAndTasks(sources)
 
     for libraryScript in compiler.libraryScripts:
       tasks.append(engine.execute(libraryScript, script.variant))
@@ -632,7 +661,7 @@ class Compiler(Tool):
     # XXX: What about returning paths to import libraries?
     
     return FileTarget(path=target, task=moduleTask)
-    
+
   def program(self, target, sources, forceExtension=True, **kwargs):
     """Build an executable program.
 
@@ -657,7 +686,7 @@ class Compiler(Tool):
     script = Script.getCurrent()
     engine = script.engine
 
-    paths, tasks = getPathsAndTasks(sources)
+    paths, tasks = getLinkPathsAndTasks(sources)
     
     for libraryScript in compiler.libraryScripts:
       tasks.append(engine.execute(libraryScript, script.variant))
@@ -724,38 +753,72 @@ class Compiler(Tool):
     else:
       return libraryPaths, unresolvedLibs
   
-  def buildPch(self, target, source, header, engine):
-    commands = self.getPchCommands(
+  def buildPch(self, target, source, header, object, engine):
+    compile, args, _ = self.getPchCommands(
       target,
       source,
       header,
+      object,
       engine,
       )
     
-    self.buildCachedObject(
-      target,
-      source,
-      commands,
-      engine,
+    # Check if the target needs building
+    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    if not reasonToBuild:
+      return # Target is up to date
+    engine.logger.outputDebug(
+      "reason",
+      "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
+
+    targets = [FileInfo(path=target)]
+    if object is not None:
+      targets.append(FileInfo(path=object))
+    newDependencyInfo = DependencyInfo(
+      targets=targets,
+      args=args,
+      dependencies=None,
+      )
+
+    # If we get to here then we didn't find the object in the cache
+    # so we need to actually execute the build.
+    engine.logger.outputInfo("Compiling %s\n" % source)
+    compileTask = compile()
+
+    def storeDependencyInfoAndCache():
+     
+      # Since we are sharing this object in the object cache we need to
+      # make any paths in this workspace relative to the current workspace.
+      dependencies = []
+      if self.objectCacheWorkspaceRoot is None:
+        dependencies = [os.path.abspath(p) for p in compileTask.result]
+      else:
+        workspaceRoot = os.path.normcase(
+          os.path.abspath(self.objectCacheWorkspaceRoot)
+          ) + os.path.sep
+        workspaceRootLen = len(workspaceRoot)
+        for path in compileTask.result:
+          path = os.path.abspath(path)
+          pathNorm = os.path.normcase(path)
+          if pathNorm.startswith(workspaceRoot):
+            path = path[workspaceRootLen:]
+          dependencies.append(path)
+      
+      getTimestamp = engine.getTimestamp
+      
+      newDependencyInfo.dependencies = [
+        FileInfo(
+          path=path,
+          timestamp=getTimestamp(path),
+          )
+        for path in dependencies
+        ]
+      engine.storeDependencyInfo(newDependencyInfo)
+        
+    storeDependencyTask = engine.createTask(storeDependencyInfoAndCache)
+    storeDependencyTask.startAfter(compileTask, immediate=True)
 
   def buildObject(self, target, source, pch, engine):
-    commands = self.getObjectCommands(
-      target,
-      source,
-      pch,
-      engine,
-      )
-    
-    self.buildCachedObject(
-      target,
-      source,
-      commands,
-      engine,
-      )
-    
-
-  def buildCachedObject(self, target, source, commands, engine):
     """Perform the actual build of an object.
     
     @param target: Path of the target object file.
@@ -766,7 +829,12 @@ class Compiler(Tool):
     
     @param engine: The build Engine to use when building this object.
     """
-    compile, args, canBeCached = commands
+    compile, args, canBeCached = self.getObjectCommands(
+      target,
+      source,
+      pch,
+      engine,
+      )
     
     # Check if the target needs building
     oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(target, args)
@@ -972,7 +1040,7 @@ class Compiler(Tool):
     storeDependencyTask = engine.createTask(storeDependencyInfoAndCache)
     storeDependencyTask.startAfter(compileTask, immediate=True)
   
-  def getPchCommands(self, target, source, header, engine):
+  def getPchCommands(self, target, source, header, object, engine):
     """Get the command-lines for compiling a precompiled header.
     
     @return: A (compile, args, canCache) tuple where 'compile' is a function that

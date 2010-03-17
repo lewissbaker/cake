@@ -306,16 +306,16 @@ class GccCompiler(Compiler):
         }.get(cake.path.extension(path).lower(), 'c++')
     return language
   
-  def getPchCommands(self, target, source, header, engine):
+  def getPchCommands(self, target, source, header, object, engine):
     language = self.getLanguage(source)
     
-    # Pch must be compiled as eg: 'c++-header'
+    # Pch must be compiled as a header, eg: 'c++-header'
     if not language.endswith('-header'):
       language += '-header'
 
     args = list(self._getCompileArgs(language))
-    args += [source, '-o', target]
-    
+    args.extend([source, '-o', target])
+
     def compile():
       self._executeProcess(args, target, engine)
 
@@ -340,7 +340,7 @@ class GccCompiler(Compiler):
     
     canBeCached = True
     return command, args, canBeCached
-
+  
   def getObjectCommands(self, target, source, pch, engine):
     language = self.getLanguage(source)
     args = list(self._getCompileArgs(language))
@@ -351,7 +351,7 @@ class GccCompiler(Compiler):
         '-include', cake.path.stripExtension(pch.path),
         ])
       
-    args += [source, '-o', target]
+    args.extend([source, '-o', target])
     
     def compile():
       self._executeProcess(args, target, engine)

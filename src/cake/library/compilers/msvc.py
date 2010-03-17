@@ -225,6 +225,9 @@ def _escapeArg(arg):
 def _escapeArgs(args):
   return [_escapeArg(arg) for arg in args]
 
+def _mungePathToSymbol(path):
+  return "_PCH_" + hex(abs(hash(path)))[2:]
+
 class MsvcCompiler(Compiler):
 
   _lineRegex = re.compile('#line [0-9]+ "(?P<path>.+)"', re.MULTILINE)
@@ -351,7 +354,6 @@ class MsvcCompiler(Compiler):
     args.extend("/I" + path for path in reversed(self.includePaths))
     args.extend("/FI" + path for path in self.forcedIncludes)
 
- 
     return args 
     
   @property
@@ -388,40 +390,77 @@ class MsvcCompiler(Compiler):
         ])
       
     return env
-    
-  def getObjectCommands(self, target, source, pch, engine):
-    
+  
+  def _getPchObject(self, path):
+    return cake.path.stripExtension(path) + self.objectSuffix
+  
+  def getLanguage(self, path):
     language = self.language
     if language is None:
-      # Try to auto-detect
-      if source.lower().endswith('.c'):
-        language = 'c'
-      else:
-        language = 'c++'
+      language = {
+        '.c':'c',
+        }.get(cake.path.extension(path).lower(), 'c++')
+    return language
 
-    processEnv = dict(self._getProcessEnv())    
-    compileArgs = list(self._getCompileCommonArgs(language))
+  def getPchCommands(self, target, source, header, object, engine):
+    language = self.getLanguage(source)
+    
+    args = list(self._getCompileCommonArgs(language))
     
     if language == 'c':
-      compileArgs.append('/Tc' + source)
+      args.append('/Tc' + source)
     else:
-      compileArgs.append('/Tp' + source)
+      args.append('/Tp' + source)
 
+    args.extend([
+      '/Yl' + _mungePathToSymbol(target),
+      '/Fp' + target,
+      '/Yc' + header,
+      ])
+
+    args.append('/Fo' + object)
+
+    return self._getObjectCommands(target, source, args, None, engine)
+    
+  def getObjectCommands(self, target, source, pch, engine):
+    language = self.getLanguage(source)
+
+    args = list(self._getCompileCommonArgs(language))
+    
+    if language == 'c':
+      args.append('/Tc' + source)
+    else:
+      args.append('/Tp' + source)
+      
+    if pch is not None:
+      args.extend([
+        '/Yl' + _mungePathToSymbol(pch.path),
+        '/Fp' + pch.path,
+        '/Yu' + pch.header,
+        ])
+      deps = [pch.path]
+    else:
+      deps = []
+
+    args.append('/Fo' + target)
+    
+    return self._getObjectCommands(target, source, args, deps, engine)
+  
+  def _getObjectCommands(self, target, source, args, deps, engine):
+    
     if self._needPdbFile:
       if self.pdbFile is not None:
         pdbFile = self.pdbFile
       else:
         pdbFile = target + '.pdb'
-      compileArgs.append('/Fd' + pdbFile)
+      args.append('/Fd' + pdbFile)
     else:
       pdbFile = None
-
-    compileArgs.append('/Fo' + target)
-    
+      
     def compile():
       engine.logger.outputDebug(
         "run",
-        "run: %s\n" % " ".join(compileArgs),
+        "run: %s\n" % " ".join(args),
         )
 
       cake.filesys.makeDirs(cake.path.dirName(target))
@@ -431,9 +470,9 @@ class MsvcCompiler(Compiler):
         # Launch the process
         try:
           p = subprocess.Popen(
-            args=compileArgs,
+            args=args,
             executable=self.__clExe,
-            env=processEnv,
+            env=self._getProcessEnv(),
             stdin=subprocess.PIPE,
             stdout=errFile,
             stderr=errFile,
@@ -518,7 +557,7 @@ class MsvcCompiler(Compiler):
       compileTask.start(immediate=True)
       return compileTask
       
-    return startCompile, compileArgs, canBeCached
+    return startCompile, args, canBeCached
 
   @memoise
   def _getCommonLibraryArgs(self):

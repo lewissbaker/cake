@@ -249,7 +249,7 @@ class MwcwCompiler(Compiler):
         }.get(cake.path.extension(source).lower(), 'c++')
    
     args = list(self._getCompileArgs(language))
-    args += [source, '-o', target]
+    args.extend([source, '-o', target])
     
     def compile():
       self._executeProcess(args, target, engine)

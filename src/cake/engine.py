@@ -74,8 +74,8 @@ class Variant(object):
   def clone(self, **keywords):
     """Create an independent copy of this variant.
     
-    @param name: The name of the new variant.
-    @type name: string or None
+    @param keywords: The name/value pairs that define the new variant.
+    @type keywords: dict of string->string
     
     @return: The new Variant.
     """

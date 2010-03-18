@@ -75,7 +75,7 @@ class ScriptTool(Tool):
     A given script will only be included once.
     
     @param scripts: A path or sequence of paths of scripts to include.
-    @type path: string or sequence of string
+    @type scripts: string or sequence of string
     """
     include = Script.getCurrent().include
     if isinstance(scripts, basestring):

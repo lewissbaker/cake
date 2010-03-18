@@ -8,10 +8,12 @@
 import sys
 import threading
 
-from cake.threadpool import ThreadPool, getProcessorCount
+_threadPool = None
 
-_threadPool = ThreadPool(numWorkers=getProcessorCount())
-
+def setThreadPool(threadPool):
+  global _threadPool
+  _threadPool = threadPool
+  
 class TaskError(Exception):
   """An exception type raised by the L{Task} class.
   """

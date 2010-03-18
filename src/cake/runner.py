@@ -20,6 +20,7 @@ import cake.engine
 import cake.task
 import cake.path
 import cake.filesys
+import cake.threadpool
 
 def searchUpForFile(path, file):
   """Search a specified directory and its parent directories for a file.
@@ -149,6 +150,14 @@ def run(args=None, cwd=None):
     default=False,
     )
   parser.add_option(
+    "-j", "--jobs",
+    metavar="JOBCOUNT",
+    type="int",
+    dest="jobs",
+    help="Number of simultaneous jobs to execute.",
+    default=cake.threadpool.getProcessorCount(),
+    )
+  parser.add_option(
     "-p", "--profile",
     metavar="FILE",
     dest="profileOutput",
@@ -205,8 +214,9 @@ def run(args=None, cwd=None):
     p = cProfile.Profile()
     p.enable()
     threadPool = cake.threadpool.DummyThreadPool()
-    oldThreadPool = cake.task._threadPool
-    cake.task._threadPool = threadPool
+  else:
+    threadPool = cake.threadpool.ThreadPool(options.jobs)
+  cake.task.setThreadPool(threadPool)
 
   if options.boot is None:
     options.boot = searchUpForFile(scriptDir, 'boot.cake')
@@ -289,7 +299,6 @@ def run(args=None, cwd=None):
   if options.profileOutput:
     mainTask.addCallback(threadPool.quit)
     threadPool.run()
-    cake.task._threadPool = oldThreadPool
   else:
     # We must wait in a loop in case a KeyboardInterrupt comes.
     while not finished.isSet():

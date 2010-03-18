@@ -555,7 +555,7 @@ class Compiler(Tool):
     """
     return getPathsAndTasks(self.forcedIncludes)[1]
     
-  def objects(self, targetDir, sources, pch, **kwargs):
+  def objects(self, targetDir, sources, pch=None, **kwargs):
     """Build a collection of objects to a target directory.
     
     @param targetDir: Path to the target directory where the built objects

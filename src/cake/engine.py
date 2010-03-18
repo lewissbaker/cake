@@ -199,14 +199,17 @@ class Engine(object):
           )
         exceptionString = ''.join(traceback.format_exception_only(type(e), e))
         message = 'Unhandled Task Exception:\n%s%s' % (tracebackString, exceptionString)
+        if not self.logger.debugEnabled("stack"):
+          message += "Pass '-d stack' if you require a more complete stack trace.\n"    
         self.logger.outputError(message)
         raise
 
     task = cake.task.Task(_wrapper)
 
-    # Set a traceback for the parent script task    
-    if Script.getCurrent() is not None:
-      task.traceback = traceback.extract_stack()[:-1]
+    # Set a traceback for the parent script task
+    if self.logger.debugEnabled("stack"):    
+      if Script.getCurrent() is not None:
+        task.traceback = traceback.extract_stack()[:-1]
 
     return task
     

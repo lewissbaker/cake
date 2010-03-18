@@ -25,6 +25,18 @@ class Logger(object):
     self.errorCount = 0
     self.warningCount = 0
     self._lock = threading.Lock()
+  
+  def debugEnabled(self, keyword):
+    """Returns True if currently debugging the given component.
+    
+    @param keyword: The component to check.
+    @type keyword: string
+    
+    @return: True if the logger is debugging the given component,
+    otherwise False.
+    @rtype: bool
+    """
+    return keyword in self.debugComponents
     
   def outputError(self, message):
     """Output an error message.

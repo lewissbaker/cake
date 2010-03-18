@@ -20,6 +20,7 @@ class MwcwCompiler(Compiler):
 
   libraryPrefixSuffixes = [('', '.a')]
   programSuffix = '.elf'
+  pchSuffix = '.mch'
 
   def __init__(
     self,
@@ -244,15 +245,54 @@ class MwcwCompiler(Compiler):
     
     return args
 
-  def getObjectCommands(self, target, source, pch, engine):
+  def getLanguage(self, path): 
     language = self.language
     if not language:
       language = {
         '.c':'c99',
         '.m':'objc',
-        }.get(cake.path.extension(source).lower(), 'c++')
+        }.get(cake.path.extension(path).lower(), 'c++')
+    return language
+
+  def getPchCommands(self, target, source, header, object, engine):
+    language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))
+    args.extend([source, '-precompile', target])
+    
+    def compile():
+      self._executeProcess(args, target, engine)
+
+      dependencyFile = cake.path.stripExtension(target) + '.d'
+      engine.logger.outputDebug(
+        "scan",
+        "scan: %s\n" % dependencyFile,
+        )
+      
+      # TODO: Add dependencies on DLLs used by gcc.exe
+      dependencies = [args[0]]
+      dependencies.extend(parseDependencyFile(
+        dependencyFile,
+        cake.path.extension(target),
+        ))
+      return dependencies
+
+    def command():
+      task = engine.createTask(compile)
+      task.start(immediate=True)
+      return task
+
+    canBeCached = True
+    return command, args, canBeCached   
+          
+  def getObjectCommands(self, target, source, pch, engine):
+    language = self.getLanguage(source)
+   
+    args = list(self._getCompileArgs(language))
+
+    if pch is not None:
+      args.extend(['-include', pch.path])
+
     args.extend([source, '-o', target])
     
     def compile():
@@ -270,6 +310,8 @@ class MwcwCompiler(Compiler):
         dependencyFile,
         cake.path.extension(target),
         ))
+      if pch is not None:
+        dependencies.append(pch.path)
       return dependencies
 
     def command():

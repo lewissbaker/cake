@@ -68,47 +68,172 @@ def makeCommand(args):
       
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
-  
-  @ivar debugSymbols: If true then the compiler will output debug symbols.
-  @type debugSymbols: boolean
   """
   
   NO_OPTIMISATION = 0
+  """No optimisation.
+  
+  Your code should run slowest at this level.
+  """
   PARTIAL_OPTIMISATION = 1
+  """Code is partially optimised.
+  
+  Depending on the compiler this may include everything up to but
+  not including link-time code generation.
+  """
   FULL_OPTIMISATION = 2
-
-  # Map of engine to map of library path to list of object paths
-  __libraryObjects = weakref.WeakKeyDictionary()
-
-  ###
-  # Default settings
-  ###
+  """Code is fully optimised.
   
+  This may include link-time code generation for compilers that
+  support it.
+  """
   debugSymbols = False
+  """Enable debug symbols.
+  
+  Enabling debug symbols will allow you to debug your code, but will
+  significantly increase the size of the executable.
+  @type: bool
+  """
   optimisation = NO_OPTIMISATION
+  """The optimisation level.
   
+  Available values are: L{NO_OPTIMISATION} L{PARTIAL_OPTIMISATION}
+  L{FULL_OPTIMISATION}
+  @type: enum 
+  """
   enableRtti = True
+  """Enable Run-Time Type Information for C++ compilation.
+  
+  Disabling RTTI can reduce the executable size, but will prevent you from
+  using dynamic_cast to downcast between classes.
+  @type: bool 
+  """
   enableExceptions = True
+  """Enable exception handling.
   
+  Disabling exceptions can significantly reduce the size of the executable.  
+  @type: bool
+  """  
   warningLevel = None
+  """Set the warning level.
+  
+  What the warning level does may depend on the compiler, but in general
+  setting it to 0 will disable all warnings, and setting it to 4 will
+  enable all warnings.   
+  @type: int
+  """
   warningsAsErrors = False
+  """Treat warnings as errors.
   
+  If enabled warnings will be treated as errors and may prevent compilation
+  from succeeding.
+  @type: bool
+  """
   objectSuffix = '.o'
-  libraryPrefixSuffixes = [('lib', '.a')]
-  moduleSuffix = '.so'
-  programSuffix = ''
-  pchSuffix = '.gch'
+  """The suffix to use for object files.
   
-  linkObjectsInLibrary = False
-  outputMapFile = False
-  useIncrementalLinking = False
-  useFunctionLevelLinking = False
-  stackSize = None
-  heapSize = None
+  @type: string
+  """
+  libraryPrefixSuffixes = [('lib', '.a')]
+  """A collection of prefixes and suffixes to use for library files.
+  
+  The first prefix and suffix in the collection will be used as the
+  default prefix/suffix.
+  @type: list of tuple(string, string)
+  """
+  moduleSuffix = '.so'
+  """The suffix to use for module files.
 
+  @type: string
+  """
+  programSuffix = ''
+  """The suffix to use for program files.
+
+  @type: string
+  """
+  pchSuffix = '.gch'
+  """The suffix to use for precompiled header files.
+
+  @type: string
+  """
+  linkObjectsInLibrary = False
+  """Link objects rather than libraries.
+  
+  Linking objects can provide faster program/module links, especially
+  if incremental linking is also enabled.
+
+  Note that libraries will still be built, but only the object files will
+  be passed to the compilers link line.
+  @type: bool
+  """
+  outputMapFile = False
+  """Output a map file.
+  
+  If enabled the compiler will output a map file that matches the name of
+  the executable. The map file will contain a list of symbols used in the
+  program or module, and their addresses.
+  @type: bool
+  """
+  useIncrementalLinking = False
+  """Use incremental linking.
+  
+  Incremental linking may speed up linking, but will also increase the size
+  of the program or module.
+  @type: bool
+  """
+  useFunctionLevelLinking = False
+# TODO: Combine this option into FULL_OPTIMISATION instead?  
+  """Use function-level linking.
+  
+  When function-level linking is enabled the linker will strip out any unused
+  functions. For some compilers this option will also strip out any unused
+  data.
+  @type: bool
+  """
+  stackSize = None
+  """The stack size of a program or module.
+  
+  If the value is None the compiler will use it's default stack sizes.
+  If the value is a single int then the value is the stack reserve size.
+  If the value is a tuple(int, int) then the first value is the reserve
+  size and the second value is the commit size.
+   
+  Note that some compilers may require you to set the stack size in the linker
+  script instead (see L{linkerScript}).
+  @type: None or int or tuple(int, int)
+  """
+  heapSize = None
+  """The heap size of a program or module.
+  
+  If the value is None the compiler will use it's default heap sizes.
+  If the value is a single int then the value is the heap reserve size.
+  If the value is a tuple(int, int) then the first value is the reserve
+  size and the second value is the commit size.
+  @type: None or int or tuple(int, int)
+  """
   linkerScript = None
-    
+  """The linker script for a program or module.
+  
+  This should be the path to the linker script file.
+  @type: None or string
+  """
   objectCachePath = None
+  """The path to the object cache.
+  
+  Setting this to a path will enable caching of object files for
+  compilers that support it. If an object file with the same checksum of
+  dependencies exists in the cache then it will be copied from the cache
+  rather than being compiled.
+  
+  You can share an object cache with others by putting the object cache
+  on a network share. You will also have to make sure all of your project
+  paths match. This could be done by using a virtual drive. An alternative
+  is to set a workspace root, but this can be problematic for debugging
+  (see L{objectCacheWorkspaceRoot}).
+  
+  If the value is None then object caching will be turned off.
+  @type: None or string
+  """
   
   # Set this if the object cache is to be shared across workspaces.
   # This will cause objects and their dependencies under this directory
@@ -129,6 +254,19 @@ class Compiler(Tool):
   importLibrary = None
   embedManifest = False
   useSse = False
+  """Use Streaming SIMD Extensions.
+  
+  If SSE if turned on the compiler may choose to optimise scalar floating
+  point math by using SSE instructions and registers that can perform
+  multiple operations in parallel.
+  
+  Note that if this value is turned on it is up to you to make sure the
+  architecture you are compiling for supports SSE instructions.
+  @type: bool
+  """
+
+  # Map of engine to map of library path to list of object paths
+  __libraryObjects = weakref.WeakKeyDictionary()
   
   def __init__(self):
     super(Compiler, self).__init__()

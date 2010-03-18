@@ -273,16 +273,18 @@ class GccCompiler(Compiler):
     else:
       args.append('-fno-exceptions')
 
+    if self.useFunctionLevelLinking:
+      args.extend([
+        '-ffunction-sections',
+        '-fdata-sections',
+        ])
+      
     if self.optimisation == self.NO_OPTIMISATION:
       args.append('-O0')
     elif self.optimisation == self.PARTIAL_OPTIMISATION:
       args.append('-O2')
     elif self.optimisation == self.FULL_OPTIMISATION:
-      args.extend([
-        '-O4',
-        '-ffunction-sections',
-        '-fdata-sections',
-        ])
+      args.append('-O4')
       
     if self.useSse:
       args.append('-msse')
@@ -466,7 +468,7 @@ class WindowsGccCompiler(GccCompiler):
     if dll:
       args.append('-shared')
 
-    if self.optimisation == self.FULL_OPTIMISATION:
+    if self.useFunctionLevelLinking:
       args.append('-Wl,--gc-sections')
       
     return args
@@ -496,7 +498,7 @@ class Ps3GccCompiler(GccCompiler):
     else:
       args.append('-Wl,--oformat=fself')
 
-    if self.optimisation == self.FULL_OPTIMISATION:
+    if self.useFunctionLevelLinking:
       args.extend([
         '-Wl,-strip-unused',
         '-Wl,-strip-unused-data',

@@ -41,6 +41,35 @@ class DummyCompiler(Compiler):
     args.extend('/FI%s' % p for p in getPathsAndTasks(self.forcedIncludes)[0])
     return args
 
+  def getPchCommands(self, target, source, header, object, engine):
+
+    language = self.language
+    if not language:
+      if source.lower().endswith('.c'):
+        language = 'c'
+      else:
+        language = 'c++'
+
+    compilerArgs = list(self._getCompileArgs(language))
+    compilerArgs += ['/H' + header, source, '/o' + target]
+    
+    def compile():
+      engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
+      cake.filesys.makeDirs(cake.path.dirName(target))
+      f = open(target, 'wb')
+      f.close()
+        
+      dependencies = [source]
+      return dependencies
+
+    def command():
+      task = engine.createTask(compile)
+      task.start(immediate=True)
+      return task
+
+    canBeCached = True
+    return command, compilerArgs, canBeCached
+
   def getObjectCommands(self, target, source, pch, engine):
 
     language = self.language
@@ -60,6 +89,8 @@ class DummyCompiler(Compiler):
       f.close()
         
       dependencies = [source]
+      if pch is not None:
+        dependencies.append(pch.path)
       return dependencies
 
     def command():

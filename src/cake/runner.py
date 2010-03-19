@@ -68,7 +68,31 @@ def _overrideOpen():
       flag |= os.O_NOINHERIT
       return old_os_open(filename, flag, mode)
     os.open = new_os_open
-  
+
+def _overridePopen():
+  """
+  Override the subprocess Popen class due to a bug in Python 2.4
+  that can cause an exception if a process finishes too quickly.
+  """
+  version = platform.python_version_tuple()
+  if version[0] == "2" and version[1] == "4":
+    import subprocess
+    
+    old_Popen = subprocess.Popen
+    class new_Popen(old_Popen):
+      def poll(self):
+        try:
+          return old_Popen.poll(self)
+        except ValueError:
+          return self.returncode
+      
+      def wait(self):
+        try:
+          return old_Popen.wait(self)
+        except ValueError:
+          return self.returncode
+    subprocess.Popen = new_Popen
+    
 def _speedUp():
   """
   Speed up execution by importing Psyco and binding the slowest functions
@@ -104,6 +128,9 @@ def run(args=None, cwd=None):
   if exited with success.
   @rtype: int
   """
+  # Override Popen to prevent an exception in Python 2.4
+  _overridePopen()
+  
   # Override open() functions to add the no-inherit flag
   _overrideOpen()
 

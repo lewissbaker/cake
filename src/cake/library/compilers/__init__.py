@@ -95,7 +95,7 @@ class Compiler(Tool):
   @type: bool
   """
   optimisation = NO_OPTIMISATION
-  """The optimisation level.
+  """Set the optimisation level.
   
   Available values are: L{NO_OPTIMISATION} L{PARTIAL_OPTIMISATION}
   L{FULL_OPTIMISATION}
@@ -105,7 +105,8 @@ class Compiler(Tool):
   """Enable Run-Time Type Information for C++ compilation.
   
   Disabling RTTI can reduce the executable size, but will prevent you from
-  using dynamic_cast to downcast between classes.
+  using dynamic_cast to downcast between classes, or typeid() to determine
+  the type of a class or struct.
   @type: bool 
   """
   enableExceptions = True
@@ -120,7 +121,7 @@ class Compiler(Tool):
   What the warning level does may depend on the compiler, but in general
   setting it to 0 will disable all warnings, and setting it to 4 will
   enable all warnings.   
-  @type: int
+  @type: int or None
   """
   warningsAsErrors = False
   """Treat warnings as errors.
@@ -164,14 +165,20 @@ class Compiler(Tool):
 
   Note that libraries will still be built, but only the object files will
   be passed to the compilers link line.
+  
+  If the linker you're using doesn't support response files then linking
+  objects may quickly cause the link command line to go over the command
+  line limit, causing your link to fail with unexpected results. 
   @type: bool
   """
   outputMapFile = False
+# TODO: Should this be a string mapFile name? It's inconsistent with importLibrary
+# at the moment.
   """Output a map file.
   
   If enabled the compiler will output a map file that matches the name of
   the executable. The map file will contain a list of symbols used in the
-  program or module, and their addresses.
+  program or module and their addresses.
   @type: bool
   """
   useIncrementalLinking = False
@@ -182,7 +189,6 @@ class Compiler(Tool):
   @type: bool
   """
   useFunctionLevelLinking = False
-# TODO: Combine this option into FULL_OPTIMISATION instead?  
   """Use function-level linking.
   
   When function-level linking is enabled the linker will strip out any unused
@@ -191,7 +197,7 @@ class Compiler(Tool):
   @type: bool
   """
   stackSize = None
-  """The stack size of a program or module.
+  """Set the stack size of a program or module.
   
   If the value is None the compiler will use it's default stack sizes.
   If the value is a single int then the value is the stack reserve size.
@@ -203,7 +209,7 @@ class Compiler(Tool):
   @type: None or int or tuple(int, int)
   """
   heapSize = None
-  """The heap size of a program or module.
+  """Set the heap size of a program or module.
   
   If the value is None the compiler will use it's default heap sizes.
   If the value is a single int then the value is the heap reserve size.
@@ -212,13 +218,13 @@ class Compiler(Tool):
   @type: None or int or tuple(int, int)
   """
   linkerScript = None
-  """The linker script for a program or module.
+  """Set the linker script for a program or module.
   
-  This should be the path to the linker script file.
-  @type: None or string
+  This should be set to the path of linker script file.
+  @type: string or None
   """
   objectCachePath = None
-  """The path to the object cache.
+  """Set the path to the object cache.
   
   Setting this to a path will enable caching of object files for
   compilers that support it. If an object file with the same checksum of
@@ -232,27 +238,82 @@ class Compiler(Tool):
   (see L{objectCacheWorkspaceRoot}).
   
   If the value is None then object caching will be turned off.
-  @type: None or string
+  @type: string or None
   """
-  
-  # Set this if the object cache is to be shared across workspaces.
-  # This will cause objects and their dependencies under this directory
-  # to be stored as paths relative to this directory. This allows 
-  # workspaces at different paths to reuse object files with the 
-  # potential danger of debug information embedded in the object
-  # files referring to paths in the wrong workspace.
   objectCacheWorkspaceRoot = None
-
+  """Set the object cache workspace root.
+  
+  Set this if the object cache is to be shared across workspaces.
+  This will cause objects and their dependencies under this directory
+  to be stored as paths relative to this directory. This allows 
+  workspaces at different paths to reuse object files with the 
+  potential danger of debug information embedded in the object
+  files referring to paths in the wrong workspace.
+  @type: string or None
+  """
   language = None
- 
-  # This is defined here so that .cake scripts don't have to
-  # check if the compiler is msvc before setting it. Compilers
-  # that don't use them can just ignore them. 
+  """Set the compilation language.
+  
+  If the value is set then the compiler will compile all source files
+  using the specified language. Example languages are 'c', 'c++'.  
+  If the value is None then the language is determined automatically
+  based on the extension of each source file.
+  @type: string or None
+  """
   pdbFile = None
+  """Set the path to the program database file.
+  
+  If set to a string path the program database file will be generated
+  at the given path.
+  
+  If set to None a program database may still be generated with the
+  name of the executable and the extension .pdb.
+  
+  @type: string or None
+  """
   strippedPdbFile = None
+  """Set the path to the stripped program database file.
+  
+  If set to a string path a stripped version of the PDB file will be
+  generated at the given path. The stripped version will only include
+  public symbols. It will not contain type information or line number
+  information.
+  
+  If set to None a stripped PDB file will not be generated.
+   
+  @type: string or None
+  """
   subSystem = None
+  """Set the sub-system.
+  
+  Set the sub-system for a Windows executable build. Possible values
+  are CONSOLE, NATIVE, POSIX, WINDOWS, WINDOWSCE. The optional values
+  [,major[.minor]] can be appended that specify the minimum required
+  version of the sub-system.
+  
+  If set to None and WinMain or wWinMain is defined, WINDOWS will
+  be the default.
+  If set to None and main or wmain is defined, CONSOLE will be the
+  default.  
+  @type: string or None
+  """
   importLibrary = None
+  """Set the path to the import library.
+  
+  When set to a string path an import library for module()'s will be
+  generated at the given path.
+  When set to None no import library is generated.
+  
+  @type: string or None
+  """
   embedManifest = False
+  """Embed the manifest in the executable.
+  
+  If True the manifest file is embedded within the executable, otherwise
+  no manifest file is generated.
+  
+  @type: bool
+  """
   useSse = False
   """Use Streaming SIMD Extensions.
   

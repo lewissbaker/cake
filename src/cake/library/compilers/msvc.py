@@ -19,7 +19,7 @@ import cake.filesys
 import cake.path
 import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
-from cake.library import memoise, getPathAndTask, getPathsAndTasks, FileTarget
+from cake.library import memoise, getPathsAndTasks
 from cake.task import Task
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
 from cake.engine import Script
@@ -231,6 +231,79 @@ def _mungePathToSymbol(path):
 
 class MsvcCompiler(Compiler):
 
+  outputFullPath = True
+  """Tell the compiler to output full paths.
+  
+  When set to True the compiler will output full (absolute) paths to
+  source files during compilation. This applies to the paths output for
+  warnings/errors and the __FILE__ macro.
+  @type: bool
+  """
+  memoryLimit = None
+  """Set the memory limit for the precompiled header.
+  
+  The value is scaling factor such that 100 means a memory limit of 50MB,
+  200 means a memory limit of 100MB, etc.
+  If set to None the default memory limit of 100 (50MB) is used.
+  @type: int or None
+  """
+  runtimeLibraries = None
+  """Set the runtime libraries to use.
+  
+  Possible values are 'debug-dll', 'release-dll', 'debug-static' and
+  'release-static'.
+  @type: string or None
+  """
+  moduleVersion = None
+  """Set the program/module version.
+  
+  The version string should be of the form 'major[.minor]'. Where major and
+  minor are decimal integers in the range 0 to 65,535.
+  If set to None the default version 0.0 is used.
+  @type: string or None
+  """
+  useStringPooling = False
+  """Use string pooling.
+  
+  When set to True the compiler may eliminate duplicate strings by sharing
+  strings that are identical.
+  @type: bool
+  """
+  useMinimalRebuild = False
+  """Use minimal rebuild.
+  
+  When set to True the compiler may choose not to recompile your source file
+  if it determines that the information stored in it's dependency information
+  file (.idb) has not changed.
+  @type: bool
+  """
+  useEditAndContinue = False
+  """Use Edit and Continue.
+  
+  When set to True the compiler will produce debug information that supports
+  the Edit and Continue feature. This option is generally not compatible with
+  any form of program/code optimisation. Enabling this option will also
+  enable function-level linking. This option is also not compatible with
+  Common Language Runtime (CLR) compilation. 
+  @type: bool
+  """
+  errorReport = None
+  """Set the error reporting behaviour.
+  
+  This value allows you to set how your program should send internal
+  compiler error (ICE) information to Microsoft.
+  Possible values are 'none', 'prompt', 'queue' and 'send'.
+  When set to None the default error reporting behaviour 'queue' is used.
+  @type: string or None
+  """
+  clrMode = None
+  """Set the Common Language Runtime (CLR) mode.
+  
+  Set to 'pure' to allow native data types but only managed functions.
+  Set to 'safe' to only allow managed types and functions.
+  @type: string or None
+  """ 
+
   _lineRegex = re.compile('#line [0-9]+ "(?P<path>.+)"', re.MULTILINE)
   
   _pdbQueue = {}
@@ -242,21 +315,6 @@ class MsvcCompiler(Compiler):
   programSuffix = '.exe'
   pchSuffix = '.pch'
   
-  outputFullPath = True
-  memoryLimit = None
-  runtimeLibraries = None
-  moduleVersion = None
-  
-  useStringPooling = False
-  useMinimalRebuild = False
-  useEditAndContinue = False
-  
-  errorReport = 'queue'
-  
-  # Set to 'pure' to allow native data types but only managed functions
-  # Set to 'safe' to only allow managed types and functions 
-  clrMode = None
-
   def __init__(
     self,
     clExe=None,

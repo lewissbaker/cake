@@ -123,7 +123,7 @@ class ScriptTool(Tool):
       if targets:
         buildArgs = (args, sourcePaths)
         try:
-          oldDependencyInfo, reason = engine.checkDependencyInfo(targets[0], buildArgs)
+          _, reason = engine.checkDependencyInfo(targets[0], buildArgs)
           if reason is None:
             # Up to date
             return

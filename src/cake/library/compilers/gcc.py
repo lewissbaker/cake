@@ -249,9 +249,14 @@ class GccCompiler(Compiler):
     args = [self.__gccExe, '-c', '-MD']
 
     args.extend(['-x', language])
-
+    
     if self.warningsAsErrors:
       args.append('-Werror')
+
+    if self.warningLevel == 0:
+      args.append('-w')
+    elif self.warningLevel >= 4:
+      args.append('-Wall')
 
     if self.debugSymbols:
       args.append('-g')

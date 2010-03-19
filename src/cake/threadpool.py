@@ -42,36 +42,6 @@ else:
     except ImportError:
       return 1
 
-class _JobQueue(object):
-  """A lightweight job queue class, similar to Queue.Queue.
-  """
-  def __init__(self):
-    """Construct the job queue.
-    """    
-    self._jobs = collections.deque()
-
-  def get(self):
-    """Get the next job from the front of the queue.
-    
-    Returns an empty job if no jobs are available.
-    """
-    try:
-      return self._jobs.popleft()
-    except IndexError:
-      def emptyJob():
-        pass
-      return emptyJob
-
-  def putBack(self, job):
-    """Put a job on the end of the queue.
-    """
-    self._jobs.append(job)
-    
-  def putFront(self, job):
-    """Put a job on the front of the queue.
-    """
-    self._jobs.appendleft(job)
-
 class ThreadPool(object):
   """Manages a pool of worker threads that it delegates jobs to.
   
@@ -88,7 +58,7 @@ class ThreadPool(object):
     @param numWorkers: Initial number of worker threads to start.
     @type numWorkers: int
     """
-    self._jobQueue = _JobQueue()
+    self._jobQueue = collections.deque()
     self._workers = []
 
     # Create the worker threads
@@ -109,14 +79,14 @@ class ThreadPool(object):
     """
     # Submit the exit job directly to the back of the queue
     for _ in xrange(len(self._workers)):
-      self._jobQueue.putFront(self._EXIT_JOB)
+      self._jobQueue.appendleft(self._EXIT_JOB)
 
     # Wait for the threads to finish
     for thread in self._workers:
       thread.join()
 
     # Clear any references
-    self._jobQueue = _JobQueue()
+    self._jobQueue = collections.deque()
     self._workers[:] = []
     
   def queueJob(self, callable, front=False):
@@ -131,15 +101,19 @@ class ThreadPool(object):
     @type front: boolean
     """
     if front:
-      self._jobQueue.putFront(callable)
+      self._jobQueue.appendleft(callable)
     else:
-      self._jobQueue.putBack(callable)
+      self._jobQueue.append(callable)
   
   def _runThread(self):
     """Process jobs continuously until dismissed.
     """
     while True:
-      job = self._jobQueue.get()
+      try:
+        job = self._jobQueue.popleft()
+      except IndexError:
+        continue
+      
       if job is self._EXIT_JOB:
         break
 

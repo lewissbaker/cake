@@ -131,15 +131,15 @@ class Task(object):
     else:
       raise AttributeError("result only available on successful tasks")
     
-  def start(self, immediate=False):
+  def start(self, immediate=False, threadPool=None):
     """Start this task now.
     
     @raise TaskError: If this task has already been started or
     cancelled.
     """
-    self.startAfter(None, immediate)
+    self.startAfter(None, immediate, threadPool)
 
-  def startAfter(self, other, immediate=False):
+  def startAfter(self, other, immediate=False, threadPool=None):
     """Start this task after other tasks have completed.
     
     This task is cancelled (transition to Task.State.FAILED state) if any of the
@@ -152,6 +152,8 @@ class Task(object):
     cancelled.
     """
     otherTasks = _makeTasks(other)
+    if threadPool is None:
+      threadPool = _threadPool
     
     self._lock.acquire()
     try:
@@ -164,11 +166,11 @@ class Task(object):
       self._lock.release()
     
     for t in otherTasks:
-      t.addCallback(lambda t=t: self._startAfterCallback(t))
+      t.addCallback(lambda t=t, tp=threadPool: self._startAfterCallback(t, tp))
       
-    self._startAfterCallback(self)
+    self._startAfterCallback(self, threadPool)
 
-  def _startAfterCallback(self, task):
+  def _startAfterCallback(self, task, threadPool):
     """Callback that is called by each task we must start after.
     """
     callbacks = None
@@ -198,7 +200,7 @@ class Task(object):
       self._lock.release()
 
     if callbacks is None:
-      _threadPool.queueJob(self._execute, front=self._immediate)          
+      threadPool.queueJob(self._execute, front=self._immediate)          
     else:
       for callback in callbacks:
         try:

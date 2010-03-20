@@ -50,6 +50,8 @@ class ThreadPool(object):
     for i in xrange(50):
       pool.queueJob(lambda i=i: someFunction(i))
   """
+  _EXIT_JOB = "exit job"
+    
   def __init__(self, numWorkers):
     """Initialise the thread pool.
     
@@ -59,7 +61,6 @@ class ThreadPool(object):
     self._jobQueue = collections.deque()
     self._workers = []
     self._wakeCondition = threading.Condition(threading.Lock())
-    self._quit = False
 
     # Create the worker threads
     for _ in xrange(numWorkers):
@@ -77,9 +78,10 @@ class ThreadPool(object):
     On shutdown we complete any currently executing jobs then exit. Jobs
     waiting on the queue may not be executed.
     """
-    # Signal threads to exit after their current job
-    self._quit = True
-    
+    # Submit the exit job directly to the back of the queue
+    for _ in xrange(len(self._workers)):
+      self._jobQueue.appendleft(self._EXIT_JOB)
+          
     # Wake them up if they're sleeping
     self._wakeCondition.acquire()
     self._wakeCondition.notifyAll()
@@ -114,7 +116,7 @@ class ThreadPool(object):
   def _runThread(self):
     """Process jobs continuously until dismissed.
     """
-    while not self._quit:
+    while True:
       try:
         job = self._jobQueue.popleft()
       except IndexError:
@@ -124,6 +126,9 @@ class ThreadPool(object):
         self._wakeCondition.release()
         continue
       
+      if job is self._EXIT_JOB:
+        break
+            
       try:
         job()
       except Exception:

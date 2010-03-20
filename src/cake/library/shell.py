@@ -10,7 +10,7 @@ import subprocess
 import cake.filesys
 import cake.path
 from cake.library import Tool, FileTarget, deepCopyBuiltins, getPathsAndTasks
-from cake.engine import Script, DependencyInfo, FileInfo
+from cake.engine import Script, DependencyInfo
 
 _undefined = object()
 
@@ -74,15 +74,11 @@ class ShellTool(Tool):
         engine.raiseError(msg)
 
       if targets:
-        newDependencyInfo = DependencyInfo(
-          targets=[FileInfo(path=t) for t in targets],
+        newDependencyInfo = engine.createDependencyInfo(
+          targets=targets,
           args=buildArgs,
-          dependencies=[
-            FileInfo(path=s, timestamp=engine.getTimestamp(s))
-            for s in sourcePaths
-            ],
+          dependencies=sourcePaths,
           )
-
         engine.storeDependencyInfo(newDependencyInfo)
 
     sourcePaths, tasks = getPathsAndTasks(sources)

@@ -5,6 +5,7 @@
 @license: Licensed under the MIT license.
 """
 
+import codecs
 import threading
 import traceback
 import sys
@@ -422,28 +423,60 @@ class Engine(object):
     """
     try:
       dependencyInfo = self.getDependencyInfo(targetPath)
-
-      if self.forceBuild:
-        return dependencyInfo, "rebuild has been forced"
-
-      if dependencyInfo.version != DependencyInfo.VERSION:
-        return dependencyInfo, "'" + targetPath + ".dep' version has changed"
-
-      if args != dependencyInfo.args:
-        return dependencyInfo, "'" + repr(args) + "' != '" + repr(dependencyInfo.args) + "'"
-      
-      for target in dependencyInfo.targets:
-        if not target.exists(self):
-          return dependencyInfo, "'" + target.path + "' doesn't exist"
-      
-      for dependency in dependencyInfo.dependencies:
-        if dependency.hasChanged(self):
-          return dependencyInfo, "'" + dependency.path + "' has changed since last build"
-        
     except EnvironmentError:
       return None, "'" + targetPath + ".dep' doesn't exist"
+
+    if dependencyInfo.version != DependencyInfo.VERSION:
+      return None, "'" + targetPath + ".dep' version has changed"
+
+    if self.forceBuild:
+      return dependencyInfo, "rebuild has been forced"
+
+    if args != dependencyInfo.args:
+      return dependencyInfo, "'" + repr(args) + "' != '" + repr(dependencyInfo.args) + "'"
+    
+    isFile = cake.filesys.isFile
+    for target in dependencyInfo.targets:
+      if not isFile(target):
+        return dependencyInfo, "'" + target + "' doesn't exist"
+    
+    getTimestamp = self.getTimestamp
+    paths = dependencyInfo.depPaths
+    timestamps = dependencyInfo.depTimestamps
+    assert len(paths) == len(timestamps)
+    for i in xrange(len(paths)):
+      path = paths[i]
+      try:
+        if getTimestamp(path) != timestamps[i]:
+          return dependencyInfo, "'" + path + "' has changed since last build"
+      except EnvironmentError:
+        return dependencyInfo, "'" + path + "' no longer exists" 
     
     return dependencyInfo, None
+
+  def createDependencyInfo(self, targets, args, dependencies, calculateDigests=False):
+    """Construct a new DependencyInfo object.
+    
+    @param targets: A list of file paths of targets.
+    @type targets: list of string
+    @param args: A value representing the parameters of the build.
+    @type args: object
+    @param dependencies: A list of file paths of dependencies.
+    @type dependencies: list of string
+    @param calculateDigests: Whether or not to store the digests of
+    dependencies in the DependencyInfo.
+    @type calculateDigests: bool
+    
+    @return: A DependencyInfo object.
+    """
+    dependencyInfo = DependencyInfo(targets=list(targets), args=args)
+    paths = dependencyInfo.depPaths = list(dependencies)
+    getTimestamp = self.getTimestamp
+    dependencyInfo.depTimestamps = [getTimestamp(p) for p in paths]
+    if calculateDigests:
+      getFileDigest = self.getFileDigest
+      dependencyInfo.depDigests = [getFileDigest(p) for p in paths]
+    return dependencyInfo
 
   def storeDependencyInfo(self, dependencyInfo):
     """Call this method after a target was built to save the
@@ -452,9 +485,9 @@ class Engine(object):
     @param dependencyInfo: The dependency info object to be stored.
     @type dependencyInfo: L{DependencyInfo}  
     """
-    depPath = dependencyInfo.targets[0].path + '.dep'
+    depPath = dependencyInfo.targets[0] + '.dep'
     for target in dependencyInfo.targets:
-      self._dependencyInfoCache[target.path] = dependencyInfo
+      self._dependencyInfoCache[target] = dependencyInfo
     
     dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
     
@@ -470,22 +503,36 @@ class DependencyInfo(object):
   
   @ivar version: The version of this dependency info.
   @type version: int
-  @ivar targets: A list of target files.
-  @type targets: usually a list of L{FileInfo}'s
+  @ivar targets: A list of target file paths.
+  @type targets: list of strings
   @ivar args: The arguments used for the build.
   @type args: usually a list of string's
-  @ivar dependencies: A list of files the targets depend on.
-  @type dependencies: usually a list of L{FileInfo}'s
   """
   
-  VERSION = 1
+  VERSION = 3
   """The most recent DependencyInfo version."""
   
-  def __init__(self, targets, args, dependencies):
+  def __init__(self, targets, args):
     self.version = self.VERSION
     self.targets = targets
     self.args = args
-    self.dependencies = dependencies
+    self.depPaths = None
+    self.depTimestamps = None
+    self.depDigests = None
+
+  def primeFileDigestCache(self, engine):
+    """Prime the engine's file-digest cache using any cached
+    information stored in this dependency info.
+    """
+    if self.depDigests and self.depTimestamps:
+      assert len(self.depDigests) == len(self.depPaths)
+      assert len(self.depTimestamps) == len(self.depPaths)
+      paths = self.depPaths
+      timestamps = self.depTimestamps
+      digests = self.depDigests
+      updateFileDigestCache = engine.updateFileDigestCache
+      for i in xrange(len(paths)):
+        updateFileDigestCache(paths[i], timestamps[i], digests[i])
 
   def isUpToDate(self, engine, args):
     """Query if the targets are up to date.
@@ -497,15 +544,28 @@ class DependencyInfo(object):
     @return: True if the targets are up to date, otherwise False.
     @rtype: bool
     """
+    if self.version != self.VERSION:
+      return False
+    
     if args != self.args:
       return False
     
+    isFile = cake.filesys.isFile
     for target in self.targets:
-      if not target.exists(engine):
+      if not isFile(target):
         return False
+
+    assert len(self.depTimestamps) == len(self.depPaths)
     
-    for dependency in self.dependencies:
-      if dependency.hasChanged(engine):
+    getTimestamp = engine.getTimestamp
+    paths = self.depPaths
+    timestamps = self.depTimestamps
+    for i in xrange(len(paths)):
+      try:
+        if getTimestamp(paths[i]) != timestamps[i]:
+          return False
+      except EnvironmentError:
+        # File doesn't exist any more?
         return False
       
     return True
@@ -518,66 +578,28 @@ class DependencyInfo(object):
     @return: The current digest of the dependency info.
     @rtype: string of 20 bytes
     """
+    self.primeFileDigestCache(engine)
+    
     hasher = cake.hash.sha1()
+    addToDigest = hasher.update
+    
+    encodeToUtf8 = lambda value, encode=codecs.utf_8_encode: encode(value)[0]
+    getFileDigest = engine.getFileDigest 
     
     # Include the paths of the targets in the digest
-    for t in self.targets:
-      hasher.update(t.path.encode("utf8"))
+    for target in self.targets:
+      addToDigest(encodeToUtf8(target))
       
     # Include parameters of the build    
-    hasher.update(repr(self.args).encode("utf8"))
+    addToDigest(encodeToUtf8(repr(self.args)))
     
-    for d in self.dependencies:
-      
-      # Let the engine know of any cached file digests from a
-      # previous run.
-      if d.timestamp is not None and d.digest is not None:
-        engine.updateFileDigestCache(d.path, d.timestamp, d.digest)
-      
+    for path in self.depPaths:
       # Include the dependency file's path and content digest in
       # this digest.
-      hasher.update(d.path.encode("utf8"))
-      hasher.update(engine.getFileDigest(d.path))
+      addToDigest(encodeToUtf8(path))
+      addToDigest(getFileDigest(path))
       
     return hasher.digest()
-
-class FileInfo(object):
-  """A container for file information.
-  """
-  
-  VERSION = 1
-  """The most recent FileInfo version."""
-  
-  def __init__(self, path, timestamp=None, digest=None):
-    self.version = self.VERSION
-    self.path = path
-    self.timestamp = timestamp
-    self.digest = digest
-    
-  def exists(self, engine):
-    """Determine whether the file exists.
-    
-    @return: True if the file exists, otherwise false.
-    @rtype: bool
-    """
-    return os.path.isfile(self.path)
-    
-  def hasChanged(self, engine):
-    """Determine whether the file has changed.
-    
-    @return: True if the file has changed, otherwise false.
-    @rtype: bool
-    """
-    if self.version != FileInfo.VERSION:
-      return True
-    
-    try:
-      currentTimestamp = engine.getTimestamp(self.path)
-    except EnvironmentError:
-      # File doesn't exist any more?
-      return True 
-    
-    return currentTimestamp != self.timestamp
 
 class Script(object):
   """A class that represents an instance of a Cake script. 

@@ -5,7 +5,7 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script, DependencyInfo, FileInfo
+from cake.engine import Script, DependencyInfo
 from cake.library import Tool, FileTarget, getPathsAndTasks
 
 class ScriptTool(Tool):
@@ -139,16 +139,10 @@ class ScriptTool(Tool):
         return func()
       finally:
         if targets:
-          newDependencyInfo = DependencyInfo(
-            targets=[FileInfo(path=t) for t in targets],
+          newDependencyInfo = engine.createDependencyInfo(
+            targets=targets,
             args=buildArgs,
-            dependencies=[
-              FileInfo(
-                path=s,
-                timestamp=engine.getTimestamp(s),
-                )
-              for s in sourcePaths
-              ],
+            dependencies=sourcePaths,
             )
           engine.storeDependencyInfo(newDependencyInfo)
 

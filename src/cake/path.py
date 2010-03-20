@@ -151,7 +151,7 @@ def forceExtension(path, ext):
   @return: The path with the specified extension.
   @rtype: string
   """
-  if os.path.normcase(extension(path)) != os.path.normcase(ext):
+  if not os.path.normcase(path).endswith(os.path.normcase(ext)):
     return path + ext
   else:
     return path

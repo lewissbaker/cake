@@ -18,7 +18,7 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.engine import Script, DependencyInfo, FileInfo, BuildError
+from cake.engine import Script, DependencyInfo, BuildError
 from cake.library import (
   Tool, FileTarget, getPathsAndTasks, getPathAndTask, memoise
   )
@@ -979,14 +979,9 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    targets = [FileInfo(path=target)]
+    targets = [target]
     if object is not None:
-      targets.append(FileInfo(path=object))
-    newDependencyInfo = DependencyInfo(
-      targets=targets,
-      args=args,
-      dependencies=None,
-      )
+      targets.append(object)
 
     # If we get to here then we didn't find the object in the cache
     # so we need to actually execute the build.
@@ -1012,15 +1007,11 @@ class Compiler(Tool):
             path = path[workspaceRootLen:]
           dependencies.append(path)
       
-      getTimestamp = engine.getTimestamp
-      
-      newDependencyInfo.dependencies = [
-        FileInfo(
-          path=path,
-          timestamp=getTimestamp(path),
-          )
-        for path in dependencies
-        ]
+      newDependencyInfo = engine.createDependencyInfo(
+        targets=targets,
+        args=args,
+        dependencies=dependencies,
+        )
       engine.storeDependencyInfo(newDependencyInfo)
         
     storeDependencyTask = engine.createTask(storeDependencyInfoAndCache)
@@ -1053,12 +1044,6 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    newDependencyInfo = DependencyInfo(
-      targets=[FileInfo(path=target)],
-      args=args,
-      dependencies=None,
-      )
-      
     useCacheForThisObject = canBeCached and self.objectCachePath is not None
       
     if useCacheForThisObject:
@@ -1069,9 +1054,7 @@ class Compiler(Tool):
       # Prime the file digest cache from previous run so we don't have
       # to recalculate file digests for files that haven't changed.
       if oldDependencyInfo is not None:
-        for dep in oldDependencyInfo.dependencies:
-          if dep.timestamp is not None and dep.digest is not None:
-            engine.updateFileDigestCache(dep.path, dep.timestamp, dep.digest)
+        oldDependencyInfo.primeFileDigestCache(engine)
       
       # We either need to make all paths that form the cache digest relative
       # to the workspace root or all of them absolute.
@@ -1142,14 +1125,11 @@ class Compiler(Tool):
           continue
         
         try:
-          newDependencyInfo.dependencies = [
-            FileInfo(
-              path=path,
-              timestamp=engine.getTimestamp(path),
-              digest=engine.getFileDigest(path),
-              )
-            for path in candidateDependencies
-            ]
+          newDependencyInfo = engine.createDependencyInfo(
+            targets=[target],
+            args=args,
+            dependencies=candidateDependencies,
+            )
         except EnvironmentError:
           # One of the dependencies didn't exist
           continue
@@ -1197,28 +1177,12 @@ class Compiler(Tool):
             path = path[workspaceRootLen:]
           dependencies.append(path)
       
-      getTimestamp = engine.getTimestamp
-      getFileDigest = engine.getFileDigest
-      
-      if useCacheForThisObject:
-        # Need to store the file digests to improve performance of
-        # cache calculations in subsequent runs.
-        newDependencyInfo.dependencies = [
-          FileInfo(
-            path=path,
-            timestamp=getTimestamp(path),
-            digest=getFileDigest(path),
-            )
-          for path in dependencies
-          ]
-      else:
-        newDependencyInfo.dependencies = [
-          FileInfo(
-            path=path,
-            timestamp=getTimestamp(path),
-            )
-          for path in dependencies
-          ]
+      newDependencyInfo = engine.createDependencyInfo(
+        targets=[target],
+        args=args,
+        dependencies=dependencies,
+        calculateDigests=useCacheForThisObject,
+        )
       engine.storeDependencyInfo(newDependencyInfo)
 
       # Finally update the cache if necessary
@@ -1326,13 +1290,10 @@ class Compiler(Tool):
     
     dependencies = scan()
     
-    newDependencyInfo = DependencyInfo(
-      targets=[FileInfo(target)],
+    newDependencyInfo = engine.createDependencyInfo(
+      targets=[target],
       args=args,
-      dependencies=[
-        FileInfo(path=path, timestamp=engine.getTimestamp(path))
-        for path in dependencies
-        ],
+      dependencies=dependencies,
       )
     
     engine.storeDependencyInfo(newDependencyInfo)
@@ -1374,13 +1335,10 @@ class Compiler(Tool):
   
     dependencies = scan()
     
-    newDependencyInfo = DependencyInfo(
-      targets=[FileInfo(target)],
+    newDependencyInfo = engine.createDependencyInfo(
+      targets=[target],
       args=args,
-      dependencies=[
-        FileInfo(path=path, timestamp=engine.getTimestamp(path))
-        for path in dependencies
-        ],
+      dependencies=dependencies,
       )
     
     engine.storeDependencyInfo(newDependencyInfo)
@@ -1437,13 +1395,10 @@ class Compiler(Tool):
   
     dependencies = scan()
     
-    newDependencyInfo = DependencyInfo(
-      targets=[FileInfo(target)],
+    newDependencyInfo = engine.createDependencyInfo(
+      targets=[target],
       args=args,
-      dependencies=[
-        FileInfo(path=path, timestamp=engine.getTimestamp(path))
-        for path in dependencies
-        ],
+      dependencies=dependencies,
       )
     
     engine.storeDependencyInfo(newDependencyInfo)

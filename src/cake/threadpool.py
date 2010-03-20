@@ -50,8 +50,6 @@ class ThreadPool(object):
     for i in xrange(50):
       pool.queueJob(lambda i=i: someFunction(i))
   """
-  _EXIT_JOB = "exit job"
-  
   def __init__(self, numWorkers):
     """Initialise the thread pool.
     
@@ -60,6 +58,8 @@ class ThreadPool(object):
     """
     self._jobQueue = collections.deque()
     self._workers = []
+    self._wakeCondition = threading.Condition(threading.Lock())
+    self._quit = False
 
     # Create the worker threads
     for _ in xrange(numWorkers):
@@ -77,17 +77,17 @@ class ThreadPool(object):
     On shutdown we complete any currently executing jobs then exit. Jobs
     waiting on the queue may not be executed.
     """
-    # Submit the exit job directly to the back of the queue
-    for _ in xrange(len(self._workers)):
-      self._jobQueue.appendleft(self._EXIT_JOB)
-
+    # Signal threads to exit after their current job
+    self._quit = True
+    
+    # Wake them up if they're sleeping
+    self._wakeCondition.acquire()
+    self._wakeCondition.notifyAll()
+    self._wakeCondition.release()
+    
     # Wait for the threads to finish
     for thread in self._workers:
       thread.join()
-
-    # Clear any references
-    self._jobQueue = collections.deque()
-    self._workers[:] = []
     
   def queueJob(self, callable, front=False):
     """Queue a new job to be executed by the thread pool.
@@ -100,23 +100,30 @@ class ThreadPool(object):
     the job queue.
     @type front: boolean
     """
+    isEmpty = len(self._jobQueue) == 0
+    if isEmpty:
+      self._wakeCondition.acquire()
     if front:
       self._jobQueue.appendleft(callable)
     else:
       self._jobQueue.append(callable)
-  
+    if isEmpty:
+      self._wakeCondition.notifyAll()      
+      self._wakeCondition.release()
+      
   def _runThread(self):
     """Process jobs continuously until dismissed.
     """
-    while True:
+    while not self._quit:
       try:
         job = self._jobQueue.popleft()
       except IndexError:
+        self._wakeCondition.acquire()
+        if len(self._jobQueue) == 0:
+          self._wakeCondition.wait()
+        self._wakeCondition.release()
         continue
       
-      if job is self._EXIT_JOB:
-        break
-
       try:
         job()
       except Exception:

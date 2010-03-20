@@ -512,9 +512,10 @@ class MsvcCompiler(Compiler):
   def getLanguage(self, path):
     language = self.language
     if language is None:
-      language = {
-        '.c':'c',
-        }.get(cake.path.extension(path).lower(), 'c++')
+      if path[-2:].lower() == '.c':
+        language = 'c'
+      else:
+        language = 'c++'
     return language
 
   def getPchCommands(self, target, source, header, object, engine):

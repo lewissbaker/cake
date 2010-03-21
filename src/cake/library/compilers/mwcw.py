@@ -147,7 +147,7 @@ class MwcwCompiler(Compiler):
     exitCode = p.wait()
     
     if output:
-      sys.stderr.write(self._formatMessage(str(output)))
+      sys.stderr.write(self._formatMessage(output.decode("latin1")).encode("latin1"))
         
     if exitCode != 0:
       engine.raiseError(

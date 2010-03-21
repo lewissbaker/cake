@@ -80,7 +80,7 @@ class ThreadPool(object):
     """
     # Submit the exit job directly to the back of the queue
     for _ in xrange(len(self._workers)):
-      self._jobQueue.appendleft(self._EXIT_JOB)
+      self.queueJob(self._EXIT_JOB, True)
           
     # Wake them up if they're sleeping
     self._wakeCondition.acquire()
@@ -102,29 +102,31 @@ class ThreadPool(object):
     the job queue.
     @type front: boolean
     """
-    isEmpty = len(self._jobQueue) == 0
-    if isEmpty:
-      self._wakeCondition.acquire()
-    if front:
-      self._jobQueue.appendleft(callable)
-    else:
-      self._jobQueue.append(callable)
-    if isEmpty:
-      self._wakeCondition.notifyAll()      
+    self._wakeCondition.acquire()
+    try:
+      wasEmpty = len(self._jobQueue) == 0
+      if front:
+        self._jobQueue.appendleft(callable)
+      else:
+        self._jobQueue.append(callable)
+      if wasEmpty:
+        self._wakeCondition.notifyAll()
+    finally:      
       self._wakeCondition.release()
       
   def _runThread(self):
     """Process jobs continuously until dismissed.
     """
     while True:
+      self._wakeCondition.acquire()
       try:
-        job = self._jobQueue.popleft()
-      except IndexError:
-        self._wakeCondition.acquire()
-        if len(self._jobQueue) == 0:
+        try:
+          job = self._jobQueue.popleft()
+        except IndexError:
           self._wakeCondition.wait()
+          continue
+      finally:
         self._wakeCondition.release()
-        continue
       
       if job is self._EXIT_JOB:
         break

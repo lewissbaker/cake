@@ -81,11 +81,6 @@ class ThreadPool(object):
     # Submit the exit job directly to the back of the queue
     for _ in xrange(len(self._workers)):
       self.queueJob(self._EXIT_JOB, True)
-          
-    # Wake them up if they're sleeping
-    self._wakeCondition.acquire()
-    self._wakeCondition.notifyAll()
-    self._wakeCondition.release()
     
     # Wait for the threads to finish
     for thread in self._workers:

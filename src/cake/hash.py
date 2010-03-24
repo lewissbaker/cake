@@ -9,7 +9,12 @@ try:
   import hashlib
   def sha1(*args, **kwargs):
     return hashlib.sha1(*args, **kwargs)
+  def md5(*args, **kwargs):
+    return hashlib.md5(*args, **kwargs)
 except ImportError:
   import sha
   def sha1(*args, **kwargs):
     return sha.new(*args, **kwargs) 
+  import md5 as md5lib
+  def md5(*args, **kwargs):
+    return md5lib.new(*args, **kwargs) 

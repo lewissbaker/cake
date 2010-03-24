@@ -211,6 +211,53 @@ def commonPath(path1, path2):
     safeCount = path1len
   return path1[:safeCount]
 
+def _hasDrive(path):
+  return bool(os.path.splitdrive(path)[0]) # Drive?    
+      
+def _isUnc(path):
+  return path.startswith("\\\\")
+    
+def relativePath(child, parent):
+  """
+  Make a child path relative to the parent path.
+  
+  @param child: The absolute child path.
+  @type child: string
+  @param parent: The absolute parent path.
+  @type parent: string
+  @return: The child path relative to parent, or the child
+  path itself if the child was not relative to the parent.
+  @rtype: string
+  """
+  childSep = child.replace(os.path.altsep, os.path.sep)
+  parentSep = parent.replace(os.path.altsep, os.path.sep)
+
+  if childSep and childSep[-1] == os.path.sep:
+    childSep = childSep[:-1]
+  if parentSep and parentSep [-1] == os.path.sep:
+    parentSep = parentSep [:-1]
+  
+  childList = childSep.split(os.path.sep)
+  parentList = parentSep.split(os.path.sep)
+  
+  if platform.system() == "Windows":
+    if _isUnc(child) or _isUnc(parent):
+      return child # Not even attempting to make unc paths relative
+    if _hasDrive(child) or _hasDrive(parent): 
+      if os.path.normcase(parentList[0]) != os.path.normcase(childList[0]):
+        return child # Paths are on different drives
+      
+  for i in range(min(len(parentList), len(childList))):
+    if os.path.normcase(parentList[i]) != os.path.normcase(childList[i]):
+      break
+  else:
+    i += 1
+
+  relList = [os.path.pardir] * (len(parentList)-i) + childList[i:]
+  if not relList:
+    return os.path.curdir
+  return join(*relList)
+  
 if platform.system() == "Windows":
   try:
     import win32file

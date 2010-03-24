@@ -112,6 +112,33 @@ class PathTests(unittest.TestCase):
     self.assertEqual(commonPath("a/bc/d", "a/bcd/e"), "a")
     self.assertEqual(commonPath("a/b/c", "a/b/c/d"), "a/b/c")
 
+  def testRelativePath(self):
+    from cake.path import relativePath
+    self.assertEqual(relativePath("", ""), ".")
+    self.assertEqual(relativePath("a", "a"), ".")
+    self.assertEqual(relativePath("a", "ab"), ".." + os.path.sep + "a")
+    self.assertEqual(relativePath("a/b", "a/c"), ".." + os.path.sep + "b")
+    self.assertEqual(relativePath("ab/c", "a"), ".." + os.path.sep + "ab"  + os.path.sep + "c")
+    self.assertEqual(relativePath("ab/c", "ab"), "c")
+    self.assertEqual(relativePath("a/b/c", "a/b"), "c")
+    self.assertEqual(relativePath("a/b/c", "a/b/"), "c")
+    self.assertEqual(relativePath("a/b/c", "a/b/d"), ".." + os.path.sep + "c")
+    self.assertEqual(relativePath("a/b/cd", "a/b/c"), ".." + os.path.sep + "cd")
+    self.assertEqual(
+      relativePath("a/bc/d", "a/bcd/e"),
+      ".." + os.path.sep + ".." + os.path.sep + "bc" + os.path.sep + "d",
+      )
+    self.assertEqual(relativePath("a/b/c", "a/b/c/d"), "..")
+    self.assertEqual(relativePath("a/b/c/d", "a/b"), "c" + os.path.sep + "d")
+    self.assertEqual(relativePath("a/b/c/d", "a/b/"), "c" + os.path.sep + "d")
+    
+    if platform.system() == 'Windows':
+      self.assertEqual(relativePath("c:", "d:"), "c:")
+      self.assertEqual(relativePath("c:\\", "d:\\"), "c:\\")
+      self.assertEqual(relativePath("c:\\ab", "d:\\dc"), "c:\\ab")
+      self.assertEqual(relativePath("c:\\ab", "c:\\dc"), "..\\ab")
+      self.assertEqual(relativePath("\\\\unc1", "\\\\unc2"), "\\\\unc1")
+
   def testFileSystemPath(self):
     # Tests are only valid on case-insensitive platforms
     if platform.system() != 'Windows':

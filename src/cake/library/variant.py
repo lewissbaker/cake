@@ -19,10 +19,9 @@ class VariantTool(Tool):
     @rtype: string
     """
     try:
-      return object.__getattribute__(self, name)
+      return Tool.__getattribute__(self, name)
     except AttributeError:
       try:
         return Script.getCurrent().variant.keywords[name]
       except KeyError:
         raise AttributeError("Unknown attribute '%s'" % name)
-  

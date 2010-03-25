@@ -36,7 +36,6 @@ def searchUpForFile(path, file):
   found.
   @rtype: string
   """
-  
   while True:
     candidate = cake.path.join(path, file)
     if cake.filesys.isFile(candidate):
@@ -68,6 +67,7 @@ def _overrideOpen():
       flag |= os.O_NOINHERIT
       return old_os_open(filename, flag, mode)
     os.open = new_os_open
+_overrideOpen()
 
 def _overridePopen():
   """
@@ -92,12 +92,13 @@ def _overridePopen():
         except ValueError:
           return self.returncode
     subprocess.Popen = new_Popen
+_overridePopen()
     
 def _speedUp():
   """
   Speed up execution by importing Psyco and binding the slowest functions
   with it.
-  """
+  """ 
   try:
     import psyco
     psyco.bind(cake.engine.DependencyInfo.isUpToDate)
@@ -113,6 +114,7 @@ def _speedUp():
       sys.stderr.write(
         "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
         )
+_speedUp()
 
 def run(args=None, cwd=None):
   """Run a cake build with the specified command-line args.
@@ -128,15 +130,6 @@ def run(args=None, cwd=None):
   if exited with success.
   @rtype: int
   """
-  # Override Popen to prevent an exception in Python 2.4
-  _overridePopen()
-  
-  # Override open() functions to add the no-inherit flag
-  _overrideOpen()
-
-  # Speed up builds if Psyco is installed
-  _speedUp()
- 
   if args is None:
     args = sys.argv[1:]
   

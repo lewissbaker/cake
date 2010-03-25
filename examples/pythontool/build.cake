@@ -1,6 +1,6 @@
 import cake.filesys
 import cake.path
-from cake.tools import script, env
+from cake.tools import script, env, logging
 
 path = "path/to/tool.exe"
 
@@ -14,7 +14,7 @@ class TestTool(object):
     engine = script.engine
 
     def run():
-      engine.logger.outputInfo("[%s] %s: (%s)\n" % (self.name, path, target))
+      logging.outputInfo("[%s] %s: (%s)\n" % (self.name, path, target))
       cake.filesys.makeDirs(cake.path.dirName(target))
       open(target, 'wb').close() 
 
@@ -22,4 +22,4 @@ class TestTool(object):
   
 tool = TestTool(name="tool")
 target = tool.build(env.expand('${BUILD}/pythontool/target'))
-target.task.addCallback(lambda: script.engine.logger.outputInfo("finished\n"))
+target.task.addCallback(lambda: logging.outputInfo("finished\n"))

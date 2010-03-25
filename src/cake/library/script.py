@@ -5,7 +5,7 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script, DependencyInfo
+from cake.engine import Script
 from cake.library import Tool, FileTarget, getPathsAndTasks
 
 class ScriptTool(Tool):

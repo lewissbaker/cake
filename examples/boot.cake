@@ -1,6 +1,7 @@
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
 from cake.library.variant import VariantTool
+from cake.library.logging import LoggingTool
 from cake.library.project import ProjectTool
 from cake.library.env import Environment
 from cake.library.compilers import CompilerNotFoundError
@@ -14,6 +15,7 @@ base = Variant()
 base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
 base.tools["variant"] = VariantTool()
+base.tools["logging"] = LoggingTool()
 env = base.tools["env"] = Environment()
 env["EXAMPLES"] = "."
 projectTool = base.tools["project"] = ProjectTool()

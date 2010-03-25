@@ -40,8 +40,10 @@ def createVariants(parent):
     compiler.objectCachePath = "cache/obj"
     compiler.outputMapFile = True
     if release == "debug":
+      compiler.addDefine("_DEBUG")
       compiler.debugSymbols = True
     elif release == "release":
+      compiler.addDefine("NDEBUG")
       compiler.useFunctionLevelLinking = True
       compiler.optimisation = compiler.FULL_OPTIMISATION
     

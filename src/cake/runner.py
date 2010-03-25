@@ -177,6 +177,13 @@ def run(args=None, cwd=None):
     default=False,
     )
   parser.add_option(
+    "-p", "--projects",
+    action="store_true",
+    dest="createProjects",
+    help="Create projects instead of building a variant.",
+    default=False,
+    )
+  parser.add_option(
     "-j", "--jobs",
     metavar="JOBCOUNT",
     type="int",
@@ -185,7 +192,7 @@ def run(args=None, cwd=None):
     default=cake.threadpool.getProcessorCount(),
     )
   parser.add_option(
-    "-p", "--profile",
+    "--profile",
     metavar="FILE",
     dest="profileOutput",
     help="Path to output profiling information to.",
@@ -264,6 +271,7 @@ def run(args=None, cwd=None):
   logger = cake.logging.Logger(debugComponents=options.debugComponents)
   engine = cake.engine.Engine(logger)
   engine.forceBuild = options.forceBuild
+  engine.createProjects = options.createProjects
   try:
     bootCode = engine.getByteCode(options.boot)
     exec bootCode in {"engine" : engine, "__file__" : options.boot}
@@ -304,11 +312,13 @@ def run(args=None, cwd=None):
   
   def onFinish():
     if mainTask.succeeded:
+      engine.onBuildSucceeded()
       if engine.logger.warningCount:
         msg = "Build succeeded with %i warnings.\n" % engine.logger.warningCount
       else:
         msg = "Build succeeded.\n"
     else:
+      engine.onBuildFailed()
       if engine.logger.warningCount:
         msg = "Build failed with %i errors and %i warnings.\n" % (
           engine.logger.errorCount,

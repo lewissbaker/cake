@@ -1,6 +1,7 @@
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
 from cake.library.variant import VariantTool
+from cake.library.project import ProjectTool
 from cake.library.env import Environment
 from cake.library.compilers import CompilerNotFoundError
 from cake.engine import Variant
@@ -15,6 +16,9 @@ base.tools["filesys"] = FileSystemTool()
 base.tools["variant"] = VariantTool()
 env = base.tools["env"] = Environment()
 env["EXAMPLES"] = "."
+projectTool = base.tools["project"] = ProjectTool()
+projectTool.enabled = engine.createProjects
+engine.addBuildSuccessCallback(lambda e=engine: projectTool.build(e))
 
 def createVariants(parent):
   for release in ["debug", "release"]:
@@ -38,7 +42,12 @@ def createVariants(parent):
     if release == "debug":
       compiler.debugSymbols = True
     elif release == "release":
+      compiler.useFunctionLevelLinking = True
       compiler.optimisation = compiler.FULL_OPTIMISATION
+    
+    # Disable the compiler during project generation
+    if engine.createProjects:
+      compiler.enabled = False
 
     engine.addVariant(variant, default=True)
 

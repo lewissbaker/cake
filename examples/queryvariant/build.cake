@@ -1,16 +1,18 @@
 from cake.tools import variant
 
+import sys
+
 if variant.platform in ["windows"]:
-  print "Current platform is '%s'." % variant.platform
+  sys.stdout.write("Current platform is '%s'.\n" % variant.platform)
 else:
-  print "Unknown platform '%s'." % variant.platform
+  sys.stderr.write("Unknown platform '%s'.\n" % variant.platform)
 
-if variant.release in ["debug", "optimised"]:
-  print "Current release is '%s'." % variant.release
+if variant.release in ["debug", "release"]:
+  sys.stdout.write("Current release is '%s'.\n" % variant.release)
 else:
-  print "Unknown release '%s'." % variant.release
+  sys.stderr.write("Unknown release '%s'.\n" % variant.release)
 
-if variant.compiler in ["dummy", "gcc", "msvc"]:
-  print "Current compiler is '%s'." % variant.compiler
+if variant.compiler in ["dummy", "msvc", "mingw", "gcc"]:
+  sys.stdout.write("Current compiler is '%s'.\n" % variant.compiler)
 else:
-  print "Unknown compiler '%s'." % variant.compiler
+  sys.stderr.write("Unknown compiler '%s'.\n" % variant.compiler)

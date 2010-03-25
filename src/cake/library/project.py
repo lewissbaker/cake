@@ -18,8 +18,33 @@ import cake.path
 import cake.filesys
 import cake.hash
 from cake.engine import Script
-from cake.library import Tool, FileTarget, getPathsAndTasks
+from cake.library import Tool, FileTarget, getPathAndTask
 
+# TODO: Split these up and allow the user to change them in their
+# own boot.cake
+def getProjectConfigName():
+  keywords = Script.getCurrent().variant.keywords
+  if keywords["platform"] != "xbox360":
+    projectPlatform = "Win32"
+  else:
+    projectPlatform = "Xbox 360"
+  return "%s (%s) %s (%s)|%s" % (
+    keywords["platform"].capitalize(),
+    keywords["architecture"],
+    keywords["release"].capitalize(),
+    keywords["compiler"],
+    projectPlatform
+    )
+  
+def getSolutionConfigName():
+  keywords = Script.getCurrent().variant.keywords
+  return "%s|%s %s (%s)" % (
+    keywords["release"].capitalize(),
+    keywords["platform"].capitalize(),
+    keywords["compiler"].capitalize(),
+    keywords["architecture"],
+    )
+  
 class Project(object):
   
   def __init__(self, path):
@@ -60,7 +85,7 @@ class ProjectConfiguration(object):
     name,
     items,
     buildArgs,
-    outputs,
+    output,
     intermediateDir,
     defines,
     includePaths,
@@ -71,7 +96,7 @@ class ProjectConfiguration(object):
     self.name = name
     self.items = items
     self.buildArgs = buildArgs
-    self.outputs = outputs
+    self.output = output
     self.intermediateDir = intermediateDir
     self.defines = defines
     self.includePaths = includePaths
@@ -165,7 +190,6 @@ class SolutionRegistry(object):
 
 class ProjectTool(Tool):
   
-  enabled = True
   projectSuffix = '.vcproj'
   solutionSuffix = '.sln'
   _projects = ProjectRegistry()
@@ -177,9 +201,8 @@ class ProjectTool(Tool):
   def project(
     self,
     target,
-    configName,
     items,
-    outputs,
+    output,
     name=None,
     intermediateDir=None,
     ):
@@ -212,10 +235,10 @@ class ProjectTool(Tool):
         - integer.cpp
     
     @type items: list/dict of string
-    @param outputs: A list of output files that this project generates.
-    The first output file should be the executable used for debugging
-    purposes (if applicable).
-    @type outputs: list of string
+    @param output: The output file that this project generates.
+    This file will also be the executable used for debugging purposes
+    (if applicable).
+    @type output: L{CompilerTarget}
     @param name: The name of the generated project. If this is None the
     base filename of the target is used instead.
     @type name: string
@@ -232,15 +255,15 @@ class ProjectTool(Tool):
     if not self.enabled:
       return FileTarget(path=target, task=None)
     
-    outputs, _ = getPathsAndTasks(outputs)
+    output, _ = getPathAndTask(output)
 
     # Project name defaults the base filename without extension
     if name is None:
       name = cake.path.baseNameWithoutExtension(target)
     
-    # Intermediate dir defaults to the first outputs dir
+    # Intermediate dir defaults to the output dir
     if intermediateDir is None:
-      intermediateDir = cake.path.dirName(outputs[0])
+      intermediateDir = cake.path.dirName(output)
 
     script = Script.getCurrent()
 
@@ -249,6 +272,7 @@ class ProjectTool(Tool):
     includePaths = []
     forcedIncludes = []
     forcedUsings = []
+    configName = getProjectConfigName()
 
     # Construct the build args
     cakeScript = sys.argv[0]
@@ -269,7 +293,7 @@ class ProjectTool(Tool):
       configName,
       items,
       buildArgs,
-      outputs,
+      output,
       intermediateDir,
       defines,
       includePaths,
@@ -279,7 +303,7 @@ class ProjectTool(Tool):
     
     return FileTarget(path=target, task=None)
     
-  def solution(self, configName, projectConfigName, target, projects):
+  def solution(self, target, projects):
     """Generate a solution file.
     
     @param target: The path for the generated solution file. If this path
@@ -298,6 +322,9 @@ class ProjectTool(Tool):
     projects = [
       cake.path.forceExtension(p, self.projectSuffix) for p in projects
       ]
+    
+    configName = getSolutionConfigName()
+    projectConfigName = getProjectConfigName()
     
     solution = self._solutions.getSolution(target)
     configuration = solution.getConfiguration(configName)
@@ -320,7 +347,10 @@ class ProjectTool(Tool):
     
     @param engine: The cake.engine instance.
     @type engine: L{Engine}
-    """    
+    """
+    if not self.enabled:
+      return
+
     # Generate solutions first as they will attempt to reload in Visual
     # studio and automatically reload all changed projects too. This
     # saves having to click reload on every project change (most of
@@ -668,9 +698,9 @@ class MsvsProjectGenerator(object):
     """
     relativePath = lambda p: cake.path.relativePath(p, self.projectDir)
     
-    outdir = relativePath(os.path.dirname(config.outputs[0]))
+    outdir = relativePath(os.path.dirname(config.output))
     intdir = relativePath(config.intermediateDir)
-    runfile = relativePath(config.outputs[0])
+    runfile = relativePath(config.output)
     buildlog = os.path.join(intdir, "buildlog.html")
 
     includePaths = ';'.join(config.includePaths)
@@ -905,7 +935,7 @@ class MsvsSolutionGenerator(object):
         }
       )
     self.file.write(
-      "# Visual Studio 2005\r\n"
+      "# Generated by Cake for Visual Studio 2005\r\n"
       )
 
   def writeProjectsSection(self):
@@ -1070,8 +1100,8 @@ class MsvsSolutionGenerator(object):
         # ...unless we know something more about the project's variants
         includeInBuild = True
 #        includeInBuild = False
-#        for config in solutionConfig.projectConfigurations:
-#          projectConfigName = config.name
+        for config in solutionConfig.projectConfigurations:
+          projectConfigName = config.name
 #          if config.path == project.path and config.name in project.configurations:
 #            includeInBuild = config.activateProject
 #            break

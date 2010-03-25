@@ -104,7 +104,38 @@ class Engine(object):
     self._executed = {}
     self._executedLock = threading.Lock()
     self.logger = logger
-      
+    self.buildSuccessCallbacks = []
+    self.buildFailureCallbacks = []
+  
+  def addBuildSuccessCallback(self, callback):
+    """Register a callback to be run if the build completes successfully.
+    
+    @param callback: The callback to run when the build completes
+    successfully.
+    @type callback: any callable
+    """    
+    self.buildSuccessCallbacks.append(callback)
+  
+  def addBuildFailureCallback(self, callback):
+    """Register a callback to be run if the build fails.
+    
+    @param callback: The callback to run when the build fails.
+    @type callback: any callable
+    """    
+    self.buildFailureCallbacks.append(callback)
+
+  def onBuildSucceeded(self):
+    """Execute build success callbacks.
+    """    
+    for callback in self.buildSuccessCallbacks:
+      callback()
+         
+  def onBuildFailed(self):
+    """Execute build failure callbacks.
+    """    
+    for callback in self.buildFailureCallbacks:
+      callback()
+
   def addVariant(self, variant, default=False):
     """Register a new variant with this engine.
     

@@ -585,18 +585,25 @@ class Compiler(Tool):
     compiler = self.clone()
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
+      
+    return compiler._copyModulesTo(targetDir)
 
+  def _copyModulesTo(self, targetDir, **kwargs):
+    
+    if not self.enabled:
+      return []
+    
     script = Script.getCurrent()
     engine = Script.getCurrent().engine
 
     tasks = []
-    for moduleScript in compiler.moduleScripts:
+    for moduleScript in self.moduleScripts:
       tasks.append(engine.execute(moduleScript, script.variant))
 
     def doCopy(source, targetDir):
       # Try without and with the extension
       if not cake.filesys.isFile(source):
-        source = cake.path.forceExtension(source, compiler.moduleSuffix)
+        source = cake.path.forceExtension(source, self.moduleSuffix)
       target = cake.path.join(targetDir, cake.path.baseName(source))
       
       if engine.forceBuild:
@@ -624,7 +631,7 @@ class Compiler(Tool):
       engine.notifyFileChanged(target)
 
     moduleTasks = []
-    for module in compiler.modules:
+    for module in self.modules:
       copyTask = engine.createTask(
         lambda s=module,t=targetDir:
           doCopy(s, t)
@@ -663,20 +670,22 @@ class Compiler(Tool):
 
   def _pch(self, target, source, header, forceExtension=True):
     
-    # Make note of which build engine we're using too
-    engine = Script.getCurrent().engine
-
     if forceExtension:
       target = cake.path.forceExtension(target, self.pchSuffix)
     object = self._getPchObject(target)
     
-    source, sourceTask = getPathAndTask(source)
-    
-    pchTask = engine.createTask(
-      lambda t=target, s=source, h=header, o=object, e=engine, c=self:
-        c.buildPch(t, s, h, o, e)
-      )
-    pchTask.startAfter(sourceTask)
+    if self.enabled:
+      engine = Script.getCurrent().engine
+      
+      source, sourceTask = getPathAndTask(source)
+      
+      pchTask = engine.createTask(
+        lambda t=target, s=source, h=header, o=object, e=engine, c=self:
+          c.buildPch(t, s, h, o, e)
+        )
+      pchTask.startAfter(sourceTask)
+    else:
+      pchTask = None
     
     return PchTarget(path=target, header=header, object=object, task=pchTask)
     
@@ -724,26 +733,28 @@ class Compiler(Tool):
     
   def _object(self, target, source, pch=None, forceExtension=True):
     
-    # Make note of which build engine we're using too
-    engine = Script.getCurrent().engine
-    
     if forceExtension:
       target = cake.path.forceExtension(target, self.objectSuffix)
-    
-    prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
-    
-    source, sourceTask = getPathAndTask(source)
-    if sourceTask is not None:      prerequisiteTasks.append(sourceTask)
-    
-    _, pchTask = getPathAndTask(pch)
-    if pchTask is not None:
-      prerequisiteTasks.append(pchTask)
-    
-    objectTask = engine.createTask(
-      lambda t=target, s=source, p=pch, e=engine, c=self:
-        c.buildObject(t, s, p, e)
-      )
-    objectTask.startAfter(prerequisiteTasks)
+      
+    if self.enabled:
+      engine = Script.getCurrent().engine
+      
+      prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
+      
+      source, sourceTask = getPathAndTask(source)
+      if sourceTask is not None:      prerequisiteTasks.append(sourceTask)
+      
+      _, pchTask = getPathAndTask(pch)
+      if pchTask is not None:
+        prerequisiteTasks.append(pchTask)
+      
+      objectTask = engine.createTask(
+        lambda t=target, s=source, p=pch, e=engine, c=self:
+          c.buildObject(t, s, p, e)
+        )
+      objectTask.startAfter(prerequisiteTasks)
+    else:
+      objectTask = None
     
     return FileTarget(path=target, task=objectTask)
     
@@ -809,22 +820,28 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
   
-    # And a copy of the current build engine
-    engine = Script.getCurrent().engine
-
-    paths, tasks = getPathsAndTasks(sources)
+    return compiler._library(target, sources, forceExtension)
+  
+  def _library(self, target, sources, forceExtension=True):
     
     if forceExtension:
       prefix, suffix = self.libraryPrefixSuffixes[0]
       target = cake.path.forcePrefixSuffix(target, prefix, suffix)
-    
-    self._setObjectsInLibrary(engine, target, paths)
-    
-    libraryTask = engine.createTask(
-      lambda t=target, s=paths, e=engine, c=compiler:
-        c.buildLibrary(t, s, e)
-      )
-    libraryTask.startAfter(tasks)
+
+    if self.enabled:
+      engine = Script.getCurrent().engine
+  
+      paths, tasks = getPathsAndTasks(sources)
+      
+      self._setObjectsInLibrary(engine, target, paths)
+      
+      libraryTask = engine.createTask(
+        lambda t=target, s=paths, e=engine, c=self:
+          c.buildLibrary(t, s, e)
+        )
+      libraryTask.startAfter(tasks)
+    else:
+      libraryTask = None
     
     return FileTarget(path=target, task=libraryTask)
     
@@ -841,30 +858,36 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
   
-    # And a copy of the current build engine
-    script = Script.getCurrent()
-    engine = script.engine
-
-    paths, tasks = getLinkPathsAndTasks(sources)
-
-    for libraryScript in compiler.libraryScripts:
-      tasks.append(engine.execute(libraryScript, script.variant))
+    return compiler._module(target, sources, forceExtension)
+  
+  def _module(self, target, sources, forceExtension=True):
     
     if forceExtension:
-      target = cake.path.forceExtension(target, compiler.moduleSuffix)
-      if compiler.importLibrary:
+      target = cake.path.forceExtension(target, self.moduleSuffix)
+      if self.importLibrary:
         prefix, suffix = self.libraryPrefixSuffixes[0]
-        compiler.importLibrary = cake.path.forcePrefixSuffix(
-          compiler.importLibrary,
+        self.importLibrary = cake.path.forcePrefixSuffix(
+          self.importLibrary,
           prefix,
           suffix,
           )
-    
-    moduleTask = engine.createTask(
-      lambda t=target, s=paths, e=engine, c=compiler:
-        c.buildModule(t, s, e)
-      )
-    moduleTask.startAfter(tasks)
+
+    if self.enabled:
+      script = Script.getCurrent()
+      engine = script.engine
+  
+      paths, tasks = getLinkPathsAndTasks(sources)
+  
+      for libraryScript in self.libraryScripts:
+        tasks.append(engine.execute(libraryScript, script.variant))
+      
+      moduleTask = engine.createTask(
+        lambda t=target, s=paths, e=engine, c=self:
+          c.buildModule(t, s, e)
+        )
+      moduleTask.startAfter(tasks)
+    else:
+      moduleTask = None
     
     # XXX: What about returning paths to import libraries?
     
@@ -890,23 +913,29 @@ class Compiler(Tool):
     for name, value in kwargs.iteritems():
       setattr(compiler, name, value)
   
-    # And a copy of the current build engine
-    script = Script.getCurrent()
-    engine = script.engine
-
-    paths, tasks = getLinkPathsAndTasks(sources)
+    return compiler._program(target, sources, forceExtension)
     
-    for libraryScript in compiler.libraryScripts:
-      tasks.append(engine.execute(libraryScript, script.variant))
+  def _program(self, target, sources, forceExtension=True, **kwargs):
     
     if forceExtension:
-      target = cake.path.forceExtension(target, compiler.programSuffix)
+      target = cake.path.forceExtension(target, self.programSuffix)
     
-    programTask = engine.createTask(
-      lambda t=target, s=paths, e=engine, c=compiler:
-        c.buildProgram(t, s, e)
-      )
-    programTask.startAfter(tasks)
+    if self.enabled:
+      script = Script.getCurrent()
+      engine = script.engine
+  
+      paths, tasks = getLinkPathsAndTasks(sources)
+      
+      for libraryScript in self.libraryScripts:
+        tasks.append(engine.execute(libraryScript, script.variant))
+      
+      programTask = engine.createTask(
+        lambda t=target, s=paths, e=engine, c=self:
+          c.buildProgram(t, s, e)
+        )
+      programTask.startAfter(tasks)
+    else:
+      programTask = None
     
     return FileTarget(path=target, task=programTask)
         

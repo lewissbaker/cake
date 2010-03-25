@@ -18,7 +18,7 @@ import cake.path
 import cake.filesys
 import cake.hash
 from cake.engine import Script
-from cake.library import Tool, FileTarget, getPathAndTask
+from cake.library import Tool, FileTarget
 
 # TODO: Split these up and allow the user to change them in their
 # own boot.cake
@@ -47,11 +47,12 @@ def getSolutionConfigName():
   
 class Project(object):
   
-  def __init__(self, path):
+  def __init__(self, path, name, version):
     
     self.path = path
     self.dir = cake.path.dirName(path)
-    self.name = cake.path.baseNameWithoutExtension(path)
+    self.name = name
+    self.version = version
     self.sccProvider = None
     self.sccProjectName = None
     self.sccAuxPath = None
@@ -60,10 +61,6 @@ class Project(object):
     self.externalGuid = generateGuid(path)
     self.configurations = {}
     self.lock = threading.Lock()
-    
-  def setName(self, name):
-    
-    self.name = name
     
   def addConfiguration(self, configuration):
     
@@ -109,11 +106,12 @@ class ProjectConfiguration(object):
 
 class Solution(object):
   
-  def __init__(self, path):
+  def __init__(self, path, version):
     
     self.path = path
     self.dir = cake.path.dirName(path)
     self.name = cake.path.baseNameWithoutExtension(path)
+    self.version = version
     self.configurations = {}
     self.lock = threading.Lock()
     
@@ -154,14 +152,14 @@ class ProjectRegistry(object):
     self.projects = {}
     self.lock = threading.Lock()
     
-  def getProject(self, path):
+  def getProject(self, path, name, version):
     
     key = os.path.normpath(os.path.normcase(path))
     self.lock.acquire()
     try:
       project = self.projects.get(key, None)
       if project is None:
-        project = Project(path)
+        project = Project(path, name, version)
         self.projects[key] = project
       return project
     finally:
@@ -179,20 +177,23 @@ class SolutionRegistry(object):
     self.solutions = {}
     self.lock = threading.Lock()
     
-  def getSolution(self, path):
+  def getSolution(self, path, version):
     
     key = os.path.normpath(os.path.normcase(path))
     self.lock.acquire()
     try:
       solution = self.solutions.get(key, None)
       if solution is None:
-        solution = Solution(path)
+        solution = Solution(path, version)
         self.solutions[key] = solution
       return solution  
     finally:
       self.lock.release()  
 
 class ProjectTool(Tool):
+  
+  VS2005 = 'Visual Studio 2005'
+  VS2008 = 'Visual Studio 2008'
   
   projectSuffix = '.vcproj'
   solutionSuffix = '.sln'
@@ -209,6 +210,7 @@ class ProjectTool(Tool):
     output,
     name=None,
     intermediateDir=None,
+    version=None,
     ):
     """Generate a project file.
     
@@ -249,6 +251,10 @@ class ProjectTool(Tool):
     @param intermediateDir: The path to intermediate files. If this is
     None the directory of the first output is used instead.
     @type intermediateDir: string
+    @param version: The product/version to generate a project for. This
+    may be one of L{VS2005} L{VS2008}. If version is None the latest
+    supported Visual Studio version is used instead.
+    @type version: enum
 
     @return: A L{FileTarget} that specifies the full path to the
     generated project file (with extension if applicable).
@@ -280,7 +286,7 @@ class ProjectTool(Tool):
     # Intermediate dir defaults to the output dir
     if intermediateDir is None:
       intermediateDir = cake.path.dirName(outputPath)
-
+    
     script = Script.getCurrent()
 
     configName = getProjectConfigName()
@@ -298,8 +304,12 @@ class ProjectTool(Tool):
       ]
     buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
     
-    project = self._projects.getProject(target)
-    project.setName(name)
+    if version is self.VS2005:
+      projectVersion = '8.00'
+    else:
+      projectVersion = '9.00'
+
+    project = self._projects.getProject(target, name, projectVersion)
     project.addConfiguration(ProjectConfiguration(
       configName,
       items,
@@ -316,7 +326,12 @@ class ProjectTool(Tool):
     
     return FileTarget(path=target, task=None)
     
-  def solution(self, target, projects):
+  def solution(
+    self,
+    target,
+    projects,
+    version=None,
+    ):
     """Generate a solution file.
     
     @param target: The path for the generated solution file. If this path
@@ -326,6 +341,10 @@ class ProjectTool(Tool):
     any of the projects listed don't have the correct suffix it will be
     appended automatically.
     @type projects: list of string
+    @param version: The product/version to generate a project for. This
+    may be one of L{VS2005} L{VS2008}. If version is None the latest
+    supported Visual Studio version is used instead.
+    @type version: enum
     """
     target = cake.path.forceExtension(target, self.solutionSuffix)
 
@@ -339,7 +358,12 @@ class ProjectTool(Tool):
     configName = getSolutionConfigName()
     projectConfigName = getProjectConfigName()
     
-    solution = self._solutions.getSolution(target)
+    if version is self.VS2005:
+      solutionVersion = '9.00'
+    else:
+      solutionVersion = '10.00'
+      
+    solution = self._solutions.getSolution(target, solutionVersion)
     configuration = solution.getConfiguration(configName)
     
     for p in projects:
@@ -565,7 +589,6 @@ class MsvsProjectGenerator(object):
   # Default member values
   file = None
   encoding = 'utf-8'
-  version = '8.00'
 
   def __init__(self, project):
     """Construct a new project generator instance.
@@ -675,7 +698,7 @@ class MsvsProjectGenerator(object):
     
     self.file.write(_msvsProjectHeader % {
       'encoding' : escapeAttr(self.encoding),
-      'version' : escapeAttr(self.version),
+      'version' : escapeAttr(self.project.version),
       'name' : escapeAttr(self.projectName),
       'guid' : escapeAttr(guid),
       'scc_attrs' : scc_attrs,
@@ -856,7 +879,6 @@ class MsvsSolutionGenerator(object):
   # Default member values
   file = None
   encoding = 'utf-8'
-  version = '9.00' # Note: version is project version + 1
   
   def __init__(self, solution, registry):
     """Construct a new solution file writer.
@@ -953,11 +975,11 @@ class MsvsSolutionGenerator(object):
     """
     self.file.write(
       "Microsoft Visual Studio Solution File, Format Version %(version)s\r\n" % {
-        'version' : self.version,
+        'version' : self.solution.version,
         }
       )
     self.file.write(
-      "# Generated by Cake for Visual Studio 2005\r\n"
+      "# Generated by Cake for Visual Studio\r\n"
       )
 
   def writeProjectsSection(self):

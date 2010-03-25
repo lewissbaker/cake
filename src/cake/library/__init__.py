@@ -67,6 +67,16 @@ class Tool(object):
   
   __metaclass__ = ToolMetaclass
   
+  enabled = True
+  """Enabled/disable this tool.
+  
+  If the tool is disabled it should not produce any output files but
+  it should still return the paths to those potential output files so
+  other tools can use them.
+  
+  @type: bool
+  """
+  
   def __init__(self):
     self.__memoise = {}
   

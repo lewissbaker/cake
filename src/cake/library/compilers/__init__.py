@@ -27,12 +27,30 @@ from cake.task import Task
 class CompilerNotFoundError(Exception):
   pass
 
-class PchTarget(FileTarget):
-  def __init__(self, path, header, object, task):
-    self.path = path
+class CompilerTarget(FileTarget):
+  
+  def __init__(self, path, task, compiler):
+    FileTarget.__init__(self, path, task)
+    self.compiler = compiler
+
+class PchTarget(CompilerTarget):
+  
+  def __init__(self, path, task, compiler, header, object):
+    CompilerTarget.__init__(self, path, task, compiler)
     self.header = header
     self.object = object
-    self.task = task
+
+class ObjectTarget(CompilerTarget):
+  pass
+  
+class LibraryTarget(CompilerTarget):
+  pass
+
+class ModuleTarget(CompilerTarget):
+  pass
+
+class ProgramTarget(CompilerTarget):
+  pass
 
 def getLinkPathsAndTasks(files):
   paths = []
@@ -687,7 +705,13 @@ class Compiler(Tool):
     else:
       pchTask = None
     
-    return PchTarget(path=target, header=header, object=object, task=pchTask)
+    return PchTarget(
+      path=target,
+      task=pchTask,
+      compiler=self,
+      header=header,
+      object=object,
+      )
     
   def _getPchObject(self, path):
     """Return the path to the pch object file given a pch target path.
@@ -756,7 +780,11 @@ class Compiler(Tool):
     else:
       objectTask = None
     
-    return FileTarget(path=target, task=objectTask)
+    return ObjectTarget(
+      path=target,
+      task=objectTask,
+      compiler=self,
+      )
     
   @memoise
   def _getObjectPrerequisiteTasks(self):
@@ -843,7 +871,11 @@ class Compiler(Tool):
     else:
       libraryTask = None
     
-    return FileTarget(path=target, task=libraryTask)
+    return LibraryTarget(
+      path=target,
+      task=libraryTask,
+      compiler=self,
+      )
     
   def module(self, target, sources, forceExtension=True, **kwargs):
     """Build a module/dynamic-library.
@@ -891,7 +923,11 @@ class Compiler(Tool):
     
     # XXX: What about returning paths to import libraries?
     
-    return FileTarget(path=target, task=moduleTask)
+    return ModuleTarget(
+      path=target,
+      task=moduleTask,
+      compiler=self,
+      )
 
   def program(self, target, sources, forceExtension=True, **kwargs):
     """Build an executable program.
@@ -937,7 +973,11 @@ class Compiler(Tool):
     else:
       programTask = None
     
-    return FileTarget(path=target, task=programTask)
+    return ProgramTarget(
+      path=target,
+      task=programTask,
+      compiler=self,
+      )
         
   ###########################
   # Internal methods not part of public API

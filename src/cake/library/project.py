@@ -89,8 +89,10 @@ class ProjectConfiguration(object):
     intermediateDir,
     defines,
     includePaths,
+    assemblyPaths,
     forcedIncludes,
     forcedUsings,
+    compileAsManaged,
     ):
     
     self.name = name
@@ -100,8 +102,10 @@ class ProjectConfiguration(object):
     self.intermediateDir = intermediateDir
     self.defines = defines
     self.includePaths = includePaths
+    self.assemblyPaths = assemblyPaths
     self.forcedIncludes = forcedIncludes
     self.forcedUsings = forcedUsings
+    self.compileAsManaged = compileAsManaged
 
 class Solution(object):
   
@@ -255,7 +259,19 @@ class ProjectTool(Tool):
     if not self.enabled:
       return FileTarget(path=target, task=None)
     
-    output, _ = getPathAndTask(output)
+    outputPath = output.path
+    
+    compiler = output.compiler
+    defines = compiler.defines
+    includePaths = [p for p in reversed(compiler.includePaths)]
+    forcedIncludes = compiler.forcedIncludes
+
+    compileAsManaged = ""
+    assemblyPaths = []
+    if hasattr(compiler, "forcedUsings"):
+      forcedUsings = compiler.forcedUsings
+    else:
+      forcedUsings = []
 
     # Project name defaults the base filename without extension
     if name is None:
@@ -263,15 +279,10 @@ class ProjectTool(Tool):
     
     # Intermediate dir defaults to the output dir
     if intermediateDir is None:
-      intermediateDir = cake.path.dirName(output)
+      intermediateDir = cake.path.dirName(outputPath)
 
     script = Script.getCurrent()
 
-# TODO: Get these from target.defines, target.includePaths etc.. too
-    defines = []
-    includePaths = []
-    forcedIncludes = []
-    forcedUsings = []
     configName = getProjectConfigName()
 
     # Construct the build args
@@ -293,12 +304,14 @@ class ProjectTool(Tool):
       configName,
       items,
       buildArgs,
-      output,
+      outputPath,
       intermediateDir,
       defines,
       includePaths,
+      assemblyPaths,
       forcedIncludes,
       forcedUsings,
+      compileAsManaged,
       ))
     
     return FileTarget(path=target, task=None)
@@ -520,12 +533,15 @@ _msvsProjectConfigurationMakeTool = """\
 \t\t\t<Tool
 \t\t\t\tName="VCNMakeTool"
 \t\t\t\tBuildCommandLine="%(buildcmd)s"
-\t\t\t\tRebuildCommandLine="%(rebuildcmd)s"
+\t\t\t\tReBuildCommandLine="%(rebuildcmd)s"
 \t\t\t\tCleanCommandLine="%(cleancmd)s"
 \t\t\t\tOutput="%(runfile)s"
-\t\t\t\tPreProcessorDefinitions="%(defines)s"
+\t\t\t\tPreprocessorDefinitions="%(defines)s"
 \t\t\t\tIncludeSearchPath="%(includes)s"
 \t\t\t\tForcedIncludes="%(forcedinc)s"
+\t\t\t\tAssemblySearchPath="%(asspath)s"
+\t\t\t\tForcedUsingAssemblies="%(forceduse)s"
+\t\t\t\tCompileAsManaged="%(compmanag)s"
 \t\t\t/>
 """
 
@@ -704,7 +720,10 @@ class MsvsProjectGenerator(object):
     buildlog = os.path.join(intdir, "buildlog.html")
 
     includePaths = ';'.join(config.includePaths)
+    assemblyPaths = ';'.join(config.assemblyPaths)
     forcedIncludes = ';'.join(config.forcedIncludes)
+    forcedUsings = ';'.join(config.forcedUsings)
+    compileAsManaged = config.compileAsManaged
 
     def formatDefine(define):
       if isinstance(define, tuple):
@@ -748,8 +767,11 @@ class MsvsProjectGenerator(object):
       'defines' : escapeAttr(defines),
       'includes' : escapeAttr(includePaths),
       'forcedinc' : escapeAttr(forcedIncludes),
+      'asspath' : escapeAttr(assemblyPaths),
+      'forceduse' : escapeAttr(forcedUsings),
+      'compmanag' : escapeAttr(compileAsManaged),
       })
-    
+
     if config.name.endswith("|Xbox 360"):
       self.file.write(_msvsProjectConfigurationXboxDeploymentTool)
 

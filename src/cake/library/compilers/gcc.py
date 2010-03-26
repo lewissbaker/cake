@@ -211,15 +211,18 @@ class GccCompiler(Compiler):
       )
     cake.filesys.makeDirs(cake.path.dirName(target))
 
-# TODO: Response file support...but gcc 3.x doesn't support it???     
-#    argsFile = target + '.args'
-#    with open(argsFile, 'wt') as f:
-#      for arg in args[1:]:
-#        f.write(arg + '\n')
+    if self.useResponseFile:
+      argsFile = target + '.args'
+      f = open(argsFile, 'wt')
+      try:
+        for arg in args[1:]:
+          f.write('"' + arg + '"\n')
+      finally:
+        f.close()
+      args = [args[0], '@' + argsFile]
 
     try:
       p = subprocess.Popen(
-        #args=[args[0], '@' + argsFile],
         args=args,
         executable=args[0],
         env=self._getProcessEnv(args[0]),

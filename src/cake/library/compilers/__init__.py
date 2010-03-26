@@ -206,6 +206,20 @@ class Compiler(Tool):
   outputMapFile = False
 # TODO: Should this be a string mapFile name? It's inconsistent with importLibrary
 # at the moment.
+  """Use a response file.
+  
+  If enabled a response file will be generated containing the compiler
+  command line options, and this file will be passed to the compiler
+  rather than the options themselves.
+  
+  This enables you to compile large projects on systems that have
+  restrictive command line length limits.
+  
+  Note that not all compiler versions will support response files, so
+  turning it on may prevent compilation from succeeding.
+  @type: bool
+  """
+  useResponseFile = False
   """Output a map file.
   
   If enabled the compiler will output a map file that matches the name of

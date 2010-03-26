@@ -714,18 +714,23 @@ class MsvcCompiler(Compiler):
         "run: %s\n" % " ".join(args),
         )
       
-      argsFile = target + '.args'
-      cake.filesys.makeDirs(cake.path.dirName(argsFile))
-      f = open(argsFile, 'wt')
-      try:
-        for arg in args[2:]:
-          f.write(arg + '\n')
-      finally:
-        f.close()            
+      if self.useResponseFile:
+        argsFile = target + '.args'
+        cake.filesys.makeDirs(cake.path.dirName(argsFile))
+        f = open(argsFile, 'wt')
+        try:
+          for arg in args[2:]:
+            f.write(arg + '\n')
+        finally:
+          f.close()
+        libArgs = [args[0], args[1], '@' + argsFile]
+      else:
+        libArgs = args            
 
+      cake.filesys.makeDirs(cake.path.dirName(target))
       try:
         p = subprocess.Popen(
-          args=[args[0], args[1], '@' + argsFile],
+          args=libArgs,
           executable=self.__libExe,
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,
@@ -902,21 +907,26 @@ class MsvcCompiler(Compiler):
         "run: %s\n" % " ".join(args),
         )
       
-      argFile = target + '.args'
-      cake.filesys.makeDirs(cake.path.dirName(argFile))
-      f = open(argFile, 'wt')
-      try:      
-        for arg in args[1:]:
-          f.write(_escapeArg(arg) + '\n')
-      finally:
-        f.close()
-
+      if self.useResponseFile:
+        argsFile = target + '.args'
+        cake.filesys.makeDirs(cake.path.dirName(argsFile))
+        f = open(argsFile, 'wt')
+        try:      
+          for arg in args[1:]:
+            f.write(_escapeArg(arg) + '\n')
+        finally:
+          f.close()
+        linkArgs = [args[0], '@' + argsFile]
+      else:
+        linkArgs = args
+  
       if self.importLibrary:
         cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
       
+      cake.filesys.makeDirs(cake.path.dirName(target))
       try:
         p = subprocess.Popen(
-          args=[args[0], '@' + argFile],
+          args=linkArgs,
           executable=self.__linkExe,
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,

@@ -112,7 +112,7 @@ class MwcwCompiler(Compiler):
     outputText += inputText.replace("\r", "")
 
     return outputText
-      
+
   def _executeProcess(self, args, target, engine):
     engine.logger.outputDebug(
       "run",
@@ -120,17 +120,19 @@ class MwcwCompiler(Compiler):
       )
     cake.filesys.makeDirs(cake.path.dirName(target))
 
-    argsFile = target + '.args'
-    f = open(argsFile, 'wt')
-    try:
-      for arg in args[1:]:
-        f.write('"' + arg + '"\n')
-    finally:
-      f.close()
+    if self.useResponseFile:
+      argsFile = target + '.args'
+      f = open(argsFile, 'wt')
+      try:
+        for arg in args[1:]:
+          f.write('"' + arg + '"\n')
+      finally:
+        f.close()
+      args = [args[0], '@' + argsFile]
 
     try:
       p = subprocess.Popen(
-        args=[args[0], '@' + argsFile],
+        args=args,
         executable=args[0],
         env=self._getProcessEnv(args[0]),
         stdin=subprocess.PIPE,

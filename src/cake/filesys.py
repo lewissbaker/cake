@@ -85,9 +85,17 @@ def makeDirs(path):
   if os.path.ismount(path):
     return
   
+  head, tail = os.path.split(path)
+  if not tail:
+    head, tail = os.path.split(head)
+  if head and tail and not os.path.exists(head):
+    makeDirs(head)
+    if tail == os.curdir: # xxx/newdir/. exists if xxx/newdir exists
+      return
+
   try:
-    os.makedirs(path)
-  except Exception:
+    os.mkdir(path)
+  except EnvironmentError:
     # Ignore failure due to directory already existing.
     if not os.path.isdir(path):
       raise

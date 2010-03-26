@@ -40,12 +40,18 @@ def createVariants(parent):
   
     compiler = variant.tools["compiler"]
     compiler.objectCachePath = "cache/obj"
+    compiler.enableRtti = True
+    compiler.enableExceptions = True
     compiler.outputMapFile = True
+    
     if release == "debug":
       compiler.addDefine("_DEBUG")
       compiler.debugSymbols = True
+      compiler.useIncrementalLinking = True
+      compiler.optimisation = compiler.NO_OPTIMISATION
     elif release == "release":
       compiler.addDefine("NDEBUG")
+      compiler.useIncrementalLinking = False
       compiler.useFunctionLevelLinking = True
       compiler.optimisation = compiler.FULL_OPTIMISATION
     

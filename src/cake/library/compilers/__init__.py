@@ -25,6 +25,12 @@ from cake.library import (
 from cake.task import Task
 
 class CompilerNotFoundError(Exception):
+  """Exception raised when a compiler cannot be found.
+  
+  This exception may be raised by the findCompiler() group of
+  functions such as L{cake.library.compilers.msvc.findMsvcCompiler}
+  and L{cake.library.compilers.gcc.findGccCompiler}.
+  """
   pass
 
 class CompilerTarget(FileTarget):
@@ -107,35 +113,43 @@ class Compiler(Tool):
   """
   debugSymbols = False
   """Enable debug symbols.
-  
+
   Enabling debug symbols will allow you to debug your code, but will
   significantly increase the size of the executable.
   @type: bool
   """
-  optimisation = NO_OPTIMISATION
+  optimisation = None
   """Set the optimisation level.
   
-  Available values are: L{NO_OPTIMISATION} L{PARTIAL_OPTIMISATION}
+  If the value is None the compiler default is used.
+  
+  Available enum values are: L{NO_OPTIMISATION} L{PARTIAL_OPTIMISATION}
   L{FULL_OPTIMISATION}
-  @type: enum 
+  @type: enum or None
   """
-  enableRtti = True
+  enableRtti = None
   """Enable Run-Time Type Information for C++ compilation.
   
+  If the value is None the compiler default is used.
+
   Disabling RTTI can reduce the executable size, but will prevent you from
   using dynamic_cast to downcast between classes, or typeid() to determine
   the type of a class or struct.
-  @type: bool 
+  @type: bool or None 
   """
-  enableExceptions = True
+  enableExceptions = None
   """Enable exception handling.
   
+  If the value is None the compiler default is used.
+
   Disabling exceptions can significantly reduce the size of the executable.  
-  @type: bool
+  @type: bool or None
   """  
   warningLevel = None
   """Set the warning level.
   
+  If the value is None the compiler default is used.
+
   What the warning level does may depend on the compiler, but in general
   setting it to 0 will disable all warnings, and setting it to 4 will
   enable all warnings.   
@@ -199,16 +213,20 @@ class Compiler(Tool):
   program or module and their addresses.
   @type: bool
   """
-  useIncrementalLinking = False
+  useIncrementalLinking = None
   """Use incremental linking.
   
+  If the value is None the compiler default is used.
+
   Incremental linking may speed up linking, but will also increase the size
   of the program or module.
   @type: bool
   """
-  useFunctionLevelLinking = False
+  useFunctionLevelLinking = None
   """Use function-level linking.
   
+  If the value is None the compiler default is used.
+
   When function-level linking is enabled the linker will strip out any unused
   functions. For some compilers this option will also strip out any unused
   data.

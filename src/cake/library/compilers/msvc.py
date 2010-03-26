@@ -415,17 +415,19 @@ class MsvcCompiler(Compiler):
     if language == 'c++':
       args.extend(self.cppFlags)
 
-      if self.enableRtti:
-        args.append('/GR') # Enable RTTI
-      else:
-        args.append('/GR-') # Disable RTTI
+      if self.enableRtti is not None:
+        if self.enableRtti:
+          args.append('/GR') # Enable RTTI
+        else:
+          args.append('/GR-') # Disable RTTI
       
-      if self.enableExceptions == "SEH":
-        args.append('/EHa') # Enable SEH exceptions
-      elif self.enableExceptions:
-        args.append('/EHsc') # Enable exceptions
-      else:
-        args.append('/EHsc-') # Disable exceptions
+      if self.enableExceptions is not None:
+        if self.enableExceptions == "SEH":
+          args.append('/EHa') # Enable SEH exceptions
+        elif self.enableExceptions:
+          args.append('/EHsc') # Enable exceptions
+        else:
+          args.append('/EHsc-') # Disable exceptions
         
     elif language == 'c++/cli':
       args.extend(self.cppFlags)
@@ -693,8 +695,6 @@ class MsvcCompiler(Compiler):
 
     if self.warningsAsErrors:
       args.append('/WX')
-    else:
-      args.append('/WX:NO')
 
     return args
 
@@ -767,10 +767,11 @@ class MsvcCompiler(Compiler):
     #if self.errorReport:
     #  args.append('/ERRORREPORT:%s' % self.errorReport.upper())
       
-    if self.useIncrementalLinking:
-      args.append('/INCREMENTAL')
-    else:
-      args.append('/INCREMENTAL:NO')
+    if self.useIncrementalLinking is not None:
+      if self.useIncrementalLinking:
+        args.append('/INCREMENTAL')
+      else:
+        args.append('/INCREMENTAL:NO')
       
     if dll:
       args.append('/DLL')
@@ -778,11 +779,12 @@ class MsvcCompiler(Compiler):
     else:
       args.extend(self.programFlags)
       
-    if self.useFunctionLevelLinking:
-      args.append('/OPT:REF') # Eliminate unused functions (COMDATs)
-      args.append('/OPT:ICF') # Identical COMDAT folding
-    else:
-      args.append('/OPT:NOREF') # Keep unreferenced functions
+    if self.useFunctionLevelLinking is not None:
+      if self.useFunctionLevelLinking:
+        args.append('/OPT:REF') # Eliminate unused functions (COMDATs)
+        args.append('/OPT:ICF') # Identical COMDAT folding
+      else:
+        args.append('/OPT:NOREF') # Keep unreferenced functions
     
     if self.moduleVersion is not None:
       args.append('/VERSION:' + self.moduleVersion)
@@ -1141,7 +1143,7 @@ class MsvcCompiler(Compiler):
       return [self.__linkExe] + sources
     
     if self.embedManifest:
-      if self.useIncrementalLinking:
+      if self.useIncrementalLinking is None or self.useIncrementalLinking:
         return linkWithManifestIncremental, scan
       else:
         return linkWithManifestNonIncremental, scan

@@ -191,20 +191,22 @@ class MwcwCompiler(Compiler):
     if language in ['c++', 'cplus', 'ec++']:
       args.extend(self.cppFlags)
 
-      if self.enableRtti:
-        args.extend(['-RTTI', 'on'])
-      else:
-        args.extend(['-RTTI', 'off'])
+      if self.enableRtti is not None:
+        if self.enableRtti:
+          args.extend(['-RTTI', 'on'])
+        else:
+          args.extend(['-RTTI', 'off'])
     elif language in ['c', 'c99']:
       args.extend(self.cFlags)
     elif language == 'objc':
       args.extend(self.mFlags)
 
     # Note: Exceptions are allowed for 'c' language
-    if self.enableExceptions:
-      args.extend(['-cpp_exceptions', 'on'])
-    else:
-      args.extend(['-cpp_exceptions', 'off'])
+    if self.enableExceptions is not None:
+      if self.enableExceptions:
+        args.extend(['-cpp_exceptions', 'on'])
+      else:
+        args.extend(['-cpp_exceptions', 'off'])
 
     if self.optimisation == self.NO_OPTIMISATION:
       args.extend([
@@ -212,7 +214,10 @@ class MwcwCompiler(Compiler):
         '-opt', 'off',
         '-ipa', 'off',
         ])
-    else:
+    elif (
+      self.optimisation == self.PARTIAL_OPTIMISATION or
+      self.optimisation == self.FULL_OPTIMISATION
+      ):
       args.extend([
         '-inline', 'all',        # Let the compiler auto inline small functions
         '-str', 'reuse,pool',    # Reuse string constants, place them together

@@ -264,19 +264,22 @@ class GccCompiler(Compiler):
     if language in ['c++', 'c++-header', 'c++-cpp-output']:
       args.extend(self.cppFlags)
 
-      if self.enableRtti:
-        args.append('-frtti')
-      else:
-        args.append('-fno-rtti')
+      if self.enableRtti is not None:
+        if self.enableRtti:
+          args.append('-frtti')
+        else:
+          args.append('-fno-rtti')
     elif language in ['c', 'c-header', 'cpp-output']:
       args.extend(self.cFlags)
     elif language in ['objective-c', 'objective-c-header', 'objc-cpp-output']:
       args.extend(self.mFlags)
 
-    if self.enableExceptions:
-      args.append('-fexceptions')
-    else:
-      args.append('-fno-exceptions')
+    # Note: Exceptions are allowed for 'c' language
+    if self.enableExceptions is not None:
+      if self.enableExceptions:
+        args.append('-fexceptions')
+      else:
+        args.append('-fno-exceptions')
 
     if self.useFunctionLevelLinking:
       args.extend([

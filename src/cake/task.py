@@ -203,10 +203,7 @@ class Task(object):
       threadPool.queueJob(self._execute, front=self._immediate)          
     else:
       for callback in callbacks:
-        try:
-          callback()
-        except Exception:
-          pass
+        callback()
               
   def _execute(self):
     """Actually execute this task.
@@ -279,11 +276,7 @@ class Task(object):
      
     if callbacks:
       for callback in callbacks:
-        try:
-          callback()
-        except Exception:
-          # TODO: Warning/Error here?
-          pass
+        callback()
 
   def completeAfter(self, other):
     """Make sure this task doesn't complete until other tasks have completed.
@@ -329,11 +322,7 @@ class Task(object):
         
     if callbacks:
       for callback in callbacks:
-        try:
-          callback()
-        except Exception:
-          # TODO: Log failed callback error
-          pass
+        callback()
 
   def cancel(self):
     """Cancel this task if it hasn't already started.
@@ -354,10 +343,7 @@ class Task(object):
       self._lock.release()
     
     for callback in callbacks:
-      try:
-        callback()
-      except Exception:
-        pass
+      callback()
   
   def addCallback(self, callback):
     """Register a callback to be run when this task is complete.
@@ -370,9 +356,6 @@ class Task(object):
       if self._callbacks is not None:
         self._callbacks.append(callback)
       else:
-        try:
-          callback()
-        except Exception:
-          pass
+        callback()
     finally:
       self._lock.release()

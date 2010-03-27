@@ -192,8 +192,18 @@ class SolutionRegistry(object):
 
 class ProjectTool(Tool):
   
-  VS2005 = 'Visual Studio 2005'
-  VS2008 = 'Visual Studio 2008'
+  VS2002 = 0
+  """Visual Studio .NET 2002
+  """
+  VS2003 = 1
+  """Visual Studio .NET 2003
+  """
+  VS2005 = 2
+  """Visual Studio 2005
+  """
+  VS2008 = 3
+  """Visual Studio 2008
+  """
   
   projectSuffix = '.vcproj'
   solutionSuffix = '.sln'
@@ -304,7 +314,11 @@ class ProjectTool(Tool):
       ]
     buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
     
-    if version is self.VS2005:
+    if version == self.VS2002:
+      projectVersion = '7.00'
+    elif version == self.VS2003:
+      projectVersion = '7.10'
+    elif version == self.VS2005:
       projectVersion = '8.00'
     else:
       projectVersion = '9.00'
@@ -358,7 +372,11 @@ class ProjectTool(Tool):
     configName = getSolutionConfigName()
     projectConfigName = getProjectConfigName()
     
-    if version is self.VS2005:
+    if version == self.VS2002:
+      solutionVersion = '7.00'
+    elif version == self.VS2003:
+      solutionVersion = '8.00'
+    elif version == self.VS2005:
       solutionVersion = '9.00'
     else:
       solutionVersion = '10.00'
@@ -601,6 +619,7 @@ class MsvsProjectGenerator(object):
     self.projectName = project.name
     self.projectDir = project.dir
     self.projectFilePath = project.path
+    self.version = project.version
     self.configs = project.configurations.values()
     self.sccProvider = project.sccProvider
     
@@ -698,7 +717,7 @@ class MsvsProjectGenerator(object):
     
     self.file.write(_msvsProjectHeader % {
       'encoding' : escapeAttr(self.encoding),
-      'version' : escapeAttr(self.project.version),
+      'version' : escapeAttr(self.version),
       'name' : escapeAttr(self.projectName),
       'guid' : escapeAttr(guid),
       'scc_attrs' : scc_attrs,
@@ -894,7 +913,8 @@ class MsvsSolutionGenerator(object):
     self.name = solution.name
     self.solutionDir = solution.dir
     self.solutionFilePath = solution.path
-    
+    self.version = solution.version
+        
     self.solutionConfigurations = list(solution.configurations.values())
     self.solutionConfigurations.sort(key=lambda config: config.name)
     
@@ -975,7 +995,7 @@ class MsvsSolutionGenerator(object):
     """
     self.file.write(
       "Microsoft Visual Studio Solution File, Format Version %(version)s\r\n" % {
-        'version' : self.solution.version,
+        'version' : self.version,
         }
       )
     self.file.write(
@@ -1013,6 +1033,11 @@ class MsvsSolutionGenerator(object):
     self.file.write('Project("%s") = "%s", "%s", "%s"\r\n' % (
       internalGuid, projectName, relativePath, externalGuid,
       ))
+
+    if self.version in ['7.00', '8.00']:
+      self.file.write("\tProjectSection(ProjectDependencies) = postProject\r\n")
+      self.file.write("\tEndProjectSection\r\n")
+    
     self.file.write('EndProject\r\n')
 
   def writeGlobalSection(self):
@@ -1022,7 +1047,11 @@ class MsvsSolutionGenerator(object):
     self.writeSourceCodeControlSection()
     self.writeSolutionConfigurationPlatformsSection()
     self.writeProjectConfigurationPlatformsSection()
-    self.writeSolutionPropertiesSection()
+    if self.version in ['7.00', '8.00']:
+      self.writeExtensibilityGlobalsSection()
+      self.writeExtensibilityAddInsSection()
+    else:
+      self.writeSolutionPropertiesSection()
     self.file.write("EndGlobal\r\n")
 
   def writeSourceCodeControlSection(self):
@@ -1091,9 +1120,14 @@ class MsvsSolutionGenerator(object):
     if not self.solutionConfigurations:
       return
 
-    self.file.write(
-      "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\r\n"
-      )
+    if self.version in ['7.00', '8.00']:
+      self.file.write(
+        "\tGlobalSection(SolutionConfiguration) = preSolution\r\n"
+        )
+    else:
+      self.file.write(
+        "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\r\n"
+        )
 
     # Make a list of all of the configs and platforms
     allConfigs = set()
@@ -1132,7 +1166,10 @@ class MsvsSolutionGenerator(object):
 
   def writeProjectConfigurationPlatformsSection(self):
 
-    self.file.write("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n")
+    if self.version in ['7.00', '8.00']:
+      self.file.write("\tGlobalSection(ProjectConfiguration) = postSolution\r\n")
+    else:
+      self.file.write("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n")
 
     for project in self.projects:
       guid = project.externalGuid
@@ -1167,6 +1204,14 @@ class MsvsSolutionGenerator(object):
            "projvariant" : projectConfigName,
            })
       
+    self.file.write("\tEndGlobalSection\r\n")
+
+  def writeExtensibilityGlobalsSection(self):
+    self.file.write("\tGlobalSection(ExtensibilityGlobals) = postSolution\r\n")
+    self.file.write("\tEndGlobalSection\r\n")
+
+  def writeExtensibilityAddInsSection(self):
+    self.file.write("\tGlobalSection(ExtensibilityAddIns) = postSolution\r\n")
     self.file.write("\tEndGlobalSection\r\n")
 
   def writeSolutionPropertiesSection(self):

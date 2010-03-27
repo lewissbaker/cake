@@ -314,6 +314,8 @@ class MsvcCompiler(Compiler):
   moduleSuffix = '.dll'
   programSuffix = '.exe'
   pchSuffix = '.pch'
+  pchObjectSuffix = '.obj'
+  manifestSuffix = '.embed.manifest'
   
   def __init__(
     self,
@@ -507,9 +509,6 @@ class MsvcCompiler(Compiler):
         ])
       
     return env
-  
-  def _getPchObject(self, path):
-    return cake.path.stripExtension(path) + self.objectSuffix
   
   def getLanguage(self, path):
     language = self.language
@@ -970,6 +969,7 @@ class MsvcCompiler(Compiler):
           "run: %s\n" % " ".join(rcArgs),
           )
         
+        cake.filesys.makeDirs(cake.path.dirName(embeddedRes))
         try:
           p = subprocess.Popen(
             args=rcArgs,
@@ -1026,6 +1026,7 @@ class MsvcCompiler(Compiler):
           "run: %s\n" % " ".join(mtArgs),
           )
         
+        cake.filesys.makeDirs(cake.path.dirName(embeddedManifest))
         try:
           p = subprocess.Popen(
             args=mtArgs,
@@ -1066,6 +1067,7 @@ class MsvcCompiler(Compiler):
       # Create an empty embeddable manifest if one doesn't already exist
       if not cake.filesys.isFile(embeddedManifest):
         engine.logger.outputInfo("Creating dummy manifest: %s\n" % embeddedManifest)
+        cake.filesys.makeDirs(cake.path.dirName(embeddedManifest))
         open(embeddedManifest, 'wb').close()
       
       # Generate .embed.manifest.rc

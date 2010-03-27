@@ -34,29 +34,85 @@ class CompilerNotFoundError(Exception):
   pass
 
 class CompilerTarget(FileTarget):
-  
+  """Base class for compiler targets.
+
+  @ivar compiler: The compiler usd to build the target.
+  @type compiler: L{Compiler}
+  """  
   def __init__(self, path, task, compiler):
     FileTarget.__init__(self, path, task)
     self.compiler = compiler
 
 class PchTarget(CompilerTarget):
-  
+  """A precompiled header target.
+
+  @ivar pch: The pch file target.
+  @type pch: L{FileTarget}
+  @ivar object: The object file target.
+  @type object: L{FileTarget}
+  @ivar header: The #include used to build the pch.
+  @type header: string
+  """
   def __init__(self, path, task, compiler, header, object):
     CompilerTarget.__init__(self, path, task, compiler)
+    self.pch = FileTarget(path, task)
+    if object is None:
+      self.object = None
+    else:
+      self.object = FileTarget(object, task)
     self.header = header
-    self.object = object
 
 class ObjectTarget(CompilerTarget):
-  pass
+  """An object target.
+
+  @ivar object: The object file target.
+  @type object: L{FileTarget}
+  """
+  def __init__(self, path, task, compiler):
+    CompilerTarget.__init__(self, path, task, compiler)
+    self.object = FileTarget(path, task)
   
 class LibraryTarget(CompilerTarget):
-  pass
+  """A library target.
+
+  @ivar library: The library file target.
+  @type library: L{FileTarget}
+  """
+  def __init__(self, path, task, compiler):
+    CompilerTarget.__init__(self, path, task, compiler)
+    self.library = FileTarget(path, task)
 
 class ModuleTarget(CompilerTarget):
-  pass
+  """A module target.
+
+  @ivar module: The module file target.
+  @type module: L{FileTarget}
+  @ivar library: An optional import library file target.
+  @type library: L{FileTarget}
+  """
+  def __init__(self, path, task, compiler, library):
+    CompilerTarget.__init__(self, path, task, compiler)
+    self.module = FileTarget(path, task)
+    if library is None:
+      self.library = None
+    else:
+      self.library = FileTarget(library, task)
 
 class ProgramTarget(CompilerTarget):
-  pass
+  """A program target.
+
+  @ivar program: The program file target.
+  @type program: L{FileTarget}
+  @ivar manifest: An optional manifest file target.
+  @type manifest: L{FileTarget}
+  """
+  def __init__(self, path, task, compiler, manifest):
+    CompilerTarget.__init__(self, path, task, compiler)
+    self.program = FileTarget(path, task)
+    if manifest is None:
+      self.manifest = None
+    else:
+      self.manifest = FileTarget(manifest, task)
 
 def getLinkPathsAndTasks(files):
   paths = []
@@ -64,8 +120,8 @@ def getLinkPathsAndTasks(files):
   for f in files:
     if isinstance(f, PchTarget):
       if f.object is not None:
-        paths.append(f.object)
-        tasks.append(f.task)
+        paths.append(f.object.path)
+        tasks.append(f.object.task)
     elif isinstance(f, FileTarget):
       paths.append(f.path)
       tasks.append(f.task)
@@ -188,6 +244,16 @@ class Compiler(Tool):
   """The suffix to use for precompiled header files.
 
   @type: string
+  """
+  pchObjectSuffix = None
+  """The suffix to use for precompiled header object files.
+
+  @type: string or None
+  """
+  manifestSuffix = None
+  """The suffix to use for manifest files.
+
+  @type: string or None
   """
   linkObjectsInLibrary = False
   """Link objects rather than libraries.
@@ -356,7 +422,7 @@ class Compiler(Tool):
   
   @type: string or None
   """
-  embedManifest = False
+  embedManifest = True
   """Embed the manifest in the executable.
   
   If True the manifest file is embedded within the executable, otherwise
@@ -375,7 +441,7 @@ class Compiler(Tool):
   architecture you are compiling for supports SSE instructions.
   @type: bool
   """
-
+  
   # Map of engine to map of library path to list of object paths
   __libraryObjects = weakref.WeakKeyDictionary()
   
@@ -722,7 +788,11 @@ class Compiler(Tool):
     
     if forceExtension:
       target = cake.path.forceExtension(target, self.pchSuffix)
-    object = self._getPchObject(target)
+    
+    if self.pchObjectSuffix is None:
+      object = None
+    else:
+      object = cake.path.stripExtension(target) + self.pchObjectSuffix
     
     if self.enabled:
       engine = Script.getCurrent().engine
@@ -744,18 +814,6 @@ class Compiler(Tool):
       header=header,
       object=object,
       )
-    
-  def _getPchObject(self, path):
-    """Return the path to the pch object file given a pch target path.
-    
-    @param path: Path to the target pch file.
-    @type path: string
-    
-    @return: Path to the pch object file or None if not supported by this
-    compiler.
-    @rtype: string or None
-    """
-    return None
 
   def object(self, target, source, pch=None, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
@@ -959,6 +1017,7 @@ class Compiler(Tool):
       path=target,
       task=moduleTask,
       compiler=self,
+      library=self.importLibrary,
       )
 
   def program(self, target, sources, forceExtension=True, **kwargs):
@@ -982,11 +1041,16 @@ class Compiler(Tool):
       setattr(compiler, name, value)
   
     return compiler._program(target, sources, forceExtension)
-    
+
   def _program(self, target, sources, forceExtension=True, **kwargs):
     
     if forceExtension:
       target = cake.path.forceExtension(target, self.programSuffix)
+    
+    if self.manifestSuffix is None:
+      manifest = None
+    else:
+      manifest = target + self.manifestSuffix
     
     if self.enabled:
       script = Script.getCurrent()
@@ -1009,6 +1073,7 @@ class Compiler(Tool):
       path=target,
       task=programTask,
       compiler=self,
+      manifest=manifest,
       )
         
   ###########################

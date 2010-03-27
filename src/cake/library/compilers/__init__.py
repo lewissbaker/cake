@@ -422,7 +422,7 @@ class Compiler(Tool):
   
   @type: string or None
   """
-  embedManifest = True
+  embedManifest = False
   """Embed the manifest in the executable.
   
   If True the manifest file is embedded within the executable, otherwise

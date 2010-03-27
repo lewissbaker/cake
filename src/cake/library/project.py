@@ -17,35 +17,40 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.engine import Script
 from cake.library import Tool, FileTarget
+from cake.engine import Script
 
-# TODO: Split these up and allow the user to change them in their
-# own boot.cake
 def getProjectConfigName():
   keywords = Script.getCurrent().variant.keywords
-  if keywords["platform"] != "xbox360":
-    projectPlatform = "Win32"
-  else:
-    projectPlatform = "Xbox 360"
-  return "%s (%s) %s (%s)|%s" % (
+  return "%s (%s) %s (%s)" % (
     keywords["platform"].capitalize(),
     keywords["architecture"],
     keywords["release"].capitalize(),
     keywords["compiler"],
-    projectPlatform
     )
   
+def getProjectPlatformName():
+  platform = Script.getCurrent().variant.keywords["platform"]
+  if platform == "xbox360":
+    return "Xbox 360"
+  elif platform == "xbox":
+    return "Xbox"
+  else:
+    return "Win32"
+
 def getSolutionConfigName():
   keywords = Script.getCurrent().variant.keywords
-  return "%s|%s %s (%s)" % (
-    keywords["release"].capitalize(),
+  return keywords["release"].capitalize()
+  
+def getSolutionPlatformName():
+  keywords = Script.getCurrent().variant.keywords
+  return "%s %s (%s)" % (
     keywords["platform"].capitalize(),
     keywords["compiler"].capitalize(),
     keywords["architecture"],
     )
   
-class Project(object):
+class _Project(object):
   
   def __init__(self, path, name, version):
     
@@ -66,20 +71,23 @@ class Project(object):
     
     self.lock.acquire()
     try:
-      if configuration.name in self.configurations:
-        raise ValueError("Project '%s' already has configuration '%s'." % (
+      key = (configuration.name, configuration.platform)
+      if key in self.configurations:
+        raise ValueError("Project '%s' already has configuration '%s-%s'." % (
             self.path,
             configuration.name,
+            configuration.platform,
             ))
-      self.configurations[configuration.name] = configuration
+      self.configurations[key] = configuration
     finally:
       self.lock.release()  
       
-class ProjectConfiguration(object):
+class _ProjectConfiguration(object):
 
   def __init__(
     self,
     name,
+    platform,
     items,
     buildArgs,
     output,
@@ -93,6 +101,7 @@ class ProjectConfiguration(object):
     ):
     
     self.name = name
+    self.platform = platform
     self.items = items
     self.buildArgs = buildArgs
     self.output = output
@@ -104,7 +113,7 @@ class ProjectConfiguration(object):
     self.forcedUsings = forcedUsings
     self.compileAsManaged = compileAsManaged
 
-class Solution(object):
+class _Solution(object):
   
   def __init__(self, path, version):
     
@@ -115,37 +124,42 @@ class Solution(object):
     self.configurations = {}
     self.lock = threading.Lock()
     
-  def getConfiguration(self, name):
+  def addConfiguration(self, configuration):
     
     self.lock.acquire()
     try:
-      solutionConfig = self.configurations.get(name, None)
-      if solutionConfig is None:
-        solutionConfig = SolutionConfiguration(name)
-        self.configurations[name] = solutionConfig
-      return solutionConfig
+      key = (configuration.name, configuration.platform)
+      if key in self.configurations:
+        raise ValueError("Solution '%s' already has configuration '%s-%s'." % (
+            self.path,
+            configuration.name,
+            configuration.platform,
+            ))
+      self.configurations[key] = configuration
     finally:
       self.lock.release()  
     
-class SolutionConfiguration(object):
+class _SolutionConfiguration(object):
   
-  def __init__(self, name):
+  def __init__(self, name, platform):
     
     self.name = name
+    self.platform = platform
     self.projectConfigurations = []
     
   def addProjectConfiguration(self, configuration):
 
     self.projectConfigurations.append(configuration) 
 
-class SolutionProjectConfiguration(object):
+class _SolutionProjectConfiguration(object):
   
-  def __init__(self, name, path):
+  def __init__(self, name, platform, path):
     
     self.name = name
+    self.platform = platform
     self.path = path
 
-class ProjectRegistry(object):
+class _ProjectRegistry(object):
   
   def __init__(self):
     
@@ -159,7 +173,7 @@ class ProjectRegistry(object):
     try:
       project = self.projects.get(key, None)
       if project is None:
-        project = Project(path, name, version)
+        project = _Project(path, name, version)
         self.projects[key] = project
       return project
     finally:
@@ -170,7 +184,7 @@ class ProjectRegistry(object):
     key = os.path.normpath(os.path.normcase(path))
     return self.projects.get(key, None)
   
-class SolutionRegistry(object):
+class _SolutionRegistry(object):
   
   def __init__(self):
     
@@ -184,7 +198,7 @@ class SolutionRegistry(object):
     try:
       solution = self.solutions.get(key, None)
       if solution is None:
-        solution = Solution(path, version)
+        solution = _Solution(path, version)
         self.solutions[key] = solution
       return solution  
     finally:
@@ -206,9 +220,14 @@ class ProjectTool(Tool):
   """
   
   projectSuffix = '.vcproj'
+  """The suffix to use for project files.
+  """
   solutionSuffix = '.sln'
-  _projects = ProjectRegistry()
-  _solutions = SolutionRegistry()
+  """The suffix to use for solution files.
+  """
+
+  _projects = _ProjectRegistry()
+  _solutions = _SolutionRegistry()
   
   def __init__(self):
     super(ProjectTool, self).__init__()
@@ -300,6 +319,7 @@ class ProjectTool(Tool):
     script = Script.getCurrent()
 
     configName = getProjectConfigName()
+    platformName = getProjectPlatformName()
 
     # Construct the build args
     cakeScript = sys.argv[0]
@@ -324,8 +344,9 @@ class ProjectTool(Tool):
       projectVersion = '9.00'
 
     project = self._projects.getProject(target, name, projectVersion)
-    project.addConfiguration(ProjectConfiguration(
+    project.addConfiguration(_ProjectConfiguration(
       configName,
+      platformName,
       items,
       buildArgs,
       outputPath,
@@ -370,7 +391,9 @@ class ProjectTool(Tool):
       ]
     
     configName = getSolutionConfigName()
+    platformName = getSolutionPlatformName()
     projectConfigName = getProjectConfigName()
+    projectPlatformName = getProjectPlatformName()
     
     if version == self.VS2002:
       solutionVersion = '7.00'
@@ -382,11 +405,16 @@ class ProjectTool(Tool):
       solutionVersion = '10.00'
       
     solution = self._solutions.getSolution(target, solutionVersion)
-    configuration = solution.getConfiguration(configName)
+    configuration = _SolutionConfiguration(
+      configName,
+      platformName,
+      )
+    solution.addConfiguration(configuration)
     
     for p in projects:
-      configuration.addProjectConfiguration(SolutionProjectConfiguration(
+      configuration.addProjectConfiguration(_SolutionProjectConfiguration(
         projectConfigName,
+        projectPlatformName,
         p, 
         ))
 
@@ -639,9 +667,7 @@ class MsvsProjectGenerator(object):
       self.sccLocalPath = str(project.sccLocalPath)
 
     # Get a unique set of platforms
-    self.platforms = list(frozenset(
-      c.name.split("|", 1)[1] for c in self.configs
-      ))
+    self.platforms = list(frozenset(c.platform for c in self.configs))
     self.platforms.sort()
 
   def build(self, engine):
@@ -776,7 +802,7 @@ class MsvsProjectGenerator(object):
     defines = [formatDefine(d) for d in config.defines]
     defines = ';'.join(defines)
       
-    name = config.name
+    name = "%s|%s" % (config.name, config.platform)
 
     def escapeArg(arg):
       if '"' in arg:
@@ -914,9 +940,10 @@ class MsvsSolutionGenerator(object):
     self.solutionDir = solution.dir
     self.solutionFilePath = solution.path
     self.version = solution.version
+    self.isDotNet = solution.version in ['7.00', '8.00'] 
         
     self.solutionConfigurations = list(solution.configurations.values())
-    self.solutionConfigurations.sort(key=lambda config: config.name)
+    self.solutionConfigurations.sort(key=lambda config: (config.name, config.platform))
     
     self.solutionGUID = generateGuid(self.solutionFilePath)
 
@@ -926,7 +953,8 @@ class MsvsSolutionGenerator(object):
       for config in config.projectConfigurations:
         project = self.registry.getProjectByPath(config.path)
         if project is not None:
-          projectConfig = project.configurations.get(config.name, None)
+          key = (config.name, config.platform)
+          projectConfig = project.configurations.get(key, None)
           if projectConfig is None:
             continue
           path = project.path
@@ -937,6 +965,25 @@ class MsvsSolutionGenerator(object):
     projectFilePaths.sort()
     self.projects = [projectFilePathToProject[p] for p in projectFilePaths]
 
+    variants = []
+    for solutionConfig in self.solutionConfigurations:
+      projectConfigName = solutionConfig.name
+      projectPlatformName = solutionConfig.platform
+      
+      for config in solutionConfig.projectConfigurations:
+        projectConfigName = config.name
+        projectPlatformName = config.platform
+
+      if self.isDotNet:
+        solutionVariant = projectConfigName
+      else:
+        solutionVariant = "%s|%s" % (solutionConfig.name, solutionConfig.platform)
+      projectVariant = "%s|%s" % (projectConfigName, projectPlatformName)
+        
+      variants.append((solutionVariant, projectVariant))
+    variants.sort()
+    self.variants = variants
+      
   def getRelativePath(self, path):
     """Return path relative to the solution file.
     """
@@ -1034,7 +1081,7 @@ class MsvsSolutionGenerator(object):
       internalGuid, projectName, relativePath, externalGuid,
       ))
 
-    if self.version in ['7.00', '8.00']:
+    if self.isDotNet:
       self.file.write("\tProjectSection(ProjectDependencies) = postProject\r\n")
       self.file.write("\tEndProjectSection\r\n")
     
@@ -1047,7 +1094,7 @@ class MsvsSolutionGenerator(object):
     self.writeSourceCodeControlSection()
     self.writeSolutionConfigurationPlatformsSection()
     self.writeProjectConfigurationPlatformsSection()
-    if self.version in ['7.00', '8.00']:
+    if self.isDotNet:
       self.writeExtensibilityGlobalsSection()
       self.writeExtensibilityAddInsSection()
     else:
@@ -1120,7 +1167,7 @@ class MsvsSolutionGenerator(object):
     if not self.solutionConfigurations:
       return
 
-    if self.version in ['7.00', '8.00']:
+    if self.isDotNet:
       self.file.write(
         "\tGlobalSection(SolutionConfiguration) = preSolution\r\n"
         )
@@ -1128,80 +1175,41 @@ class MsvsSolutionGenerator(object):
       self.file.write(
         "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\r\n"
         )
-
-    # Make a list of all of the configs and platforms
-    allConfigs = set()
-    allPlatforms = set()
-    allVariants = set()
-    for solutionConfig in self.solutionConfigurations:
-      config, platform = solutionConfig.name.split("|", 1)
-      allConfigs.add(config)
-      allPlatforms.add(platform)
-      allVariants.add(solutionConfig.name)
       
-    allConfigs = list(allConfigs)
-    allConfigs.sort()
-    allPlatforms = list(allPlatforms)
-    allPlatforms.sort()
-    allVariants = list(allVariants)
-    allVariants.sort()
-
-    for config in allConfigs:
-      for platform in allPlatforms:
-        variant = "%s|%s" % (config, platform)
-        if variant in allVariants:
-          actualVariant = variant
-        else:
-          # This variant doesn't exist, find a suitable variant that we
-          # can map this one to.
-          suffix = "|" + platform
-          for candidateVariant in allVariants:
-            if candidateVariant.endswith(suffix):
-              actualVariant = candidateVariant
-              break
-            
-        self.file.write("\t\t%s = %s\r\n" % (variant, actualVariant))
+    for solutionVariant, _ in self.variants: 
+      self.file.write("\t\t%s = %s\r\n" % (
+        solutionVariant,
+        solutionVariant,
+        ))
 
     self.file.write("\tEndGlobalSection\r\n")
 
   def writeProjectConfigurationPlatformsSection(self):
 
-    if self.version in ['7.00', '8.00']:
+    if self.isDotNet:
       self.file.write("\tGlobalSection(ProjectConfiguration) = postSolution\r\n")
     else:
       self.file.write("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n")
-
+    
     for project in self.projects:
       guid = project.externalGuid
-      for solutionConfig in self.solutionConfigurations:
-        
-        # Default the project variant to that of the solution...
-        projectConfigName = solutionConfig.name
-        
-        # ...unless we know something more about the project's variants
-        includeInBuild = True
-#        includeInBuild = False
-        for config in solutionConfig.projectConfigurations:
-          projectConfigName = config.name
-#          if config.path == project.path and config.name in project.configurations:
-#            includeInBuild = config.activateProject
-#            break
-          
+      for solutionVariant, projectVariant in self.variants: 
         # Map the solution config to the project config
         self.file.write(
           "\t\t%(guid)s.%(slnvariant)s.ActiveCfg = %(projvariant)s\r\n" %
           {"guid" : guid,
-           "slnvariant" : solutionConfig.name,
-           "projvariant" : projectConfigName,
+           "slnvariant" : solutionVariant,
+           "projvariant" : projectVariant,
            })
 
         # And optionally include in this solution config's build
+        includeInBuild = True
         if includeInBuild:
           self.file.write(
             "\t\t%(guid)s.%(slnvariant)s.Build.0 = %(projvariant)s\r\n" %
           {"guid" : guid,
-           "slnvariant" : solutionConfig.name,
-           "projvariant" : projectConfigName,
+           "slnvariant" : solutionVariant,
+           "projvariant" : projectVariant,
            })
       
     self.file.write("\tEndGlobalSection\r\n")

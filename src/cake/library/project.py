@@ -52,9 +52,10 @@ def getSolutionPlatformName():
   
 class _Project(object):
   
-  def __init__(self, path, name, version):
+  def __init__(self, path, filtersPath, name, version):
     
     self.path = path
+    self.filtersPath = filtersPath
     self.dir = cake.path.dirName(path)
     self.name = name
     self.version = version
@@ -166,14 +167,14 @@ class _ProjectRegistry(object):
     self.projects = {}
     self.lock = threading.Lock()
     
-  def getProject(self, path, name, version):
+  def getProject(self, path, filtersPath, name, version):
     
     key = os.path.normpath(os.path.normcase(path))
     self.lock.acquire()
     try:
       project = self.projects.get(key, None)
       if project is None:
-        project = _Project(path, name, version)
+        project = _Project(path, filtersPath, name, version)
         self.projects[key] = project
       return project
     finally:
@@ -204,6 +205,28 @@ class _SolutionRegistry(object):
     finally:
       self.lock.release()  
 
+class ProjectToolTarget(FileTarget):
+  
+  def __init__(self, path, task, tool):
+    FileTarget.__init__(self, path, task)
+    self.tool = tool
+
+class ProjectTarget(ProjectToolTarget):
+  
+  def __init__(self, path, task, tool, filters):
+    ProjectToolTarget.__init__(self, path, task, tool)
+    self.project = FileTarget(path, task)
+    if filters is None:
+      self.filters = None
+    else:
+      self.filters = FileTarget(filters, task)
+
+class SolutionTarget(ProjectToolTarget):
+  
+  def __init__(self, path, task, tool):
+    ProjectToolTarget.__init__(self, path, task, tool)
+    self.solution = FileTarget(path, task)
+    
 class ProjectTool(Tool):
   
   VS2002 = 0
@@ -218,17 +241,41 @@ class ProjectTool(Tool):
   VS2008 = 3
   """Visual Studio 2008
   """
+  VS2010 = 4
+  """Visual Studio 2010
+  """
   
-  projectSuffix = '.vcproj'
-  """The suffix to use for project files.
+  product = VS2010
+  """The product to generate solutions and projects for.
+  
+  Can be one of L{VS2002}, L{VS2003}, L{VS2005}, L{VS2008} or L{VS2010}.
+  @type: enum
   """
-  solutionSuffix = '.sln'
-  """The suffix to use for solution files.
-  """
-
+  
   _projects = _ProjectRegistry()
   _solutions = _SolutionRegistry()
   
+  _msvsProjectSuffix = '.vcproj'
+  _msvsProjectSuffix2010 = '.vcxproj'
+  _msvsFiltersSuffix2010 = '.filters'
+  _msvsSolutionSuffix = '.sln'
+
+  _toProjectVersion = {
+    VS2002 : "7.00",
+    VS2003 : "7.10",
+    VS2005 : "8.00",
+    VS2008 : "9.00",
+    VS2010 : "4.0", # MSBuild script
+    }
+
+  _toSolutionVersion = {
+    VS2002 : '7.00',
+    VS2003 : '8.00',
+    VS2005 : '9.00',
+    VS2008 : '10.00',
+    VS2010 : '11.00',
+    }
+        
   def __init__(self):
     super(ProjectTool, self).__init__()
     
@@ -239,7 +286,7 @@ class ProjectTool(Tool):
     output,
     name=None,
     intermediateDir=None,
-    version=None,
+    **kwargs
     ):
     """Generate a project file.
     
@@ -289,18 +336,44 @@ class ProjectTool(Tool):
     generated project file (with extension if applicable).
     @rtype: L{FileTarget}
     """
-    target = cake.path.forceExtension(target, self.projectSuffix)
+    tool = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(tool, k, v)
+      
+    return tool._project(
+      target,
+      items,
+      output,
+      name,
+      intermediateDir,
+      )
+      
+  def _project(
+    self,
+    target,
+    items,
+    output,
+    name,
+    intermediateDir,
+    ):
+
+    if self.product == self.VS2010:
+      target = cake.path.forceExtension(target, self._msvsProjectSuffix2010)
+      filters = cake.path.forceExtension(target, self._msvsFiltersSuffix2010)
+    else:
+      target = cake.path.forceExtension(target, self._msvsProjectSuffix)
+      filters = None
     
     if not self.enabled:
       return FileTarget(path=target, task=None)
     
     outputPath = output.path
-    
     compiler = output.compiler
     defines = compiler.defines
     includePaths = [p for p in reversed(compiler.includePaths)]
     forcedIncludes = compiler.forcedIncludes
 
+# TODO: Fill these out when the compiler has them.
     compileAsManaged = ""
     assemblyPaths = []
     if hasattr(compiler, "forcedUsings"):
@@ -322,28 +395,26 @@ class ProjectTool(Tool):
     platformName = getProjectPlatformName()
 
     # Construct the build args
-    cakeScript = sys.argv[0]
-    targetDir = cake.path.dirName(target)
+    targetDir = cake.path.dirName(os.path.abspath(target))
+    pythonExe = os.path.abspath(sys.executable)
+    cakeScript = os.path.abspath(sys.argv[0])
+    scriptPath = os.path.abspath(script.path)
     keywords = script.variant.keywords
 
     buildArgs = [
-      "python",
+      cake.path.relativePath(pythonExe, targetDir),
       "-u",
-      cakeScript,
-      cake.path.relativePath(script.path, targetDir),
+      cake.path.relativePath(cakeScript, targetDir),
+      cake.path.relativePath(scriptPath, targetDir),
       ]
     buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
     
-    if version == self.VS2002:
-      projectVersion = '7.00'
-    elif version == self.VS2003:
-      projectVersion = '7.10'
-    elif version == self.VS2005:
-      projectVersion = '8.00'
-    else:
-      projectVersion = '9.00'
+    try:
+      version = self._toProjectVersion[self.product]
+    except KeyError:
+      raise ValueError("Unknown product: '%d'" % self.product)
 
-    project = self._projects.getProject(target, name, projectVersion)
+    project = self._projects.getProject(target, filters, name, version)
     project.addConfiguration(_ProjectConfiguration(
       configName,
       platformName,
@@ -359,13 +430,13 @@ class ProjectTool(Tool):
       compileAsManaged,
       ))
     
-    return FileTarget(path=target, task=None)
+    return ProjectTarget(path=target, task=None, tool=self, filters=filters)
     
   def solution(
     self,
     target,
     projects,
-    version=None,
+    **kwargs
     ):
     """Generate a solution file.
     
@@ -381,30 +452,46 @@ class ProjectTool(Tool):
     supported Visual Studio version is used instead.
     @type version: enum
     """
-    target = cake.path.forceExtension(target, self.solutionSuffix)
+    tool = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(tool, k, v)
+    
+    return tool._solution(target, projects)
+      
+  def _solution(
+    self,
+    target,
+    projects,
+    **kwargs
+    ):
+    
+    target = cake.path.forceExtension(target, self._msvsSolutionSuffix)
 
     if not self.enabled:
       return FileTarget(path=target, task=None)
 
-    projects = [
-      cake.path.forceExtension(p, self.projectSuffix) for p in projects
-      ]
+    if self.product == self.VS2010:
+      projects = [
+        cake.path.forceExtension(p, self._msvsProjectSuffix2010)
+        for p in projects
+        ]
+    else:
+      projects = [
+        cake.path.forceExtension(p, self._msvsProjectSuffix)
+        for p in projects
+        ]
     
     configName = getSolutionConfigName()
     platformName = getSolutionPlatformName()
     projectConfigName = getProjectConfigName()
     projectPlatformName = getProjectPlatformName()
     
-    if version == self.VS2002:
-      solutionVersion = '7.00'
-    elif version == self.VS2003:
-      solutionVersion = '8.00'
-    elif version == self.VS2005:
-      solutionVersion = '9.00'
-    else:
-      solutionVersion = '10.00'
+    try:
+      version = self._toSolutionVersion[self.product]
+    except KeyError:
+      raise ValueError("Unknown product: '%d'" % self.product)
       
-    solution = self._solutions.getSolution(target, solutionVersion)
+    solution = self._solutions.getSolution(target, version)
     configuration = _SolutionConfiguration(
       configName,
       platformName,
@@ -418,7 +505,7 @@ class ProjectTool(Tool):
         p, 
         ))
 
-    return FileTarget(path=target, task=None)
+    return SolutionTarget(path=target, task=None, tool=self)
   
   def build(self, engine):
     """Build project and solution files.
@@ -443,8 +530,14 @@ class ProjectTool(Tool):
       generator.build(engine)
 
     for project in self._projects.projects.values():
-      generator = MsvsProjectGenerator(project)
-      generator.build(engine)
+      if project.version == '4.0':
+        generator = MsBuildProjectGenerator(project)
+        generator.build(engine)
+        generator = MsBuildFiltersGenerator(project)
+        generator.build(engine)
+      else:
+        generator = MsvsProjectGenerator(project)
+        generator.build(engine)
 
 def escapeAttr(value):
   """Utility function for escaping xml attribute values.
@@ -780,11 +873,12 @@ class MsvsProjectGenerator(object):
   def _writeConfiguration(self, config):
     """Write a section that declares an individual build configuration.
     """
-    relativePath = lambda p: cake.path.relativePath(p, self.projectDir)
-    
-    outdir = relativePath(os.path.dirname(config.output))
-    intdir = relativePath(config.intermediateDir)
-    runfile = relativePath(config.output)
+    outdir = cake.path.relativePath(
+      os.path.dirname(config.output),
+      self.projectDir,
+      )
+    intdir = cake.path.relativePath(config.intermediateDir, self.projectDir)
+    runfile = cake.path.relativePath(config.output, self.projectDir)
     buildlog = os.path.join(intdir, "buildlog.html")
 
     includePaths = ';'.join(config.includePaths)
@@ -917,6 +1011,601 @@ class MsvsProjectGenerator(object):
         
       self.file.write('%s</File>\n' % indent)
 
+_msbuildProjectHeader = """\
+<?xml version="1.0" encoding="%(encoding)s"?>
+<Project\
+ DefaultTargets="Build"\
+ ToolsVersion="%(version)s"\
+ xmlns="http://schemas.microsoft.com/developer/msbuild/2003"\
+>
+"""
+_msbuildProjectTailer = """\
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+"""
+
+_msbuildProjectConfiguration = """\
+    <ProjectConfiguration Include="%(name)s|%(platform)s">
+      <Configuration>%(name)s</Configuration>
+      <Platform>%(platform)s</Platform>
+    </ProjectConfiguration>
+"""
+
+_msbuildGlobals = """\
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>%(guid)s</ProjectGuid>
+    <Keyword>MakeFileProj</Keyword>
+  </PropertyGroup>
+"""
+
+_msbuildConfigurationTypesHeader = """\
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+"""
+
+_msbuildConfigurationTypesTailer = """\
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+"""
+
+_msbuildConfigurationType = """\
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='%(name)s|%(platform)s'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <OutDir>%(outdir)s</OutDir>
+    <IntDir>%(intdir)s</IntDir>
+  </PropertyGroup>
+"""
+
+_msbuildConfigurationPropertySheet = """\
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='%(name)s|%(platform)s'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+"""
+
+_msbuildConfiguration = """\
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='%(name)s|%(platform)s'">
+    <NMakeBuildCommandLine>%(buildcmd)s</NMakeBuildCommandLine>
+    <NMakeOutput>%(output)s</NMakeOutput>
+    <NMakeCleanCommandLine>%(cleancmd)s</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>%(rebuildcmd)s</NMakeReBuildCommandLine>
+    <NMakePreprocessorDefinitions>%(defines)s</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>%(includepaths)s</NMakeIncludeSearchPath>
+    <NMakeForcedIncludes>%(forcedincludes)s</NMakeForcedIncludes>
+    <NMakeAssemblySearchPath>%(assemblypaths)s</NMakeAssemblySearchPath>
+    <NMakeForcedUsingAssemblies>%(forcedusings)s</NMakeForcedUsingAssemblies>
+  </PropertyGroup>
+"""
+
+_msbuildLog = """\
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='%(name)s|%(platform)s'">
+    <BuildLog>
+      <Path>%(buildlog)s</Path>
+    </BuildLog>
+  </ItemDefinitionGroup>
+"""
+
+_msbuildExcludedFile = """\
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='%(config)s|%(platform)s'">true</ExcludedFromBuild>
+"""
+
+class MsBuildProjectGenerator(object):
+  """I am a class that is able to generate a single .vcproj file from
+  its configuration information.
+  """
+
+  # Default member values
+  file = None
+  encoding = 'utf-8'
+
+  def __init__(self, project):
+    """Construct a new project generator instance.
+
+    @param project: A Project object containing all info required for the project.
+
+    @param sccProvider: The string identifying the MSVS SCC provider 
+    """
+    self.project = project
+    self.projectName = project.name
+    self.projectDir = project.dir
+    self.projectFilePath = project.path
+    self.version = project.version
+    self.configs = project.configurations.values()
+
+  def build(self, engine):
+    """Create and write the .vcproj file.
+
+    Throws an exception if building the project file fails.
+    """
+    stream = StringIO.StringIO()
+    self.file = codecs.getwriter(self.encoding)(stream)
+    try:
+      self._writeProject()
+    except:
+      self.file.close()
+      self.file = None
+      raise
+    newFileContents = stream.getvalue()
+    self.file.close()
+    self.file = None
+    
+    shouldBuild = engine.forceBuild
+    if not shouldBuild:
+      # Compare new file contents against existing file
+      existingFileContents = None
+      try:
+        f = open(self.projectFilePath, "rb")
+        try:
+          existingFileContents = f.read()
+          shouldBuild = newFileContents != existingFileContents
+        finally:
+          f.close()
+      except EnvironmentError:
+        shouldBuild = True
+    
+    if shouldBuild:
+      engine.logger.outputInfo("Generating Project %s\n" % self.projectFilePath)
+      cake.filesys.makeDirs(self.projectDir)
+      open(self.projectFilePath, "wb").write(newFileContents)
+    else:
+      engine.logger.outputDebug(
+        "project",
+        "Skipping Identical Project %s\n" % self.projectFilePath,
+        )
+    
+  def _writeProject(self):
+    """Write the project to the currently open file.
+    """
+    self._writeProjectHeader()
+    self._writeProjectConfigurations()
+    self._writeGlobals()
+    self._writeConfigurationTypes()
+    self._writeConfigurations()
+    self._writeBuildLogs()
+    self._writeFiles()
+    self._writeProjectTailer()
+
+  def _writeProjectHeader(self):
+    """Write the project header section to the currently open file.
+
+    This should be written at the start of the file.
+    """
+    self.file.write(_msbuildProjectHeader % {
+      "encoding" : escapeAttr(self.encoding),
+      "version" : escapeAttr(self.version),
+      })
+
+  def _writeProjectTailer(self):
+    """Write the project tailer to the file.
+
+    This should be the last content written to the file as it closes off
+    datastructures written by the header.
+    """
+    self.file.write(_msbuildProjectTailer)
+
+  def _writeProjectConfigurations(self):
+    """Write the section that declares all of the configurations supported by
+    this project.
+    """
+    self.file.write('  <ItemGroup Label="ProjectConfigurations">\n')
+    for config in self.configs:
+      self._writeProjectConfiguration(config)
+    self.file.write("  </ItemGroup>\n")
+
+  def _writeProjectConfiguration(self, config):
+    """Write a section that declares an individual build configuration.
+    """
+    self.file.write(_msbuildProjectConfiguration % {
+      "name" : escapeAttr(config.name),
+      "platform" : escapeAttr(config.platform),
+      })
+
+  def _writeGlobals(self):
+    """Write a section that declares globals.
+    """
+    guid = self.project.externalGuid
+   
+    self.file.write(_msbuildGlobals % {
+      "guid" : escapeAttr(guid),
+      })
+
+  def _writeConfigurationTypes(self):
+    """Write the section that declares all of the configurations supported by
+    this project.
+    """
+    self.file.write(_msbuildConfigurationTypesHeader)
+    for config in self.configs:
+      self._writeConfigurationType(config)
+    self.file.write(_msbuildConfigurationTypesTailer)
+    for config in self.configs:
+      self._writeConfigurationPropertySheet(config)
+    self.file.write('  <PropertyGroup Label="UserMacros" />\n')
+
+  def _writeConfigurationType(self, config):
+    """Write a section that declares an individual build configuration.
+    """
+    outdir = cake.path.relativePath(
+      os.path.dirname(config.output),
+      self.projectDir,
+      )
+    intdir = cake.path.relativePath(config.intermediateDir, self.projectDir)
+    
+    self.file.write(_msbuildConfigurationType % {
+      "name" : escapeAttr(config.name),
+      "platform" : escapeAttr(config.platform),
+      "outdir" : escapeAttr(outdir),
+      "intdir" : escapeAttr(intdir),
+      })
+    
+  def _writeConfigurationPropertySheet(self, config):
+    """Write a section that declares an individual build configuration.
+    """
+    self.file.write(_msbuildConfigurationPropertySheet % {
+      "name" : escapeAttr(config.name),
+      "platform" : escapeAttr(config.platform),
+      })
+    
+  def _writeConfigurations(self):
+    """Write the section that declares all of the configurations supported by
+    this project.
+    """
+    for config in self.configs:
+      self._writeConfiguration(config)
+    
+  def _writeConfiguration(self, config):
+    """Write a section that declares an individual build configuration.
+    """
+    output = cake.path.relativePath(config.output, self.projectDir)
+
+    includePaths = ';'.join(config.includePaths + ['$(NMakeIncludeSearchPath)'])
+    assemblyPaths = ';'.join(config.assemblyPaths + ['$(NMakeAssemblySearchPath)'])
+    forcedIncludes = ';'.join(config.forcedIncludes + ['$(NMakeForcedIncludes)'])
+    forcedUsings = ';'.join(config.forcedUsings + ['$(NMakeForcedUsingAssemblies)'])
+
+    def formatDefine(define):
+      if isinstance(define, tuple):
+        return "%s=%s" % (str(define[0]), str(define[1]))
+      else:
+        return str(define)
+
+    defines = [formatDefine(d) for d in config.defines]
+    defines = ';'.join(defines + ['$(NMakePreprocessorDefinitions)'])
+    
+    def escapeArg(arg):
+      if '"' in arg:
+        arg = arg.replace('"', '\\"')
+      if " " in arg:
+        arg = '"' + arg + '"'
+      return arg
+    
+    def escapeArgs(args):
+      return [escapeArg(arg) for arg in args]
+
+    args = escapeArgs(list(config.buildArgs))
+
+    buildCmd = " ".join(args)
+    cleanCmd = buildCmd + " -clean-not-implemented"
+    rebuildCmd = buildCmd + " -f"
+        
+    self.file.write(_msbuildConfiguration % {
+      "name" : escapeAttr(config.name),
+      "platform" : escapeAttr(config.platform),
+      "buildcmd" : escapeAttr(buildCmd),
+      "output" : escapeAttr(output),
+      "cleancmd" : escapeAttr(cleanCmd),
+      "rebuildcmd" : escapeAttr(rebuildCmd),
+      "defines" : escapeAttr(defines),
+      "includepaths" : escapeAttr(includePaths),
+      "forcedincludes" : escapeAttr(forcedIncludes),
+      "assemblypaths" : escapeAttr(assemblyPaths),
+      "forcedusings" : escapeAttr(forcedUsings),
+      })
+    
+  def _writeBuildLogs(self):
+    """Write the section that declares all of the configurations supported by
+    this project.
+    """
+    for config in self.configs:
+      self._writeBuildLog(config)
+    
+  def _writeBuildLog(self, config):
+    """Write a section that declares an individual build configuration.
+    """
+    intdir = cake.path.relativePath(config.intermediateDir, self.projectDir)
+    buildLog = cake.path.join(intdir, "buildlog.log")
+    
+    self.file.write(_msbuildLog % {
+      "name" : escapeAttr(config.name),
+      "platform" : escapeAttr(config.platform),
+      "buildlog" : escapeAttr(buildLog),
+      })
+
+  def _writeFiles(self):
+
+    configItems = {}
+    for config in self.configs:
+      configItems[config] = convertToProjectItems(config.items, self.projectDir)
+
+    self.file.write('  <ItemGroup>\n')
+    self._writeSubFiles(configItems)
+    self.file.write('  </ItemGroup>\n')
+
+  def _writeSubFiles(self, configItems, parent=None):
+    """Recursively write out all of the subitems.
+
+    configItems - A dictionary mapping from the ConfigurationNode
+    to a list of the items to write for that configuration.
+    """
+    mergedFileItemConfigs = {}
+    mergedFilterSubItems = {}
+
+    # Merge the subitems from each config
+    for config, items  in configItems.iteritems():
+      for item in items:
+        if item.kind == 'filter':
+          filters = mergedFilterSubItems.setdefault(item.name, {})
+          filters[config] = item.subItems
+        elif item.kind == 'file':
+          configs = mergedFileItemConfigs.setdefault(item.filePath, [])
+          configs.append(config)
+
+    # Write out all of the <Filter> subitems first.
+    filterNames = mergedFilterSubItems.keys()
+    filterNames.sort()
+    for name in filterNames:
+      if parent:
+        path = parent + "\\" + name
+      else:
+        path = name
+        
+      # Recurse on each filter's subitems
+      filterSubItems = mergedFilterSubItems[name]
+      self._writeSubFiles(filterSubItems, path)
+        
+    # Write out all of the <File> subitems
+    filePaths = mergedFileItemConfigs.keys()
+    filePaths.sort()
+    for path in filePaths:
+      configs = mergedFileItemConfigs[path]
+      
+      excluded = False
+      for config in self.configs:
+        if config not in configs:
+          excluded = True
+          break
+      
+      if excluded:
+        self.file.write('    <None Include="%(name)s">\n' % {
+          "name" : escapeAttr(path),
+          })
+        for config in self.configs:
+          if config not in configs:
+            self.file.write(_msbuildExcludedFile % {
+              "config" : escapeAttr(config.name),
+              "platform" : escapeAttr(config.platform),
+              })
+        self.file.write('    </None>\n')
+      else:
+        self.file.write('    <None Include="%(name)s" />\n' % {
+          "name" : escapeAttr(path),
+          })
+        
+_msbuildFiltersHeader = """\
+<?xml version="1.0" encoding="%(encoding)s"?>
+<Project\
+ ToolsVersion="%(version)s"\
+ xmlns="http://schemas.microsoft.com/developer/msbuild/2003"\
+>
+"""
+_msbuildFiltersTailer = """\
+</Project>
+"""
+   
+_msbuildFolder = """\
+    <Filter Include="%(name)s">
+      <UniqueIdentifier>%(guid)s</UniqueIdentifier>
+    </Filter>
+"""
+
+_msbuildFile = """\
+    <None Include="%(name)s">
+      <Filter>%(filter)s</Filter>
+    </None>
+"""
+
+_msbuildFileNoFilter = """\
+    <None Include="%(name)s" />
+"""
+
+class MsBuildFiltersGenerator(object):
+  """I am a class that is able to generate a single .vcproj file from
+  its configuration information.
+  """
+
+  # Default member values
+  file = None
+  encoding = 'utf-8'
+
+  def __init__(self, project):
+    """Construct a new project generator instance.
+
+    @param project: A Project object containing all info required for the project.
+
+    @param sccProvider: The string identifying the MSVS SCC provider 
+    """
+    self.project = project
+    self.projectName = project.name
+    self.projectDir = project.dir
+    self.projectFiltersPath = project.filtersPath
+    self.version = project.version
+    self.configs = project.configurations.values()
+
+  def build(self, engine):
+    """Create and write the .vcproj file.
+
+    Throws an exception if building the project file fails.
+    """
+    stream = StringIO.StringIO()
+    self.file = codecs.getwriter(self.encoding)(stream)
+    try:
+      self._writeFilters()
+    except:
+      self.file.close()
+      self.file = None
+      raise
+    newFileContents = stream.getvalue()
+    self.file.close()
+    self.file = None
+    
+    shouldBuild = engine.forceBuild
+    if not shouldBuild:
+      # Compare new file contents against existing file
+      existingFileContents = None
+      try:
+        f = open(self.projectFiltersPath, "rb")
+        try:
+          existingFileContents = f.read()
+          shouldBuild = newFileContents != existingFileContents
+        finally:
+          f.close()
+      except EnvironmentError:
+        shouldBuild = True
+    
+    if shouldBuild:
+      engine.logger.outputInfo("Generating Filters %s\n" % self.projectFiltersPath)
+      cake.filesys.makeDirs(self.projectDir)
+      open(self.projectFiltersPath, "wb").write(newFileContents)
+    else:
+      engine.logger.outputDebug(
+        "project",
+        "Skipping Identical Filters %s\n" % self.projectFiltersPath,
+        )
+    
+  def _writeFilters(self):
+    """Write the project to the currently open file.
+    """
+    self._writeFiltersHeader()
+    self._writeFoldersAndFiles()
+    self._writeFiltersTailer()
+
+  def _writeFiltersHeader(self):
+    """Write the project header section to the currently open file.
+
+    This should be written at the start of the file.
+    """
+    self.file.write(_msbuildFiltersHeader % {
+      "encoding" : escapeAttr(self.encoding),
+      "version" : escapeAttr(self.version),
+      })
+
+  def _writeFiltersTailer(self):
+    """Write the project tailer to the file.
+
+    This should be the last content written to the file as it closes off
+    datastructures written by the header.
+    """
+    self.file.write(_msbuildFiltersTailer)
+
+  def _writeFoldersAndFiles(self):
+
+    configItems = {}
+    for config in self.configs:
+      configItems[config] = convertToProjectItems(config.items, self.projectDir)
+    
+    self.file.write('  <ItemGroup>\n')
+    self._writeSubFolders(configItems)
+    self.file.write('  </ItemGroup>\n')
+
+    self.file.write('  <ItemGroup>\n')
+    self._writeSubFiles(configItems)
+    self.file.write('  </ItemGroup>\n')
+
+  def _writeSubFolders(self, configItems, parent=None):
+    """Recursively write out all of the subitems.
+
+    configItems - A dictionary mapping from the ConfigurationNode
+    to a list of the items to write for that configuration.
+    """
+    mergedFileItemConfigs = {}
+    mergedFilterSubItems = {}
+
+    # Merge the subitems from each config
+    for config, items  in configItems.iteritems():
+      for item in items:
+        if item.kind == 'filter':
+          filters = mergedFilterSubItems.setdefault(item.name, {})
+          filters[config] = item.subItems
+        elif item.kind == 'file':
+          configs = mergedFileItemConfigs.setdefault(item.filePath, [])
+          configs.append(config)
+
+    # Write out all of the <Filter> subitems first.
+    filterNames = mergedFilterSubItems.keys()
+    filterNames.sort()
+    for name in filterNames:
+      if parent:
+        path = parent + "\\" + name
+      else:
+        path = name
+      guid = generateGuid(path)
+      
+      self.file.write(_msbuildFolder % {
+        "name" : escapeAttr(path),
+        "guid" : escapeAttr(guid),
+        })
+
+      # Recurse on each filter's subitems
+      filterSubItems = mergedFilterSubItems[name]
+      self._writeSubFolders(filterSubItems, path)
+
+  def _writeSubFiles(self, configItems, parent=None):
+    """Recursively write out all of the subitems.
+
+    configItems - A dictionary mapping from the ConfigurationNode
+    to a list of the items to write for that configuration.
+    """
+    mergedFileItemConfigs = {}
+    mergedFilterSubItems = {}
+
+    # Merge the subitems from each config
+    for config, items  in configItems.iteritems():
+      for item in items:
+        if item.kind == 'filter':
+          filters = mergedFilterSubItems.setdefault(item.name, {})
+          filters[config] = item.subItems
+        elif item.kind == 'file':
+          configs = mergedFileItemConfigs.setdefault(item.filePath, [])
+          configs.append(config)
+
+    # Write out all of the <Filter> subitems first.
+    filterNames = mergedFilterSubItems.keys()
+    filterNames.sort()
+    for name in filterNames:
+      if parent:
+        path = parent + "\\" + name
+      else:
+        path = name
+        
+      # Recurse on each filter's subitems
+      filterSubItems = mergedFilterSubItems[name]
+      self._writeSubFiles(filterSubItems, path)
+        
+    # Write out all of the <File> subitems
+    filePaths = mergedFileItemConfigs.keys()
+    filePaths.sort()
+    for path in filePaths:
+      if parent:
+        self.file.write(_msbuildFile % {
+          "name" : escapeAttr(path),
+          "filter" : escapeAttr(parent),
+          })
+      else:
+        self.file.write(_msbuildFileNoFilter % {
+          "name" : escapeAttr(path),
+          })
+          
 class MsvsSolutionGenerator(object):
   """I am the class that does the actual writing of solution files.
   """

@@ -32,11 +32,9 @@ project.project(
     "" : extras,
     },
   output=program,
-  version=project.VS2008,
   )
 
 project.solution(
   target=script.cwd("createproject"),
   projects=[script.cwd("createproject")],
-  version=project.VS2008,
   )

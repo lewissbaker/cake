@@ -266,8 +266,8 @@ def run(args=None, cwd=None):
   engine.forceBuild = options.forceBuild
   engine.createProjects = options.createProjects
   try:
-    bootCode = engine.getByteCode(options.boot)
-    exec bootCode in {"engine" : engine, "__file__" : options.boot}
+    s = cake.engine.Script(options.boot, None, engine, None)
+    s.execute()
   except Exception:
     msg = traceback.format_exc()
     engine.logger.outputError(msg)

@@ -5,8 +5,10 @@ from cake.library.logging import LoggingTool
 from cake.library.project import ProjectTool
 from cake.library.env import Environment
 from cake.library.compilers import CompilerNotFoundError
-from cake.engine import Variant
+from cake.engine import Script, Variant
 import cake.system
+
+engine = Script.getCurrent().engine
 
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()

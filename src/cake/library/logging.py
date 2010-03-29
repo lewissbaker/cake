@@ -10,6 +10,14 @@ from cake.library import Tool
 
 class LoggingTool(Tool):
   
+  def __init__(self):
+    """Initialise this tool.
+    """    
+    Tool.__init__(self)
+    script = Script.getCurrent()
+    if script is not None:
+      self.logger = script.engine.logger
+
   def debugEnabled(self, keyword):
     """Returns True if currently debugging the given component.
     
@@ -20,8 +28,7 @@ class LoggingTool(Tool):
     otherwise False.
     @rtype: bool
     """
-    logger = Script.getCurrent().engine.logger
-    return logger.debugEnabled(keyword)
+    return self.logger.debugEnabled(keyword)
     
   def outputError(self, message):
     """Output an error message.
@@ -29,8 +36,7 @@ class LoggingTool(Tool):
     @param message: The message to output.
     @type message: string
     """
-    logger = Script.getCurrent().engine.logger
-    return logger.outputError(message)
+    return self.logger.outputError(message)
       
   def outputWarning(self, message):
     """Output a warning message.
@@ -38,8 +44,7 @@ class LoggingTool(Tool):
     @param message: The message to output.
     @type message: string
     """
-    logger = Script.getCurrent().engine.logger
-    return logger.outputWarning(message)
+    return self.logger.outputWarning(message)
       
   def outputInfo(self, message):
     """Output an informative message.
@@ -47,8 +52,7 @@ class LoggingTool(Tool):
     @param message: The message to output.
     @type message: string
     """
-    logger = Script.getCurrent().engine.logger
-    return logger.outputInfo(message)
+    return self.logger.outputInfo(message)
       
   def outputDebug(self, keyword, message):
     """Output a debug message.
@@ -61,6 +65,5 @@ class LoggingTool(Tool):
     @param message: The message to output.
     @type message: string
     """
-    logger = Script.getCurrent().engine.logger
-    return logger.outputDebug(message)
+    return self.logger.outputDebug(message)
     

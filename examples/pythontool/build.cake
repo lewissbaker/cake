@@ -10,7 +10,6 @@ class TestTool(object):
     self.name = name
     
   def build(self, target):
-
     engine = script.engine
 
     def run():
@@ -22,4 +21,4 @@ class TestTool(object):
   
 tool = TestTool(name="tool")
 target = tool.build(env.expand('${BUILD}/pythontool/target'))
-target.task.addCallback(lambda: logging.outputInfo("finished\n"))
+target.task.addCallback(lambda: logging.outputInfo("pythontool finished\n"))

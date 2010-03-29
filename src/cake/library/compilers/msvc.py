@@ -246,6 +246,9 @@ class MsvcCompiler(Compiler):
   When set to True the compiler will output full (absolute) paths to
   source files during compilation. This applies to the paths output for
   warnings/errors and the __FILE__ macro.
+
+  Related compiler options::
+    /FC
   @type: bool
   """
   memoryLimit = None
@@ -254,6 +257,9 @@ class MsvcCompiler(Compiler):
   The value is scaling factor such that 100 means a memory limit of 50MB,
   200 means a memory limit of 100MB, etc.
   If set to None the default memory limit of 100 (50MB) is used.
+
+  Related compiler options::
+    /Zm
   @type: int or None
   """
   runtimeLibraries = None
@@ -261,6 +267,9 @@ class MsvcCompiler(Compiler):
   
   Possible values are 'debug-dll', 'release-dll', 'debug-static' and
   'release-static'.
+
+  Related compiler options::
+    /MD, /MDd, /MT, /MTd
   @type: string or None
   """
   moduleVersion = None
@@ -269,6 +278,9 @@ class MsvcCompiler(Compiler):
   The version string should be of the form 'major[.minor]'. Where major and
   minor are decimal integers in the range 0 to 65,535.
   If set to None the default version 0.0 is used.
+
+  Related compiler options::
+    /VERSION
   @type: string or None
   """
   useStringPooling = False
@@ -276,6 +288,9 @@ class MsvcCompiler(Compiler):
   
   When set to True the compiler may eliminate duplicate strings by sharing
   strings that are identical.
+
+  Related compiler options::
+    /GF
   @type: bool
   """
   useMinimalRebuild = False
@@ -284,6 +299,9 @@ class MsvcCompiler(Compiler):
   When set to True the compiler may choose not to recompile your source file
   if it determines that the information stored in it's dependency information
   file (.idb) has not changed.
+
+  Related compiler options::
+    /Gm
   @type: bool
   """
   useEditAndContinue = False
@@ -294,6 +312,9 @@ class MsvcCompiler(Compiler):
   any form of program/code optimisation. Enabling this option will also
   enable function-level linking. This option is also not compatible with
   Common Language Runtime (CLR) compilation. 
+
+  Related compiler options::
+    /ZI
   @type: bool
   """
   errorReport = None
@@ -303,6 +324,9 @@ class MsvcCompiler(Compiler):
   compiler error (ICE) information to Microsoft.
   Possible values are 'none', 'prompt', 'queue' and 'send'.
   When set to None the default error reporting behaviour 'queue' is used.
+
+  Related compiler options::
+    /errorReport
   @type: string or None
   """
   clrMode = None
@@ -310,6 +334,9 @@ class MsvcCompiler(Compiler):
   
   Set to 'pure' to allow native data types but only managed functions.
   Set to 'safe' to only allow managed types and functions.
+
+  Related compiler options::
+    /clr, /CLRIMAGETYPE
   @type: string or None
   """ 
 

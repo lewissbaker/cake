@@ -327,10 +327,6 @@ class ProjectTool(Tool):
     @param intermediateDir: The path to intermediate files. If this is
     None the directory of the first output is used instead.
     @type intermediateDir: string
-    @param version: The product/version to generate a project for. This
-    may be one of L{VS2005} L{VS2008}. If version is None the latest
-    supported Visual Studio version is used instead.
-    @type version: enum
 
     @return: A L{FileTarget} that specifies the full path to the
     generated project file (with extension if applicable).
@@ -447,10 +443,6 @@ class ProjectTool(Tool):
     any of the projects listed don't have the correct suffix it will be
     appended automatically.
     @type projects: list of string
-    @param version: The product/version to generate a project for. This
-    may be one of L{VS2005} L{VS2008}. If version is None the latest
-    supported Visual Studio version is used instead.
-    @type version: enum
     """
     tool = self.clone()
     for k, v in kwargs.iteritems():
@@ -571,7 +563,7 @@ def convertToProjectItems(srcfiles, projectDir):
   @param srcfiles: A dictionary mapping filter names to either a list of
   files or to a similar dictionary. An empty sub-item name in the dictionary
   indicates that the sub-item list should be added to the parent's sub-items.
-  eg. Passing this structure:
+  eg. Passing this structure::
      {'Sources' :
        {'Private' : ['fooimpl.cpp', 'barimpl.cpp'],
         '' : ['foo.cpp'],
@@ -579,7 +571,8 @@ def convertToProjectItems(srcfiles, projectDir):
        'Headers' : ['foo.h'],
        '' : ['source.cake'],
        }
-  will return this hierarchy of items:
+  
+  will return this hierarchy of items::
    + ProjectFilterItem('Sources')
    | + ProjectFilterItem('Private')
    | | + ProjectFileItem('fooimpl.cpp')
@@ -733,8 +726,6 @@ class MsvsProjectGenerator(object):
     """Construct a new project generator instance.
 
     @param project: A Project object containing all info required for the project.
-
-    @param sccProvider: The string identifying the MSVS SCC provider 
     """
     self.project = project
     self.projectName = project.name
@@ -1104,8 +1095,6 @@ class MsBuildProjectGenerator(object):
     """Construct a new project generator instance.
 
     @param project: A Project object containing all info required for the project.
-
-    @param sccProvider: The string identifying the MSVS SCC provider 
     """
     self.project = project
     self.projectName = project.name
@@ -1432,8 +1421,6 @@ class MsBuildFiltersGenerator(object):
     """Construct a new project generator instance.
 
     @param project: A Project object containing all info required for the project.
-
-    @param sccProvider: The string identifying the MSVS SCC provider 
     """
     self.project = project
     self.projectName = project.name
@@ -1617,7 +1604,7 @@ class MsvsSolutionGenerator(object):
   def __init__(self, solution, registry):
     """Construct a new solution file writer.
 
-    @param solutionFile: The Solution object containing details of solution
+    @param solution: The Solution object containing details of solution
     file to build.
     
     @param registry: The ProjectRegistry to use to find details of referenced

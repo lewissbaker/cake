@@ -159,62 +159,102 @@ class Compiler(Tool):
   NO_OPTIMISATION = 0
   """No optimisation.
   
-  Your code should run slowest at this level.
+  Your code should run slowest at this level, but debugging should
+  be easiest. The code you step through with a debugger should closely
+  match the original source.
+  
+  Related compiler options::
+    GCC:  -O0
+    MSVC: /Od
+    MWCW: -opt off
   """
   PARTIAL_OPTIMISATION = 1
   """Code is partially optimised.
   
   Depending on the compiler this may include everything up to but
   not including link-time code generation.
+
+  Related compiler options::
+    GCC:  -O2
+    MSVC: /Ox
+    MWCW: -opt level=2  
   """
   FULL_OPTIMISATION = 2
   """Code is fully optimised.
   
   This may include link-time code generation for compilers that
   support it.
+
+  Related compiler options::
+    GCC:  -O4
+    MSVC: /GL
+    MWCW: -opt level=4  
   """
   debugSymbols = False
   """Enable debug symbols.
 
   Enabling debug symbols will allow you to debug your code, but will
   significantly increase the size of the executable.
+
+  Related compiler options::
+    GCC:  -g
+    MSVC: /Z7
+    MWCW: -sym dwarf-2
   @type: bool
   """
   optimisation = None
   """Set the optimisation level.
   
-  If the value is None the compiler default is used.
-  
   Available enum values are: L{NO_OPTIMISATION} L{PARTIAL_OPTIMISATION}
   L{FULL_OPTIMISATION}
+
+  If the value is None the compiler default is used.
   @type: enum or None
   """
   enableRtti = None
   """Enable Run-Time Type Information for C++ compilation.
   
-  If the value is None the compiler default is used.
-
   Disabling RTTI can reduce the executable size, but will prevent you from
   using dynamic_cast to downcast between classes, or typeid() to determine
   the type of a class or struct.
+
+  If the value is None the compiler default is used.
+
+  Related compiler options::
+    GCC:  -frtti
+    MSVC: /GR
+    MWCW: -RTTI on
   @type: bool or None 
   """
   enableExceptions = None
   """Enable exception handling.
   
+  Disabling exceptions can significantly reduce the size of the executable.  
+
   If the value is None the compiler default is used.
 
-  Disabling exceptions can significantly reduce the size of the executable.  
+  Related compiler options::
+    GCC:  -fexceptions
+    MSVC: /EHsc
+    MWCW: -cpp_exceptions on  
   @type: bool or None
   """  
   warningLevel = None
   """Set the warning level.
   
-  If the value is None the compiler default is used.
-
   What the warning level does may depend on the compiler, but in general
   setting it to 0 will disable all warnings, and setting it to 4 will
-  enable all warnings.   
+  enable all warnings.
+  
+  If the value is None the compiler default is used.
+
+  Related compiler options (warning level 0)::
+    GCC:  -w
+    MSVC: /W0
+
+  Related compiler options (warning level 4)::
+    GCC:  -Wall
+    MSVC: /W4
   @type: int or None
   """
   warningsAsErrors = False
@@ -222,6 +262,11 @@ class Compiler(Tool):
   
   If enabled warnings will be treated as errors and may prevent compilation
   from succeeding.
+
+  Related compiler options::
+    GCC:  -Werror
+    MSVC: /WX
+    MWCW: -w error  
   @type: bool
   """
   objectSuffix = '.o'
@@ -275,9 +320,22 @@ class Compiler(Tool):
   line limit, causing your link to fail with unexpected results. 
   @type: bool
   """
-  outputMapFile = False
 # TODO: Should this be a string mapFile name? It's inconsistent with importLibrary
 # at the moment.
+  outputMapFile = False
+  """Output a map file.
+  
+  If enabled the compiler will output a map file that matches the name of
+  the executable. The map file will contain a list of symbols used in the
+  program or module and their addresses.
+
+  Related compiler options::
+    GCC:  -Map=<target>.map
+    MSVC: /MAP:<target>.map
+    MWCW: -map <target>.map
+  @type: bool
+  """
+  useResponseFile = False
   """Use a response file.
   
   If enabled a response file will be generated containing the compiler
@@ -291,31 +349,30 @@ class Compiler(Tool):
   turning it on may prevent compilation from succeeding.
   @type: bool
   """
-  useResponseFile = False
-  """Output a map file.
-  
-  If enabled the compiler will output a map file that matches the name of
-  the executable. The map file will contain a list of symbols used in the
-  program or module and their addresses.
-  @type: bool
-  """
   useIncrementalLinking = None
   """Use incremental linking.
   
-  If the value is None the compiler default is used.
-
   Incremental linking may speed up linking, but will also increase the size
   of the program or module.
+
+  If the value is None the compiler default is used.
+
+  Related compiler options::
+    MSVC: /INCREMENTAL
   @type: bool
   """
   useFunctionLevelLinking = None
   """Use function-level linking.
   
-  If the value is None the compiler default is used.
-
   When function-level linking is enabled the linker will strip out any unused
   functions. For some compilers this option will also strip out any unused
   data.
+  
+  If the value is None the compiler default is used.
+
+  Related compiler options::
+    GCC:  -ffunction-sections, -fdata-sections, --gc-sections
+    MSVC: /Gy, /OPT:REF, /OPT:ICF
   @type: bool
   """
   stackSize = None
@@ -328,6 +385,9 @@ class Compiler(Tool):
    
   Note that some compilers may require you to set the stack size in the linker
   script instead (see L{linkerScript}).
+  
+  Related compiler options::
+    MSVC: /STACK
   @type: None or int or tuple(int, int)
   """
   heapSize = None
@@ -337,12 +397,18 @@ class Compiler(Tool):
   If the value is a single int then the value is the heap reserve size.
   If the value is a tuple(int, int) then the first value is the reserve
   size and the second value is the commit size.
+
+  Related compiler options::
+    MSVC: /HEAP
   @type: None or int or tuple(int, int)
   """
   linkerScript = None
   """Set the linker script for a program or module.
   
   This should be set to the path of linker script file.
+
+  Related compiler options::
+    MWCW: -lcf <linkerScript>
   @type: string or None
   """
   objectCachePath = None
@@ -380,6 +446,11 @@ class Compiler(Tool):
   using the specified language. Example languages are 'c', 'c++'.  
   If the value is None then the language is determined automatically
   based on the extension of each source file.
+  
+  Related compiler options::
+    GCC:  -x <language>
+    MSVC: /Tc or /Tp
+    MWCW: -lang <language>
   @type: string or None
   """
   pdbFile = None
@@ -391,6 +462,8 @@ class Compiler(Tool):
   If set to None a program database may still be generated with the
   name of the executable and the extension .pdb.
   
+  Related compiler options::
+    MSVC: /PDB
   @type: string or None
   """
   strippedPdbFile = None
@@ -402,7 +475,9 @@ class Compiler(Tool):
   information.
   
   If set to None a stripped PDB file will not be generated.
-   
+
+  Related compiler options::
+    MSVC: /PDBSTRIPPED   
   @type: string or None
   """
   subSystem = None
@@ -416,7 +491,10 @@ class Compiler(Tool):
   If set to None and WinMain or wWinMain is defined, WINDOWS will
   be the default.
   If set to None and main or wmain is defined, CONSOLE will be the
-  default.  
+  default.
+    
+  Related compiler options::
+    MSVC: /SUBSYSTEM
   @type: string or None
   """
   importLibrary = None
@@ -426,6 +504,9 @@ class Compiler(Tool):
   generated at the given path.
   When set to None no import library is generated.
   
+  Related compiler options::
+    GCC:  --out-implib
+    MSVC: /IMPLIB
   @type: string or None
   """
   embedManifest = False
@@ -433,7 +514,9 @@ class Compiler(Tool):
   
   If True the manifest file is embedded within the executable, otherwise
   no manifest file is generated.
-  
+
+  Related compiler options::
+    MSVC: /MANIFESTFILE
   @type: bool
   """
   useSse = False
@@ -445,6 +528,9 @@ class Compiler(Tool):
   
   Note that if this value is turned on it is up to you to make sure the
   architecture you are compiling for supports SSE instructions.
+
+  Related compiler options::
+    GCC: -msse
   @type: bool
   """
   

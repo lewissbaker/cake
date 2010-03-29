@@ -75,6 +75,13 @@ def _createMsvcCompiler(
         "%s" % msvcArchitecture,
         )
   
+  # Find the host bin dir for exe's such as 'cvtres.exe'
+  if hostArchitecture == 'x86':
+    msvcHostBinDir = cake.path.join(msvcProductDir, "bin")
+  else:
+    msvcHostArchitecture = _toArchitectureDir(hostArchitecture)
+    msvcHostBinDir = cake.path.join(msvcProductDir, "bin", msvcHostArchitecture)
+    
   msvcIncludeDir = cake.path.join(msvcProductDir, "include")
   platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
 
@@ -123,6 +130,8 @@ def _createMsvcCompiler(
   checkDirectory(platformSdkIncludeDir)
   checkDirectory(msvcLibDir)
   checkDirectory(platformSdkLibDir)
+  
+  dllPaths = [msvcHostBinDir, msvsInstallDir]
 
   compiler = MsvcCompiler(
     clExe=clExe,
@@ -130,7 +139,7 @@ def _createMsvcCompiler(
     linkExe=linkExe,
     rcExe=rcExe,
     mtExe=mtExe,
-    dllPaths=[msvsInstallDir],
+    dllPaths=dllPaths,
     architecture=architecture,
     )
 

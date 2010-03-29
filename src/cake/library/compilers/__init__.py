@@ -89,14 +89,20 @@ class ModuleTarget(CompilerTarget):
   @type module: L{FileTarget}
   @ivar library: An optional import library file target.
   @type library: L{FileTarget}
+  @ivar manifest: An optional manifest file target.
+  @type manifest: L{FileTarget}
   """
-  def __init__(self, path, task, compiler, library):
+  def __init__(self, path, task, compiler, library, manifest):
     CompilerTarget.__init__(self, path, task, compiler)
     self.module = FileTarget(path, task)
     if library is None:
       self.library = None
     else:
       self.library = FileTarget(library, task)
+    if manifest is None:
+      self.manifest = None
+    else:
+      self.manifest = FileTarget(manifest, task)
 
 class ProgramTarget(CompilerTarget):
   """A program target.
@@ -994,6 +1000,11 @@ class Compiler(Tool):
           suffix,
           )
 
+    if self.manifestSuffix is None:
+      manifest = None
+    else:
+      manifest = target + self.manifestSuffix
+
     if self.enabled:
       script = Script.getCurrent()
       engine = script.engine
@@ -1018,6 +1029,7 @@ class Compiler(Tool):
       task=moduleTask,
       compiler=self,
       library=self.importLibrary,
+      manifest=manifest,
       )
 
   def program(self, target, sources, forceExtension=True, **kwargs):

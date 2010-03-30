@@ -62,13 +62,8 @@ class DummyCompiler(Compiler):
       dependencies = [source]
       return dependencies
 
-    def command():
-      task = engine.createTask(compile)
-      task.start(immediate=True)
-      return task
-
     canBeCached = True
-    return command, compilerArgs, canBeCached
+    return compile, compilerArgs, canBeCached
 
   def getObjectCommands(self, target, source, pch, engine):
 
@@ -93,13 +88,8 @@ class DummyCompiler(Compiler):
         dependencies.append(pch.path)
       return dependencies
 
-    def command():
-      task = engine.createTask(compile)
-      task.start(immediate=True)
-      return task
-
     canBeCached = True
-    return command, compilerArgs, canBeCached
+    return compile, compilerArgs, canBeCached
 
   def getLibraryCommand(self, target, sources, engine):
     

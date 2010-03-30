@@ -101,7 +101,6 @@ def _speedUp():
   """ 
   try:
     import psyco
-    psyco.bind(cake.engine.DependencyInfo.isUpToDate)
     psyco.bind(cake.engine.Engine.checkDependencyInfo)
     #psyco.full()
     #psyco.profile()

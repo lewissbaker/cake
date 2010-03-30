@@ -346,13 +346,8 @@ class GccCompiler(Compiler):
         ))
       return dependencies
     
-    def command():
-      task = engine.createTask(compile)
-      task.start(immediate=True)
-      return task
-    
     canBeCached = True
-    return command, args, canBeCached
+    return compile, args, canBeCached
   
   def getObjectCommands(self, target, source, pch, engine):
     language = self.getLanguage(source)
@@ -385,13 +380,8 @@ class GccCompiler(Compiler):
         dependencies.append(pch.path)
       return dependencies
     
-    def command():
-      task = engine.createTask(compile)
-      task.start(immediate=True)
-      return task
-    
     canBeCached = True
-    return command, args, canBeCached
+    return compile, args, canBeCached
 
   @memoise
   def _getCommonLibraryArgs(self):

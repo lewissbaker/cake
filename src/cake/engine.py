@@ -24,6 +24,7 @@ import cake.tools
 import cake.task
 import cake.path
 import cake.hash
+import cake.threadpool
 
 class BuildError(Exception):
   """Exception raised when a build fails.
@@ -88,6 +89,13 @@ class Variant(object):
 
 class Engine(object):
   """Main object that holds all of the singleton resources for a build.
+  
+  @ivar scriptThreadPool: The scriptThreadPool is a single-threaded thread
+  pool that is used to speed up incremental builds on multi-core platforms.
+  It is used to execute scripts and check dependencies, both of which
+  mainly use Python code. Threaded Python code executes under a
+  notoriously slow GIL (Global Interpreter Lock). By executing most
+  Python code on the same thread we can avoid the expensive GIL locking.  
   """
   
   forceBuild = False
@@ -106,6 +114,7 @@ class Engine(object):
     self.logger = logger
     self.buildSuccessCallbacks = []
     self.buildFailureCallbacks = []
+    self.scriptThreadPool = cake.threadpool.ThreadPool(1)
   
   def addBuildSuccessCallback(self, callback):
     """Register a callback to be run if the build completes successfully.
@@ -309,7 +318,7 @@ class Engine(object):
             "Finished %s\n" % script.path,
             )
           )
-        task.start()
+        task.start(threadPool=self.scriptThreadPool)
     finally:
       self._executedLock.release()
 
@@ -564,42 +573,6 @@ class DependencyInfo(object):
       updateFileDigestCache = engine.updateFileDigestCache
       for i in xrange(len(paths)):
         updateFileDigestCache(paths[i], timestamps[i], digests[i])
-
-  def isUpToDate(self, engine, args):
-    """Query if the targets are up to date.
-    
-    @param engine: The engine instance.
-    @type engine: L{Engine}
-    @param args: The current args.
-    @type args: usually a list of string's
-    @return: True if the targets are up to date, otherwise False.
-    @rtype: bool
-    """
-    if self.version != self.VERSION:
-      return False
-    
-    if args != self.args:
-      return False
-    
-    isFile = cake.filesys.isFile
-    for target in self.targets:
-      if not isFile(target):
-        return False
-
-    assert len(self.depTimestamps) == len(self.depPaths)
-    
-    getTimestamp = engine.getTimestamp
-    paths = self.depPaths
-    timestamps = self.depTimestamps
-    for i in xrange(len(paths)):
-      try:
-        if getTimestamp(paths[i]) != timestamps[i]:
-          return False
-      except EnvironmentError:
-        # File doesn't exist any more?
-        return False
-      
-    return True
 
   def calculateDigest(self, engine):
     """Calculate the digest of the sources/dependencies.

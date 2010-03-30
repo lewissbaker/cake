@@ -895,7 +895,7 @@ class Compiler(Tool):
         lambda t=target, s=source, h=header, o=object, e=engine, c=self:
           c.buildPch(t, s, h, o, e)
         )
-      pchTask.startAfter(sourceTask)
+      pchTask.startAfter(sourceTask, threadPool=engine.scriptThreadPool)
     else:
       pchTask = None
     
@@ -948,7 +948,8 @@ class Compiler(Tool):
       prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
       
       source, sourceTask = getPathAndTask(source)
-      if sourceTask is not None:      prerequisiteTasks.append(sourceTask)
+      if sourceTask is not None:
+        prerequisiteTasks.append(sourceTask)
       
       _, pchTask = getPathAndTask(pch)
       if pchTask is not None:
@@ -958,7 +959,7 @@ class Compiler(Tool):
         lambda t=target, s=source, p=pch, e=engine, c=self:
           c.buildObject(t, s, p, e)
         )
-      objectTask.startAfter(prerequisiteTasks)
+      objectTask.startAfter(prerequisiteTasks, threadPool=engine.scriptThreadPool)
     else:
       objectTask = None
     
@@ -1049,7 +1050,7 @@ class Compiler(Tool):
         lambda t=target, s=paths, e=engine, c=self:
           c.buildLibrary(t, s, e)
         )
-      libraryTask.startAfter(tasks)
+      libraryTask.startAfter(tasks, threadPool=engine.scriptThreadPool)
     else:
       libraryTask = None
     
@@ -1104,7 +1105,7 @@ class Compiler(Tool):
         lambda t=target, s=paths, e=engine, c=self:
           c.buildModule(t, s, e)
         )
-      moduleTask.startAfter(tasks)
+      moduleTask.startAfter(tasks, threadPool=engine.scriptThreadPool)
     else:
       moduleTask = None
     
@@ -1163,7 +1164,7 @@ class Compiler(Tool):
         lambda t=target, s=paths, e=engine, c=self:
           c.buildProgram(t, s, e)
         )
-      programTask.startAfter(tasks)
+      programTask.startAfter(tasks, threadPool=engine.scriptThreadPool)
     else:
       programTask = None
     
@@ -1249,8 +1250,12 @@ class Compiler(Tool):
 
     # If we get to here then we didn't find the object in the cache
     # so we need to actually execute the build.
-    engine.logger.outputInfo("Compiling %s\n" % source)
-    compileTask = compile()
+    def command():
+      engine.logger.outputInfo("Compiling %s\n" % source)
+      return compile()
+
+    compileTask = engine.createTask(command)
+    compileTask.start(immediate=True)
 
     def storeDependencyInfoAndCache():
      
@@ -1419,8 +1424,12 @@ class Compiler(Tool):
 
     # If we get to here then we didn't find the object in the cache
     # so we need to actually execute the build.
-    engine.logger.outputInfo("Compiling %s\n" % source)
-    compileTask = compile()
+    def command():
+      engine.logger.outputInfo("Compiling %s\n" % source)
+      return compile()
+    
+    compileTask = engine.createTask(command)
+    compileTask.start(immediate=True)
 
     def storeDependencyInfoAndCache():
      
@@ -1546,21 +1555,23 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    engine.logger.outputInfo("Archiving %s\n" % target)
-    
-    cake.filesys.makeDirs(cake.path.dirName(target))
-    
-    archive()
-    
-    dependencies = scan()
-    
-    newDependencyInfo = engine.createDependencyInfo(
-      targets=[target],
-      args=args,
-      dependencies=dependencies,
-      )
-    
-    engine.storeDependencyInfo(newDependencyInfo)
+    def command():
+      engine.logger.outputInfo("Archiving %s\n" % target)
+      
+      archive()
+      
+      dependencies = scan()
+      
+      newDependencyInfo = engine.createDependencyInfo(
+        targets=[target],
+        args=args,
+        dependencies=dependencies,
+        )
+      
+      engine.storeDependencyInfo(newDependencyInfo)
+
+    archiveTask = engine.createTask(command)
+    archiveTask.start(immediate=True)
   
   def getLibraryCommand(self, target, sources, engine):
     """Get the command for constructing a library.
@@ -1593,19 +1604,23 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    engine.logger.outputInfo("Linking %s\n" % target)
-  
-    link()
-  
-    dependencies = scan()
+    def command():
+      engine.logger.outputInfo("Linking %s\n" % target)
     
-    newDependencyInfo = engine.createDependencyInfo(
-      targets=[target],
-      args=args,
-      dependencies=dependencies,
-      )
+      link()
     
-    engine.storeDependencyInfo(newDependencyInfo)
+      dependencies = scan()
+      
+      newDependencyInfo = engine.createDependencyInfo(
+        targets=[target],
+        args=args,
+        dependencies=dependencies,
+        )
+      
+      engine.storeDependencyInfo(newDependencyInfo)
+  
+    moduleTask = engine.createTask(command)
+    moduleTask.start(immediate=True)
   
   def getModuleCommands(self, target, sources, engine):
     """Get the commands for linking a module.
@@ -1653,19 +1668,23 @@ class Compiler(Tool):
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    engine.logger.outputInfo("Linking %s\n" % target)
-  
-    link()
-  
-    dependencies = scan()
+    def command():
+      engine.logger.outputInfo("Linking %s\n" % target)
     
-    newDependencyInfo = engine.createDependencyInfo(
-      targets=[target],
-      args=args,
-      dependencies=dependencies,
-      )
+      link()
     
-    engine.storeDependencyInfo(newDependencyInfo)
+      dependencies = scan()
+      
+      newDependencyInfo = engine.createDependencyInfo(
+        targets=[target],
+        args=args,
+        dependencies=dependencies,
+        )
+      
+      engine.storeDependencyInfo(newDependencyInfo)
+
+    programTask = engine.createTask(command)
+    programTask.start(immediate=True)
 
   def getProgramCommands(self, target, sources, engine):
     """Get the commands for linking a program.

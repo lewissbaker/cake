@@ -352,6 +352,7 @@ class MsvcCompiler(Compiler):
   pchSuffix = '.pch'
   pchObjectSuffix = '.obj'
   manifestSuffix = '.embed.manifest'
+  resourceSuffix = '.res'
   
   def __init__(
     self,
@@ -1192,4 +1193,75 @@ class MsvcCompiler(Compiler):
         return linkWithManifestNonIncremental, scan
     else:
       return link, scan
-  
+
+  @memoise
+  def _getCommonResourceArgs(self):
+    args = [self.__rcExe, '/nologo']
+    
+    args.extend("/d" + define for define in self.defines)
+    args.extend("/i" + path for path in reversed(self.includePaths))
+    
+    return args
+
+  def getResourceCommand(self, target, source, engine):
+    
+    args = list(self._getCommonResourceArgs())
+    args.append('/fo' + _escapeArg(target))
+    args.append(_escapeArg(source))
+    
+    @makeCommand(args)
+    def compile():
+
+      engine.logger.outputDebug(
+        "run",
+        "run: %s\n" % " ".join(args),
+        )
+      
+      if self.useResponseFile:
+        argsFile = target + '.args'
+        cake.filesys.makeDirs(cake.path.dirName(argsFile))
+        f = open(argsFile, 'wt')
+        try:
+          for arg in args[2:]:
+            f.write(arg + '\n')
+        finally:
+          f.close()
+        rcArgs = [args[0], args[1], '@' + argsFile]
+      else:
+        rcArgs = args            
+
+      cake.filesys.makeDirs(cake.path.dirName(target))
+      try:
+        p = subprocess.Popen(
+          args=rcArgs,
+          executable=self.__rcExe,
+          env=self._getProcessEnv(),
+          stdin=subprocess.PIPE,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.STDOUT,
+          )
+      except EnvironmentError, e:
+        engine.raiseError("cake: failed to launch %s: %s\n" % (self.__rcExe, str(e)))
+    
+      p.stdin.close()
+      output = p.stdout.read()
+      exitCode = p.wait()
+    
+      outputLines = []
+      for line in str(output).splitlines():
+        if not line.rstrip():
+          continue
+        outputLines.append(line)
+      if outputLines:
+        sys.stderr.write("\n".join(outputLines) + "\n")
+        sys.stderr.flush()
+          
+      if exitCode != 0:
+        engine.raiseError("rc: failed with exit code %i\n" % exitCode)
+
+    @makeCommand("rc-scan")
+    def scan():
+      # TODO: Add dependencies on DLLs used by rc.exe
+      return [self.__rcExe, source]
+
+    return compile, scan

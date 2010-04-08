@@ -1015,10 +1015,7 @@ class Compiler(Tool):
     results = []
     for source in sources:
       sourcePath, _ = getPathAndTask(source)
-      if os.path.isabs(sourcePath):
-        sourceName = cake.path.baseNameWithoutExtension(sourcePath)
-      else:
-        sourceName = cake.path.stripExtension(sourcePath)
+      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
       targetPath = cake.path.join(targetDir, sourceName)
       results.append(compiler._object(
         targetPath,

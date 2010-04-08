@@ -847,7 +847,7 @@ class Compiler(Tool):
       
       try:
         cake.filesys.makeDirs(targetDir)
-        cake.filesys.copyFile(source, target)
+        cake.filesys.copyFile(source=source, target=target)
       except EnvironmentError, e:
         engine.raiseError("%s: %s\n" % (target, str(e)))
 
@@ -1479,8 +1479,8 @@ class Compiler(Tool):
         if cake.filesys.isFile(cachedObjectPath):
           engine.logger.outputInfo("Cached %s\n" % source)
           cake.filesys.copyFile(
-            target=target,
             source=cachedObjectPath,
+            target=target,
             )
           engine.storeDependencyInfo(newDependencyInfo)
           return
@@ -1548,7 +1548,7 @@ class Compiler(Tool):
           # so that other processes won't find the dependency until
           # the object file is ready.
           cake.filesys.makeDirs(cake.path.dirName(cacheObjectPath))
-          cake.filesys.copyFile(target, cacheObjectPath)
+          cake.filesys.copyFile(source=target, target=cacheObjectPath)
           
           if not cake.filesys.isFile(cacheDepPath):
             cake.filesys.makeDirs(targetCacheDir)

@@ -65,21 +65,27 @@ class FileSystemTool(Tool):
 
     return FileTarget(path=target, task=copyTask)
 
-  def copyFiles(self, sources, target):
+  def copyFiles(self, sources, targetDir):
     """Copy a collection of files to a target directory.
-    
-    Not yet Implemented!
     
     @param sources: A list of files to copy.
     @type sources: list of string's
-    @param target: The target directory to copy to.
-    @type target: string
+    @param targetDir: The target directory to copy to.
+    @type targetDir: string
     
     @return: A list of FileTarget's representing the files that will be
     copied.
     @rtype: list of L{FileTarget}
     """
-    raise NotImplementedError()
+    if not isinstance(targetDir, basestring):
+      raise TypeError("targetDir must be a string")
+    
+    results = []
+    for s in sources:
+      sourcePath, _ = getPathAndTask(s)
+      target = cake.path.join(targetDir, cake.path.baseName(sourcePath))
+      results.append(self.copyFile(source=s, target=target))
+    return results
   
   def copyDirectory(self, source, target, pattern=None):
     """Copy the directory's contents to the target directory,

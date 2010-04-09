@@ -65,8 +65,8 @@ class ZipTool(Tool):
     source,
     onlyNewer=True,
     removeStale=False,
-    includes=None,
-    excludes=None,
+    includeFunc=None,
+    excludeFunc=None,
     ):
     """Extract all files in a Zip to the specified path.
   
@@ -80,16 +80,16 @@ class ZipTool(Tool):
     @param removeStale: Remove files and directories in the target
     directory that no longer exist in the zip.
     @type removeStale: bool 
-    @param includes: A list of include expressions used to include certain
-    files in the extraction. These could be regular expression objects
-    returned by re.compile(), or simply an object that exposes a
-    match(string) function.
-    @type includes: list of obj.match(string) 
-    @param excludes: A list of exclude expressions used to exclude certain
-    files from being extracted. These could be regular expression objects
-    returned by re.compile(), or simply an object that exposes a
-    match(string) function.
-    @type exclude: list of obj.match(string)
+    @param includeFunc: A callable used to decide whether to include
+    certain files in the extraction. This could be a python callable that
+    returns True to include the file or False to exclude it, or a regular
+    expression function such as re.compile().match or re.match.
+    @type includeFunc: any callable 
+    @param excludeFunc: A callable used to decide whether to exclude certain
+    files from being extracted. This could be a python callable that
+    returns True to exclude the file or False to include it, or a regular
+    expression function such as re.compile().match or re.match.
+    @type excludeFunc: any callable 
     
     @return: A task that will complete when the extraction has finished.
     @rtype: L{Task} 
@@ -106,22 +106,17 @@ class ZipTool(Tool):
       try:
         zipInfos = file.infolist()
         
-        if includes is not None:
+        if includeFunc is not None:
           newZipInfos = []
           for zipInfo in zipInfos:
-            for expression in includes:
-              if expression.match(zipInfo.filename):
-                newZipInfos.append(zipInfo)
-                break
+            if includeFunc(zipInfo.filename):
+              newZipInfos.append(zipInfo)
           zipInfos = newZipInfos
 
-        if excludes is not None:
+        if excludeFunc is not None:
           newZipInfos = []
           for zipInfo in zipInfos:
-            for expression in excludes:
-              if expression.match(zipInfo.filename):
-                break
-            else:
+            if not excludeFunc(zipInfo.filename):
               newZipInfos.append(zipInfo)
           zipInfos = newZipInfos
         

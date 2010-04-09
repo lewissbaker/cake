@@ -27,11 +27,8 @@ def _extractFile(engine, zipfile, zipinfo, targetDir, onlyNewer):
     zipTime = time.mktime(time.struct_time((year, month, day, hour, minute, second, 0, 0, 0)))
     
     if onlyNewer and os.path.isfile(targetFile):
-      
-      curTimestamp = cake.filesys.toUtc(os.stat(targetFile).st_mtime)
-      zipTimestamp = cake.filesys.toUtc(zipTime)
-      
-      if zipTimestamp == curTimestamp:
+      mtime = os.stat(targetFile).st_mtime
+      if zipTime == mtime:
         # Assume the zip and the extract are the same file.
         return
     

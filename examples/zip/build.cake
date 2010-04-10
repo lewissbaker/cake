@@ -5,10 +5,10 @@ def shouldInclude(s):
 
 def shouldExclude(s):
   return s.find("exclude") != -1
-
-zipping.extract(
-  env.expand("${BUILD}/unzip"),
-  script.cwd("unzip.zip"),
+  
+zipping.compress(
+  env.expand("${BUILD}/zip/zip.zip"),
+  script.cwd("zipme"),
   onlyNewer=True,
   removeStale=True,
   includeMatch=shouldInclude,

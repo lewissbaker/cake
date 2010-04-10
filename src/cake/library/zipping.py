@@ -47,6 +47,32 @@ def _extractFile(engine, zipfile, zipinfo, targetDir, onlyNewer):
     # Set the file modification time to match the zip time
     os.utime(targetFile, (zipTime, zipTime))
 
+def _writeFile(engine, file, target, sourcePath, targetPath):
+  utcTime = time.gmtime(os.stat(sourcePath).st_mtime)
+  targetPath = targetPath.replace("\\", "/") # Zips use forward slashes
+  
+  engine.logger.outputInfo("Adding %s to %s\n" % (sourcePath, target))
+  
+  if os.path.isdir(sourcePath):
+    if not targetPath.endswith("/"):
+      targetPath += "/" # Trailing slash denotes directory for some zip packages
+
+    zi = zipfile.ZipInfo(targetPath, utcTime[0:6])
+    zi.compress_type = zipfile.ZIP_DEFLATED
+    zi.external_attr = 0x00000010L # FILE_ATTRIBUTE_DIRECTORY
+    file.writestr(zi, "")
+  else:  
+    f = open(sourcePath, "rb")
+    try:
+      data = f.read()
+    finally:
+      f.close()
+    
+    zi = zipfile.ZipInfo(targetPath, utcTime[0:6])
+    zi.compress_type = zipfile.ZIP_DEFLATED
+    zi.external_attr = 0x00000020L # FILE_ATTRIBUTE_ARCHIVE
+    file.writestr(zi, data)
+
 def _walkTree(path):
   """Recursively walk a directory tree.
   """
@@ -65,8 +91,8 @@ class ZipTool(Tool):
     source,
     onlyNewer=True,
     removeStale=False,
-    includeFunc=None,
-    excludeFunc=None,
+    includeMatch=None,
+    excludeMatch=None,
     ):
     """Extract all files in a Zip to the specified path.
   
@@ -80,16 +106,16 @@ class ZipTool(Tool):
     @param removeStale: Remove files and directories in the target
     directory that no longer exist in the zip.
     @type removeStale: bool 
-    @param includeFunc: A callable used to decide whether to include
+    @param includeMatch: A callable used to decide whether to include
     certain files in the extraction. This could be a python callable that
     returns True to include the file or False to exclude it, or a regular
     expression function such as re.compile().match or re.match.
-    @type includeFunc: any callable 
-    @param excludeFunc: A callable used to decide whether to exclude certain
+    @type includeMatch: any callable 
+    @param excludeMatch: A callable used to decide whether to exclude certain
     files from being extracted. This could be a python callable that
     returns True to exclude the file or False to include it, or a regular
     expression function such as re.compile().match or re.match.
-    @type excludeFunc: any callable 
+    @type excludeMatch: any callable 
     
     @return: A task that will complete when the extraction has finished.
     @rtype: L{Task} 
@@ -106,25 +132,25 @@ class ZipTool(Tool):
       try:
         zipInfos = file.infolist()
         
-        if includeFunc is not None:
+        if includeMatch is not None:
           newZipInfos = []
           for zipInfo in zipInfos:
-            if includeFunc(zipInfo.filename):
+            if includeMatch(zipInfo.filename):
               newZipInfos.append(zipInfo)
           zipInfos = newZipInfos
 
-        if excludeFunc is not None:
+        if excludeMatch is not None:
           newZipInfos = []
           for zipInfo in zipInfos:
-            if not excludeFunc(zipInfo.filename):
+            if not excludeMatch(zipInfo.filename):
               newZipInfos.append(zipInfo)
           zipInfos = newZipInfos
         
         if removeStale:
-          zipFiles = []
+          zipFiles = set()
           for zipInfo in zipInfos:
             path = os.path.join(targetDir, zipInfo.filename)
-            zipFiles.append(os.path.normpath(os.path.normcase(path)))
+            zipFiles.add(os.path.normpath(os.path.normcase(path)))
           
           for path in _walkTree(targetDir):
             if os.path.normcase(path) not in zipFiles:
@@ -142,3 +168,126 @@ class ZipTool(Tool):
     task = engine.createTask(doIt)
     task.startAfter(sourceTask)
     return task
+
+  def compress(
+    self,
+    target,
+    source,
+    onlyNewer=True,
+    removeStale=True,
+    includeMatch=None,
+    excludeMatch=None,
+    ):
+    """Extract all files in a Zip to the specified path.
+  
+    @param target: Path to the zip file to add files to.
+    @type target: string
+    @param source: Path to the source file or directory to add.
+    @type source: string
+    @param onlyNewer: Only add files that are newer than those in
+    the zip file. Otherwise all files are re-added every time.
+    @type onlyNewer: bool
+    @param removeStale: Remove files and directories in the zip
+    file that no longer exist in the source directory.
+    @type removeStale: bool 
+    @param includeMatch: A callable used to decide whether to include
+    certain files in the zip file. This could be a python callable that
+    returns True to include the file or False to exclude it, or a regular
+    expression function such as re.compile().match or re.match.
+    @type includeMatch: any callable 
+    @param excludeMatch: A callable used to decide whether to exclude certain
+    files from the zip file. This could be a python callable that
+    returns True to exclude the file or False to include it, or a regular
+    expression function such as re.compile().match or re.match.
+    @type excludeMatch: any callable 
+    
+    @return: A task that will complete when the compression has finished.
+    @rtype: L{Task} 
+    """
+    if not isinstance(target, basestring):
+      raise TypeError("target  must be a string")
+
+    sourcePath, sourceTask = getPathAndTask(source)
+
+    engine = Script.getCurrent().engine
+    
+    def doIt():
+      toZip = {}
+      if os.path.isdir(source):
+        firstChar = len(source)+1
+        for path in _walkTree(source):
+          targetPath = path[firstChar:] # Strip the source dir name
+          if includeMatch is not None and not includeMatch(targetPath):
+            continue
+          if excludeMatch is not None and excludeMatch(targetPath):
+            continue
+          toZip[os.path.normcase(targetPath)] = (path, targetPath)
+      else:
+        targetPath = os.path.basename(source)
+        toZip[os.path.normcase(targetPath)] = (source, targetPath)
+      
+      if onlyNewer:
+        recreate = False
+      else:
+        recreate = True # Always rebuild
+      
+      if not recreate:
+        try:
+          file = zipfile.ZipFile(target, "r")
+          try:
+            zipInfos = file.infolist()
+          finally:
+            file.close()
+          
+          fromZip = {}
+          for zipInfo in zipInfos:
+            path = os.path.normpath(os.path.normcase(zipInfo.filename))
+            fromZip[path] = zipInfo
+        except EnvironmentError:
+          recreate = True # File doesn't exist or is invalid
+
+      if not recreate and onlyNewer:
+        for path, sourceTarget in toZip.iteritems():
+          zipInfo = fromZip.get(path, None)
+          if zipInfo is not None:
+            utcTime = time.gmtime(os.stat(sourceTarget[0]).st_mtime)
+            zipTime = utcTime[0:5] + (
+              utcTime[5] & 0xFE, # Zip only saves 2 second resolution
+              )              
+            if zipTime != zipInfo.date_time:
+              # We must recreate the zip to update files
+              recreate = True
+              break
+          
+        if not recreate and removeStale:
+          for path in fromZip.iterkeys():
+            if path not in toZip:
+              # We must recreate the zip to remove files
+              recreate = True
+              break
+      
+      if recreate:
+        cake.filesys.makeDirs(os.path.dirname(target))
+        file = zipfile.ZipFile(target, "w")
+        try:
+          for sourcePath, targetPath in toZip.itervalues():
+            _writeFile(engine, file, target, sourcePath, targetPath)
+        finally:
+          file.close()
+      else:
+        file = None
+        try:
+          for sourcePath, targetPath in toZip.itervalues():
+            path = os.path.normcase(targetPath)
+            if path not in fromZip:
+              if file is None:
+                file = zipfile.ZipFile(target, "a")
+              _writeFile(engine, file, target, sourcePath, targetPath)
+        finally:
+          if file is not None:
+            file.close()
+
+    task = engine.createTask(doIt)
+    task.startAfter(sourceTask)
+    return task
+    

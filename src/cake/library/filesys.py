@@ -32,15 +32,20 @@ class FileSystemTool(Tool):
     
     sourcePath, sourceTask = getPathAndTask(source)
    
-    engine = Script.getCurrent().engine
+    script = Script.getCurrent()
+    engine = script.engine
+    configuration = script.configuration
    
     def doCopy():
       
+      targetAbsPath = configuration.abspath(target)
+      sourceAbsPath = configuration.abspath(sourcePath) 
+      
       if engine.forceBuild:
         reasonToBuild = "rebuild has been forced"
-      elif not cake.filesys.isFile(target):
+      elif not cake.filesys.isFile(targetAbsPath):
         reasonToBuild = "'%s' does not exist" % target
-      elif engine.getTimestamp(sourcePath) > engine.getTimestamp(target):
+      elif engine.getTimestamp(sourceAbsPath) > engine.getTimestamp(targetAbsPath):
         reasonToBuild = "'%s' is newer than '%s'" % (sourcePath, target)
       else:
         # up-to-date
@@ -53,8 +58,8 @@ class FileSystemTool(Tool):
       engine.logger.outputInfo("Copying %s to %s\n" % (sourcePath, target))
       
       try:
-        cake.filesys.makeDirs(cake.path.dirName(target))
-        cake.filesys.copyFile(sourcePath, target)
+        cake.filesys.makeDirs(cake.path.dirName(targetAbsPath))
+        cake.filesys.copyFile(sourceAbsPath, targetAbsPath)
       except EnvironmentError, e:
         engine.raiseError("%s: %s\n" % (target, str(e)))
 

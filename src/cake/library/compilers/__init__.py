@@ -554,29 +554,29 @@ class Compiler(Tool):
     self.modules = []
 
   @classmethod
-  def _getObjectsInLibrary(cls, engine, path):
+  def _getObjectsInLibrary(cls, configuration, path):
     """Get a list of the paths of object files in the specified library.
     
-    @param engine: The Engine that is looking up the results.
-    @type engine: cake.engine.Engine
+    @param configuration: The Configuration that is looking up the results.
+    @type configuration: cake.engine.Configuration
     
     @param path: Path of the library previously built by a call to library().
     
     @return: A tuple of the paths of objects in the library.
     """
     path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = cls.__libraryObjects.get(engine, None)
+    libraryObjects = cls.__libraryObjects.get(configuration, None)
     if libraryObjects:
       return libraryObjects.get(path, None)
     else:
       return None
 
   @classmethod
-  def _setObjectsInLibrary(cls, engine, path, objectPaths):
+  def _setObjectsInLibrary(cls, configuration, path, objectPaths):
     """Set the list of paths of object files in the specified library.
     
-    @param engine: The Engine that is looking up the results.
-    @type engine: cake.engine.Engine
+    @param configuration: The Configuration that is looking up the results.
+    @type configuration: cake.engine.Configuration
     
     @param path: Path of the library previously built by a call to library().
     @type path: string
@@ -585,7 +585,7 @@ class Compiler(Tool):
     @type objectPaths: list of strings
     """
     path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = cls.__libraryObjects.setdefault(engine, {})
+    libraryObjects = cls.__libraryObjects.setdefault(configuration, {})
     libraryObjects[path] = tuple(objectPaths)
 
   def addCFlag(self, flag):
@@ -802,23 +802,30 @@ class Compiler(Tool):
       return []
     
     script = Script.getCurrent()
-    engine = Script.getCurrent().engine
+    engine = script.engine
+    configuration = script.configuration
 
     tasks = []
     for moduleScript in self.moduleScripts:
-      tasks.append(engine.execute(moduleScript, script.variant))
+      tasks.append(configuration.execute(moduleScript, script.variant))
 
     def doCopy(source, targetDir):
       # Try without and with the extension
-      if not cake.filesys.isFile(source):
+      absSource = configuration.abspath(source)
+      
+      # HACK: We should really be passing in the correct file name here
+      if not cake.filesys.isFile(absSource):
         source = cake.path.forceExtension(source, self.moduleSuffix)
-      target = cake.path.join(targetDir, cake.path.baseName(source))
+        absSource = cake.path.forceExtension(absSource, self.moduleSuffix)
+        
+      target = cake.path.join(targetDir, cake.path.baseName(absSource))
+      absTarget = configuration.abspath(target)
       
       if engine.forceBuild:
         reasonToBuild = "rebuild has been forced"
-      elif not cake.filesys.isFile(target):
+      elif not cake.filesys.isFile(absTarget):
         reasonToBuild = "'%s' does not exist" % target
-      elif engine.getTimestamp(source) > engine.getTimestamp(target):
+      elif engine.getTimestamp(absSource) > engine.getTimestamp(absTarget):
         reasonToBuild = "'%s' is newer than '%s'" % (source, target)
       else:
         # up-to-date
@@ -831,12 +838,12 @@ class Compiler(Tool):
       engine.logger.outputInfo("Copying %s to %s\n" % (source, target))
       
       try:
-        cake.filesys.makeDirs(targetDir)
-        cake.filesys.copyFile(source, target)
+        cake.filesys.makeDirs(cake.path.dirName(absTarget))
+        cake.filesys.copyFile(absSource, absTarget)
       except EnvironmentError, e:
         engine.raiseError("%s: %s\n" % (target, str(e)))
 
-      engine.notifyFileChanged(target)
+      engine.notifyFileChanged(absTarget)
 
     moduleTasks = []
     for module in self.modules:
@@ -887,13 +894,13 @@ class Compiler(Tool):
       object = cake.path.stripExtension(target) + self.pchObjectSuffix
     
     if self.enabled:
-      engine = Script.getCurrent().engine
+      configuration = Script.getCurrent().configuration
       
       source, sourceTask = getPathAndTask(source)
       
-      pchTask = engine.createTask(
-        lambda t=target, s=source, h=header, o=object, e=engine, c=self:
-          c.buildPch(t, s, h, o, e)
+      pchTask = configuration.engine.createTask(
+        lambda t=target, s=source, h=header, o=object, cn=configuration, c=self:
+          c.buildPch(t, s, h, o, cn)
         )
       pchTask.startAfter(sourceTask)
     else:
@@ -943,20 +950,21 @@ class Compiler(Tool):
       target = cake.path.forceExtension(target, self.objectSuffix)
       
     if self.enabled:
-      engine = Script.getCurrent().engine
+      configuration = Script.getCurrent().configuration
       
       prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
       
       source, sourceTask = getPathAndTask(source)
-      if sourceTask is not None:      prerequisiteTasks.append(sourceTask)
+      if sourceTask is not None:
+        prerequisiteTasks.append(sourceTask)
       
       _, pchTask = getPathAndTask(pch)
       if pchTask is not None:
         prerequisiteTasks.append(pchTask)
       
-      objectTask = engine.createTask(
-        lambda t=target, s=source, p=pch, e=engine, c=self:
-          c.buildObject(t, s, p, e)
+      objectTask = configuration.engine.createTask(
+        lambda t=target, s=source, p=pch, cn=configuration, c=self:
+          c.buildObject(t, s, p, cn)
         )
       objectTask.startAfter(prerequisiteTasks)
     else:
@@ -1039,15 +1047,15 @@ class Compiler(Tool):
       target = cake.path.forcePrefixSuffix(target, prefix, suffix)
 
     if self.enabled:
-      engine = Script.getCurrent().engine
+      configuration = Script.getCurrent().configuration
   
       paths, tasks = getPathsAndTasks(sources)
       
-      self._setObjectsInLibrary(engine, target, paths)
+      self._setObjectsInLibrary(configuration, target, paths)
       
-      libraryTask = engine.createTask(
-        lambda t=target, s=paths, e=engine, c=self:
-          c.buildLibrary(t, s, e)
+      libraryTask = configuration.engine.createTask(
+        lambda t=target, s=paths, cn=configuration, c=self:
+          c.buildLibrary(t, s, cn)
         )
       libraryTask.startAfter(tasks)
     else:
@@ -1094,15 +1102,16 @@ class Compiler(Tool):
     if self.enabled:
       script = Script.getCurrent()
       engine = script.engine
+      configuration = script.configuration
   
       paths, tasks = getLinkPathsAndTasks(sources)
   
       for libraryScript in self.libraryScripts:
-        tasks.append(engine.execute(libraryScript, script.variant))
+        tasks.append(configuration.execute(libraryScript, script.variant))
       
       moduleTask = engine.createTask(
-        lambda t=target, s=paths, e=engine, c=self:
-          c.buildModule(t, s, e)
+        lambda t=target, s=paths, cn=configuration, c=self:
+          c.buildModule(t, s, cn)
         )
       moduleTask.startAfter(tasks)
     else:
@@ -1153,15 +1162,16 @@ class Compiler(Tool):
     if self.enabled:
       script = Script.getCurrent()
       engine = script.engine
+      configuration = script.configuration
   
       paths, tasks = getLinkPathsAndTasks(sources)
       
       for libraryScript in self.libraryScripts:
-        tasks.append(engine.execute(libraryScript, script.variant))
+        tasks.append(configuration.execute(libraryScript, script.variant))
       
       programTask = engine.createTask(
-        lambda t=target, s=paths, e=engine, c=self:
-          c.buildProgram(t, s, e)
+        lambda t=target, s=paths, cn=configuration, c=self:
+          c.buildProgram(t, s, cn)
         )
       programTask.startAfter(tasks)
     else:
@@ -1177,15 +1187,16 @@ class Compiler(Tool):
   ###########################
   # Internal methods not part of public API
   
-  def _resolveLibraries(self, engine):
+  def _resolveLibraries(self, configuration):
     """Resolve the list of library names to library paths.
     
     Searches for each library in the libraryPaths.
     If self.linkObjectsInLibrary is True then returns the paths of object files
     that comprise the library instead of the library path.
     
-    @param engine: The engine to use for logging error messages.
-    @type engine: cake.engine.Engine
+    @param configuration: The configuration to use for resolving relative
+    paths and logging error messages.
+    @type configuration: cake.engine.Configuration
     
     @return: A tuple containing a list of paths to resolved
     libraries/objects, followed by a list of unresolved libraries.
@@ -1203,11 +1214,12 @@ class Compiler(Tool):
 
       # Add [""] so we search for the full path first 
       for candidate in cake.path.join(reversed(self.libraryPaths + [""]), fileNames):
-        if cake.filesys.isFile(candidate):
+        absCandidate = configuration.abspath(candidate)
+        if cake.filesys.isFile(absCandidate):
           libraryPaths.append(candidate)
           break
       else:
-        engine.logger.outputDebug(
+        configuration.engine.logger.outputDebug(
           "scan",
           "scan: Ignoring missing library '" + library + "'\n",
           )
@@ -1216,7 +1228,7 @@ class Compiler(Tool):
     if self.linkObjectsInLibrary:
       results = []
       for libraryPath in libraryPaths:
-        objects = self._getObjectsInLibrary(engine, libraryPath)
+        objects = self._getObjectsInLibrary(configuration, libraryPath)
         if objects is None:
           results.append(libraryPath)
         else:
@@ -1225,20 +1237,20 @@ class Compiler(Tool):
     else:
       return libraryPaths, unresolvedLibs
   
-  def buildPch(self, target, source, header, object, engine):
+  def buildPch(self, target, source, header, object, configuration):
     compile, args, _ = self.getPchCommands(
       target,
       source,
       header,
       object,
-      engine,
+      configuration,
       )
     
     # Check if the target needs building
-    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    _, reasonToBuild = configuration.checkDependencyInfo(target, args)
     if not reasonToBuild:
       return # Target is up to date
-    engine.logger.outputDebug(
+    configuration.engine.logger.outputDebug(
       "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
@@ -1249,7 +1261,7 @@ class Compiler(Tool):
 
     # If we get to here then we didn't find the object in the cache
     # so we need to actually execute the build.
-    engine.logger.outputInfo("Compiling %s\n" % source)
+    configuration.engine.logger.outputInfo("Compiling %s\n" % source)
     compileTask = compile()
 
     def storeDependencyInfoAndCache():
@@ -1271,17 +1283,17 @@ class Compiler(Tool):
             path = path[workspaceRootLen:]
           dependencies.append(path)
       
-      newDependencyInfo = engine.createDependencyInfo(
+      newDependencyInfo = configuration.createDependencyInfo(
         targets=targets,
         args=args,
         dependencies=dependencies,
         )
-      engine.storeDependencyInfo(newDependencyInfo)
+      configuration.storeDependencyInfo(newDependencyInfo)
         
-    storeDependencyTask = engine.createTask(storeDependencyInfoAndCache)
+    storeDependencyTask = configuration.engine.createTask(storeDependencyInfoAndCache)
     storeDependencyTask.startAfter(compileTask, immediate=True)
 
-  def buildObject(self, target, source, pch, engine):
+  def buildObject(self, target, source, pch, configuration):
     """Perform the actual build of an object.
     
     @param target: Path of the target object file.
@@ -1290,20 +1302,21 @@ class Compiler(Tool):
     @param source: Path of the source file.
     @type source: string
     
-    @param engine: The build Engine to use when building this object.
+    @param configuration: The configuration to use when building this object.
+    @type configuration: L{cake.engine.Configuration}
     """
     compile, args, canBeCached = self.getObjectCommands(
       target,
       source,
       pch,
-      engine,
+      configuration,
       )
     
     # Check if the target needs building
-    oldDependencyInfo, reasonToBuild = engine.checkDependencyInfo(target, args)
+    oldDependencyInfo, reasonToBuild = configuration.checkDependencyInfo(target, args)
     if not reasonToBuild:
       return # Target is up to date
-    engine.logger.outputDebug(
+    configuration.engine.logger.outputDebug(
       "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
@@ -1318,13 +1331,13 @@ class Compiler(Tool):
       # Prime the file digest cache from previous run so we don't have
       # to recalculate file digests for files that haven't changed.
       if oldDependencyInfo is not None:
-        oldDependencyInfo.primeFileDigestCache(engine)
+        configuration.primeFileDigestCache(oldDependencyInfo)
       
       # We either need to make all paths that form the cache digest relative
       # to the workspace root or all of them absolute.
-      targetDigestPath = os.path.abspath(target)
+      targetDigestPath = configuration.abspath(target)
       if self.objectCacheWorkspaceRoot is not None:
-        workspaceRoot = os.path.abspath(self.objectCacheWorkspaceRoot)
+        workspaceRoot = configuration.abspath(self.objectCacheWorkspaceRoot)
         workspaceRoot = os.path.normcase(workspaceRoot)
         targetDigestPathNorm = os.path.normcase(targetDigestPath)
         if cake.path.commonPath(targetDigestPathNorm, workspaceRoot) == workspaceRoot:
@@ -1340,12 +1353,13 @@ class Compiler(Tool):
         targetDigestStr[1],
         targetDigestStr
         )
+      targetCacheDir = configuration.abspath(targetCacheDir)
       
       # Find all entries in the directory
       entries = set()
       
       # If doing a force build, pretend the cache is empty
-      if not engine.forceBuild:
+      if not configuration.engine.forceBuild:
         try:
           entries.update(os.listdir(targetCacheDir))
         except EnvironmentError:
@@ -1389,7 +1403,7 @@ class Compiler(Tool):
           continue
         
         try:
-          newDependencyInfo = engine.createDependencyInfo(
+          newDependencyInfo = configuration.createDependencyInfo(
             targets=[target],
             args=args,
             dependencies=candidateDependencies,
@@ -1400,7 +1414,7 @@ class Compiler(Tool):
         
         # Check if the state of our files matches that of a cached
         # object file.
-        cachedObjectDigest = newDependencyInfo.calculateDigest(engine)
+        cachedObjectDigest = configuration.calculateDigest(newDependencyInfo)
         cachedObjectDigestStr = binascii.hexlify(cachedObjectDigest).decode("utf8")
         cachedObjectPath = cake.path.join(
           self.objectCachePath,
@@ -1409,17 +1423,17 @@ class Compiler(Tool):
           cachedObjectDigestStr
           )
         if cake.filesys.isFile(cachedObjectPath):
-          engine.logger.outputInfo("Cached %s\n" % source)
+          configuration.engine.logger.outputInfo("Cached %s\n" % source)
           cake.filesys.copyFile(
-            target=target,
-            source=cachedObjectPath,
+            target=configuration.abspath(target),
+            source=configuration.abspath(cachedObjectPath),
             )
-          engine.storeDependencyInfo(newDependencyInfo)
+          configuration.storeDependencyInfo(newDependencyInfo)
           return
 
     # If we get to here then we didn't find the object in the cache
     # so we need to actually execute the build.
-    engine.logger.outputInfo("Compiling %s\n" % source)
+    configuration.engine.logger.outputInfo("Compiling %s\n" % source)
     compileTask = compile()
 
     def storeDependencyInfoAndCache():
@@ -1428,31 +1442,31 @@ class Compiler(Tool):
       # make any paths in this workspace relative to the current workspace.
       dependencies = []
       if self.objectCacheWorkspaceRoot is None:
-        dependencies = [os.path.abspath(p) for p in compileTask.result]
+        dependencies = [configuration.abspath(p) for p in compileTask.result]
       else:
         workspaceRoot = os.path.normcase(
-          os.path.abspath(self.objectCacheWorkspaceRoot)
+          configuration.abspath(self.objectCacheWorkspaceRoot)
           ) + os.path.sep
         workspaceRootLen = len(workspaceRoot)
         for path in compileTask.result:
-          path = os.path.abspath(path)
+          path = configuration.abspath(path)
           pathNorm = os.path.normcase(path)
           if pathNorm.startswith(workspaceRoot):
             path = path[workspaceRootLen:]
           dependencies.append(path)
       
-      newDependencyInfo = engine.createDependencyInfo(
+      newDependencyInfo = configuration.createDependencyInfo(
         targets=[target],
         args=args,
         dependencies=dependencies,
         calculateDigests=useCacheForThisObject,
         )
-      engine.storeDependencyInfo(newDependencyInfo)
+      configuration.storeDependencyInfo(newDependencyInfo)
 
       # Finally update the cache if necessary
       if useCacheForThisObject:
         try:
-          objectDigest = newDependencyInfo.calculateDigest(engine)
+          objectDigest = configuration.calculateDigest(newDependencyInfo)
           objectDigestStr = binascii.hexlify(objectDigest).decode("utf8")
           
           dependencyDigest = cake.hash.sha1()
@@ -1476,7 +1490,7 @@ class Compiler(Tool):
           # so that other processes won't find the dependency until
           # the object file is ready.
           cake.filesys.makeDirs(cake.path.dirName(cacheObjectPath))
-          cake.filesys.copyFile(target, cacheObjectPath)
+          cake.filesys.copyFile(configuration.abspath(target), cacheObjectPath)
           
           if not cake.filesys.isFile(cacheDepPath):
             cake.filesys.makeDirs(targetCacheDir)
@@ -1491,10 +1505,10 @@ class Compiler(Tool):
           # The build shouldn't fail.
           pass
         
-    storeDependencyTask = engine.createTask(storeDependencyInfoAndCache)
+    storeDependencyTask = configuration.engine.createTask(storeDependencyInfoAndCache)
     storeDependencyTask.startAfter(compileTask, immediate=True)
   
-  def getPchCommands(self, target, source, header, object, engine):
+  def getPchCommands(self, target, source, header, object, configuration):
     """Get the command-lines for compiling a precompiled header.
     
     @return: A (compile, args, canCache) tuple where 'compile' is a function that
@@ -1505,9 +1519,9 @@ class Compiler(Tool):
     'canCache' is a boolean value that indicates whether the built object
     file can be safely cached or not.
     """
-    engine.raiseError("Don't know how to compile %s\n" % source)
+    configuration.engine.raiseError("Don't know how to compile %s\n" % source)
 
-  def getObjectCommands(self, target, source, pch, engine):
+  def getObjectCommands(self, target, source, pch, configuration):
     """Get the command-lines for compiling a source to a target.
     
     @return: A (compile, args, canCache) tuple where 'compile' is a function that
@@ -1518,9 +1532,9 @@ class Compiler(Tool):
     'canCache' is a boolean value that indicates whether the built object
     file can be safely cached or not.
     """
-    engine.raiseError("Don't know how to compile %s\n" % source)
+    configuration.engine.raiseError("Don't know how to compile %s\n" % source)
   
-  def buildLibrary(self, target, sources, engine):
+  def buildLibrary(self, target, sources, configuration):
     """Perform the actual build of a library.
     
     @param target: Path of the target library file.
@@ -1529,45 +1543,46 @@ class Compiler(Tool):
     @param sources: List of source object files.
     @type sources: list of string
     
-    @param engine: The Engine object to use for dependency checking
+    @param configuration: The Configuration object to use for dependency checking
     etc.
     """
 
-    archive, scan = self.getLibraryCommand(target, sources, engine)
+    archive, scan = self.getLibraryCommand(target, sources, configuration)
     
     args = repr(archive)
     
     # Check if the target needs building
-    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    _, reasonToBuild = configuration.checkDependencyInfo(target, args)
     if not reasonToBuild:
       return # Target is up to date
-    engine.logger.outputDebug(
+    configuration.engine.logger.outputDebug(
       "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    engine.logger.outputInfo("Archiving %s\n" % target)
+    configuration.engine.logger.outputInfo("Archiving %s\n" % target)
     
-    cake.filesys.makeDirs(cake.path.dirName(target))
+    absTarget = configuration.abspath(target)
+    cake.filesys.makeDirs(cake.path.dirName(absTarget))
     
     archive()
     
     dependencies = scan()
     
-    newDependencyInfo = engine.createDependencyInfo(
+    newDependencyInfo = configuration.createDependencyInfo(
       targets=[target],
       args=args,
       dependencies=dependencies,
       )
     
-    engine.storeDependencyInfo(newDependencyInfo)
+    configuration.storeDependencyInfo(newDependencyInfo)
   
-  def getLibraryCommand(self, target, sources, engine):
+  def getLibraryCommand(self, target, sources, configuration):
     """Get the command for constructing a library.
     """
-    engine.raiseError("Don't know how to archive %s\n" % target)
+    configuration.engine.raiseError("Don't know how to archive %s\n" % target)
   
-  def buildModule(self, target, sources, engine):
+  def buildModule(self, target, sources, configuration):
     """Perform the actual build of a module.
     
     @param target: Path of the target module file.
@@ -1577,37 +1592,37 @@ class Compiler(Tool):
     libraries to link.
     @type sources: list of string
     
-    @param engine: The Engine object to use for dependency checking
+    @param configuration: The Configuration object to use for dependency checking
     etc.
     """
-    link, scan = self.getModuleCommands(target, sources, engine)
+    link, scan = self.getModuleCommands(target, sources, configuration)
 
     args = [repr(link), repr(scan)]
     
     # Check if the target needs building
-    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    _, reasonToBuild = configuration.checkDependencyInfo(target, args)
     if not reasonToBuild:
       return # Target is up to date
-    engine.logger.outputDebug(
+    configuration.engine.logger.outputDebug(
       "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    engine.logger.outputInfo("Linking %s\n" % target)
+    configuration.engine.logger.outputInfo("Linking %s\n" % target)
   
     link()
   
     dependencies = scan()
     
-    newDependencyInfo = engine.createDependencyInfo(
+    newDependencyInfo = configuration.createDependencyInfo(
       targets=[target],
       args=args,
       dependencies=dependencies,
       )
     
-    engine.storeDependencyInfo(newDependencyInfo)
+    configuration.storeDependencyInfo(newDependencyInfo)
   
-  def getModuleCommands(self, target, sources, engine):
+  def getModuleCommands(self, target, sources, configuration):
     """Get the commands for linking a module.
     
     @param target: path to the target file
@@ -1617,16 +1632,16 @@ class Compiler(Tool):
     module.
     @type sources: list of string
     
-    @param engine: The cake Engine being used for the build.
-    @type engine: cake.engine.Engine
+    @param configuration: The Configuration being used for the build.
+    @type configuration: L{cake.engine.Configuration}
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
     returns the list of dependencies. 
     """
-    engine.raiseError("Don't know how to link %s\n" % target)
+    configuration.engine.raiseError("Don't know how to link %s\n" % target)
   
-  def buildProgram(self, target, sources, engine):
+  def buildProgram(self, target, sources, configuration):
     """Perform the actual build of a module.
     
     @param target: Path of the target module file.
@@ -1636,38 +1651,38 @@ class Compiler(Tool):
     libraries to link.
     @type sources: list of string
     
-    @param engine: The Engine object to use for dependency checking
+    @param configuration: The Configuration object to use for dependency checking
     etc.
     """
 
-    link, scan = self.getProgramCommands(target, sources, engine)
+    link, scan = self.getProgramCommands(target, sources, configuration)
 
     args = [repr(link), repr(scan)]
     
     # Check if the target needs building
-    _, reasonToBuild = engine.checkDependencyInfo(target, args)
+    _, reasonToBuild = configuration.checkDependencyInfo(target, args)
     if not reasonToBuild:
       return # Target is up to date
-    engine.logger.outputDebug(
+    configuration.engine.logger.outputDebug(
       "reason",
       "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
       )
 
-    engine.logger.outputInfo("Linking %s\n" % target)
+    configuration.engine.logger.outputInfo("Linking %s\n" % target)
   
     link()
   
     dependencies = scan()
     
-    newDependencyInfo = engine.createDependencyInfo(
+    newDependencyInfo = configuration.createDependencyInfo(
       targets=[target],
       args=args,
       dependencies=dependencies,
       )
     
-    engine.storeDependencyInfo(newDependencyInfo)
+    configuration.storeDependencyInfo(newDependencyInfo)
 
-  def getProgramCommands(self, target, sources, engine):
+  def getProgramCommands(self, target, sources, configuration):
     """Get the commands for linking a program.
     
     @param target: path to the target file
@@ -1677,11 +1692,11 @@ class Compiler(Tool):
     program.
     @type sources: list of string
     
-    @param engine: The cake Engine being used for the build.
-    @type engine: cake.engine.Engine
+    @param configuration: The cake Configuration being used for the build.
+    @type configuration: L{cake.engine.Engine}
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
     returns the list of dependencies. 
     """
-    engine.raiseError("Don't know how to link %s\n" % target)
+    configuration.engine.raiseError("Don't know how to link %s\n" % target)

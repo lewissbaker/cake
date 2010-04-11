@@ -22,31 +22,29 @@ import cake.path
 import cake.filesys
 import cake.threadpool
 
-def searchUpForFile(path, file):
-  """Search a specified directory and its parent directories for a file.
+def callOnce(f):
+  """Decorator that handles calling a function only once.
   
-  @param path: The path of the directory to start searching from.
-  This should be an absolute path, otherwise results may be unexpected.
-  @type path: string
-  
-  @param file: The name of the file to search for.
-  @type file: string
-  
-  @return: The path of the file found or None if the file was not
-  found.
-  @rtype: string
+  The second and subsequent times it is called the cached
+  result is returned.
   """
-  while True:
-    candidate = cake.path.join(path, file)
-    if cake.filesys.isFile(candidate):
-      return candidate
-  
-    parent = cake.path.dirName(path)
-    if parent == path:
-      return None
-    
-    path = parent
+  state = {}
+  def func(*args, **kwargs):
+    if state:
+      try:
+        return state["result"]
+      except KeyError:
+        raise state["exception"]
+    else:
+      try:
+        result = state["result"] = f(*args, **kwargs)
+        return result
+      except Exception, e:
+        state["exception"] = e
+        raise
+  return func 
 
+@callOnce
 def _overrideOpen():
   """
   Override the built-in open() and os.open() to set the no-inherit
@@ -67,8 +65,8 @@ def _overrideOpen():
       flag |= os.O_NOINHERIT
       return old_os_open(filename, flag, mode)
     os.open = new_os_open
-_overrideOpen()
 
+@callOnce
 def _overridePopen():
   """
   Override the subprocess Popen class due to a bug in Python 2.4
@@ -92,8 +90,8 @@ def _overridePopen():
         except ValueError:
           return self.returncode
     subprocess.Popen = new_Popen
-_overridePopen()
-    
+
+@callOnce    
 def _speedUp():
   """
   Speed up execution by importing Psyco and binding the slowest functions
@@ -101,8 +99,8 @@ def _speedUp():
   """ 
   try:
     import psyco
-    psyco.bind(cake.engine.DependencyInfo.isUpToDate)
-    psyco.bind(cake.engine.Engine.checkDependencyInfo)
+    psyco.bind(cake.engine.Configuration.checkDependencyInfo)
+    psyco.bind(cake.engine.Configuration.createDependencyInfo)
     #psyco.full()
     #psyco.profile()
     #psyco.log()
@@ -114,7 +112,6 @@ def _speedUp():
       sys.stderr.write(
         "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
         )
-_speedUp()
 
 def run(args=None, cwd=None):
   """Run a cake build with the specified command-line args.
@@ -130,10 +127,14 @@ def run(args=None, cwd=None):
   if exited with success.
   @rtype: int
   """
+  startTime = datetime.datetime.utcnow()
+  
+  _overrideOpen()
+  _overridePopen()
+  _speedUp()
+  
   if args is None:
     args = sys.argv[1:]
-  
-  startTime = datetime.datetime.utcnow()
   
   class MyOption(optparse.Option):
     """Subclass the Option class to provide an 'extend' action.
@@ -205,9 +206,10 @@ def run(args=None, cwd=None):
     cwd = os.path.abspath(cwd)
   else:
     cwd = os.getcwd()
+  cwd = cake.path.fileSystemPath(cwd)
 
   keywords = {}
-  script = None
+  scripts = []
   
   for arg in args:
     if '=' in arg:
@@ -217,25 +219,13 @@ def run(args=None, cwd=None):
         value = value[0]
       keywords[keyword] = value
     else:
-      if script is None:
-        script = arg
-      else:
-        sys.stderr.write(
-          "cake: cannot execute multiple scripts '%s' and '%s'\n" % (
-            script,
-            arg,
-            ))
-        return -1
+      if not os.path.isabs(arg):
+        arg = os.path.join(cwd, arg)
+      scripts.append(arg)
     
-  if script is None:
-    script = cwd
+  if not scripts:
+    scripts.append(cwd)
   
-  if not os.path.isabs(script):
-    script = os.path.join(cwd, script)
-  if cake.filesys.isDir(script):
-    script = cake.path.join(script, 'build.cake')
-  scriptDir = os.path.dirname(script)
-
   if options.profileOutput:
     import cProfile
     p = cProfile.Profile()
@@ -245,64 +235,29 @@ def run(args=None, cwd=None):
     threadPool = cake.threadpool.ThreadPool(options.jobs)
   cake.task.setThreadPool(threadPool)
 
-  if options.boot is None:
-    options.boot = searchUpForFile(scriptDir, 'boot.cake')
-    if options.boot is None:
-      sys.stderr.write("cake: could not find 'boot.cake' in %s\n" % scriptDir)
-      return -1
-  elif not os.path.isabs(options.boot):
-    options.boot = os.path.join(cwd, options.boot)
-
-  # Make the boot file path the cwd as we'll be making the args
-  # relative to it later  
-  # Ideally this would go in the boot.cake but then it would also
-  # need the ability to modify the scripts path to be relative to this
-  bootDir = os.path.dirname(options.boot)
-  bootDir = cake.path.fileSystemPath(bootDir) 
-  os.chdir(bootDir)
-
   logger = cake.logging.Logger(debugComponents=options.debugComponents)
   engine = cake.engine.Engine(logger)
   engine.forceBuild = options.forceBuild
   engine.createProjects = options.createProjects
-  try:
-    s = cake.engine.Script(options.boot, None, engine, None)
-    s.execute()
-  except Exception:
-    msg = traceback.format_exc()
-    engine.logger.outputError(msg)
-    return 1
-
-  if keywords:
-    try:
-      variants = engine.findAllVariants(keywords)
-    except LookupError, e:
-      msg = "Error: unable to determine build variant: %s" % str(e)
-      engine.logger.outputError(msg)
-      return 1
-  else:
-    variants = engine.defaultVariants
-
+  
   tasks = []
-
-  # Find the common parts of the boot dir and arg and strip them off
-  script = cake.path.fileSystemPath(script)
-  index = len(cake.path.commonPath(script, bootDir))
-  # If stripping a directory, make sure to strip off the separator too 
-  if index and (script[index] == os.path.sep or script[index] == os.path.altsep):
-    index += 1
-  script = script[index:]
-
-  for variant in variants:
+  
+  bootScript = options.boot
+  if bootScript is not None and not os.path.isabs(bootScript):
+    bootScript = os.path.abspath(bootScript)
+  
+  for script in scripts:
     try:
-      task = engine.execute(path=script, variant=variant)
+      task = engine.execute(
+        path=script,
+        bootScript=bootScript,
+        keywords=keywords,
+        )
       tasks.append(task)
     except Exception:
       msg = traceback.format_exc()
       engine.logger.outputError(msg)
-
-  finished = threading.Event()
-  
+    
   def onFinish():
     if mainTask.succeeded:
       engine.onBuildSucceeded()
@@ -320,16 +275,18 @@ def run(args=None, cwd=None):
       else:
         msg = "Build failed with %i errors.\n" % engine.logger.errorCount
     engine.logger.outputInfo(msg)
-    finished.set()
   
   mainTask = cake.task.Task()
+  mainTask.completeAfter(tasks)
   mainTask.addCallback(onFinish)
-  mainTask.startAfter(tasks)
+  mainTask.start()
 
   if options.profileOutput:
     mainTask.addCallback(threadPool.quit)
     threadPool.run()
   else:
+    finished = threading.Event()
+    mainTask.addCallback(finished.set)
     # We must wait in a loop in case a KeyboardInterrupt comes.
     while not finished.isSet():
       time.sleep(0.1)

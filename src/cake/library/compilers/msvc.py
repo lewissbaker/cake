@@ -408,9 +408,9 @@ class MsvcCompiler(Compiler):
       if self.forcedUsingScripts:
         script = Script.getCurrent()
         variant = script.variant
-        engine = script.engine
+        execute = script.configuration.execute
         for path in self.forcedUsingScripts:
-          tasks.append(engine.execute(path, variant))
+          tasks.append(execute(path, variant))
           
       tasks.extend(getPathsAndTasks(self.forcedUsings)[1])
     
@@ -555,7 +555,7 @@ class MsvcCompiler(Compiler):
         language = 'c++'
     return language
 
-  def getPchCommands(self, target, source, header, object, engine):
+  def getPchCommands(self, target, source, header, object, configuration):
     language = self.getLanguage(source)
     
     args = list(self._getCompileCommonArgs(language))
@@ -573,9 +573,9 @@ class MsvcCompiler(Compiler):
 
     args.append('/Fo' + object)
 
-    return self._getObjectCommands(target, source, args, None, engine)
+    return self._getObjectCommands(target, source, args, None, configuration)
     
-  def getObjectCommands(self, target, source, pch, engine):
+  def getObjectCommands(self, target, source, pch, configuration):
     language = self.getLanguage(source)
 
     args = list(self._getCompileCommonArgs(language))
@@ -597,9 +597,9 @@ class MsvcCompiler(Compiler):
 
     args.append('/Fo' + target)
     
-    return self._getObjectCommands(target, source, args, deps, engine)
+    return self._getObjectCommands(target, source, args, deps, configuration)
   
-  def _getObjectCommands(self, target, source, args, deps, engine):
+  def _getObjectCommands(self, target, source, args, deps, configuration):
     
     if self._needPdbFile:
       if self.pdbFile is not None:
@@ -611,12 +611,13 @@ class MsvcCompiler(Compiler):
       pdbFile = None
       
     def compile():
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "run",
         "run: %s\n" % " ".join(args),
         )
 
-      cake.filesys.makeDirs(cake.path.dirName(target))
+      absTarget = configuration.abspath(target)
+      cake.filesys.makeDirs(cake.path.dirName(absTarget))
       
       errFile = tempfile.TemporaryFile()
       try:
@@ -624,14 +625,15 @@ class MsvcCompiler(Compiler):
         try:
           p = subprocess.Popen(
             args=args,
-            executable=self.__clExe,
+            executable=configuration.abspath(self.__clExe),
             env=self._getProcessEnv(),
             stdin=subprocess.PIPE,
             stdout=errFile,
             stderr=errFile,
+            cwd=configuration.baseDir,
             )
         except EnvironmentError, e:
-          engine.raiseError(
+          configuration.engine.raiseError(
             "cake: failed to launch %s: %s\n" % (self.__clExe, str(e))
             )
         p.stdin.close()
@@ -671,35 +673,29 @@ class MsvcCompiler(Compiler):
           sys.stderr.flush()
 
         if exitCode != 0:
-          raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
+          configuration.engine.raiseError("cl: failed with exit code %i\n" % exitCode)
       finally:
         errFile.close()        
       
       return dependencies
       
     def compileWhenPdbIsFree():
+      absPdbFile = configuration.abspath(pdbFile)
       self._pdbQueueLock.acquire()
       try:
-        predecessor = self._pdbQueue.get(pdbFile, None)
-        if predecessor is None or predecessor.completed:
-          # No prior compiles using this .pdb can start this
-          # one immediately in the same task.
-          compileTask = Task.getCurrent()
-          compileNow = True
+        predecessor = self._pdbQueue.get(absPdbFile, None)
+        compileTask = configuration.engine.createTask(compile)
+        if predecessor is not None:
+          predecessor.addCallback(
+            lambda: compileTask.start(immediate=True)
+            )
         else:
-          # Another compile task is using this .pdb
-          # We'll start after it finishes
-          compileTask = engine.createTask(compile)
-          predecessor.addCallback(compileTask.start)
-          compileNow = False
-        self._pdbQueue[pdbFile] = compileTask
+          compileTask.start(immediate=True)
+        self._pdbQueue[absPdbFile] = compileTask
       finally:
         self._pdbQueueLock.release()
         
-      if compileNow:
-        return compile()
-      else:
-        return compileTask
+      return compileTask
       
     # Can only cache the object if it's debug info is not going into
     # a .pdb since multiple objects could all put their debug info
@@ -708,10 +704,10 @@ class MsvcCompiler(Compiler):
 
     def startCompile():
       if pdbFile is None:
-        compileTask = engine.createTask(compile)
+        compileTask = configuration.engine.createTask(compile)
+        compileTask.start(immediate=True)
       else:
-        compileTask = engine.createTask(compileWhenPdbIsFree)
-      compileTask.start(immediate=True)
+        compileTask = compileWhenPdbIsFree()
       return compileTask
       
     return startCompile, args, canBeCached
@@ -733,7 +729,7 @@ class MsvcCompiler(Compiler):
 
     return args
 
-  def getLibraryCommand(self, target, sources, engine):
+  def getLibraryCommand(self, target, sources, configuration):
     
     args = list(self._getCommonLibraryArgs())
 
@@ -744,15 +740,16 @@ class MsvcCompiler(Compiler):
     @makeCommand(args)
     def archive():
 
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "run",
         "run: %s\n" % " ".join(args),
         )
       
       if self.useResponseFile:
         argsFile = target + '.args'
-        cake.filesys.makeDirs(cake.path.dirName(argsFile))
-        f = open(argsFile, 'wt')
+        absArgsFile = configuration.abspath(argsFile)
+        cake.filesys.makeDirs(cake.path.dirName(absArgsFile))
+        f = open(absArgsFile, 'wt')
         try:
           for arg in args[2:]:
             f.write(arg + '\n')
@@ -761,19 +758,22 @@ class MsvcCompiler(Compiler):
         libArgs = [args[0], args[1], '@' + argsFile]
       else:
         libArgs = args            
-
-      cake.filesys.makeDirs(cake.path.dirName(target))
+        
+      absTarget = configuration.abspath(target)
+      cake.filesys.makeDirs(cake.path.dirName(absTarget))
       try:
         p = subprocess.Popen(
           args=libArgs,
-          executable=self.__libExe,
+          executable=configuration.abspath(self.__libExe),
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,
           stdout=subprocess.PIPE,
           stderr=subprocess.STDOUT,
           )
       except EnvironmentError, e:
-        engine.raiseError("cake: failed to launch %s: %s\n" % (self.__libExe, str(e)))
+        configuration.engine.raiseError(
+          "cake: failed to launch %s: %s\n" % (self.__libExe, str(e))
+          )
     
       p.stdin.close()
       output = p.stdout.read()
@@ -789,7 +789,9 @@ class MsvcCompiler(Compiler):
         sys.stderr.flush()
           
       if exitCode != 0:
-        engine.raiseError("lib: failed with exit code %i\n" % exitCode)
+        configuration.engine.raiseError(
+          "lib: failed with exit code %i\n" % exitCode
+          )
 
     @makeCommand("lib-scan")
     def scan():
@@ -884,16 +886,19 @@ class MsvcCompiler(Compiler):
     
     return args
 
-  def getProgramCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=False)
+  def getProgramCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=False)
   
-  def getModuleCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=True)
+  def getModuleCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=True)
 
-  def _getLinkCommands(self, target, sources, engine, dll):
+  def _getLinkCommands(self, target, sources, configuration, dll):
     
-    resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+    resolvedPaths, unresolvedLibs = self._resolveLibraries(configuration)
     sources = sources + resolvedPaths
+    
+    absTarget = configuration.abspath(target)
+    absTargetDir = cake.path.dirName(absTarget)
     
     args = list(self._getLinkCommonArgs(dll))
 
@@ -908,23 +913,33 @@ class MsvcCompiler(Compiler):
 
     if self.optimisation == self.FULL_OPTIMISATION and \
        self.useIncrementalLinking:
-      engine.raiseError("Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n")
+      configuration.engine.raiseError(
+        "Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n"
+        )
     
     if self.embedManifest:
       if not self.__mtExe:
-        engine.raiseError("You must set path to mt.exe with embedManifest=True\n")
+        configuration.engine.raiseError(
+          "You must set path to mt.exe with embedManifest=True\n"
+          )
       
       if dll:
         manifestResourceId = 2
       else:
         manifestResourceId = 1
       embeddedManifest = target + '.embed.manifest'
+      absEmbeddedManifest = configuration.abspath(embeddedManifest)
       if self.useIncrementalLinking:
         if not self.__rcExe:
-          engine.raiseError("You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n")
+          configuration.engine.raiseError(
+            "You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n"
+            )
         
         intermediateManifest = target + '.intermediate.manifest'
+        absIntermediateManifest = absTarget + '.intermediate.manifest'
+        
         embeddedRc = embeddedManifest + '.rc'
+        absEmbeddedRc = absEmbeddedManifest + '.rc' 
         embeddedRes = embeddedManifest + '.res'
         args.append('/MANIFESTFILE:' + intermediateManifest)
         args.append(embeddedRes)
@@ -937,15 +952,16 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "run",
         "run: %s\n" % " ".join(args),
         )
       
       if self.useResponseFile:
         argsFile = target + '.args'
-        cake.filesys.makeDirs(cake.path.dirName(argsFile))
-        f = open(argsFile, 'wt')
+        absArgsFile = configuration.abspath(argsFile)
+        cake.filesys.makeDirs(cake.path.dirName(absArgsFile))
+        f = open(absArgsFile, 'wt')
         try:      
           for arg in args[1:]:
             f.write(_escapeArg(arg) + '\n')
@@ -956,20 +972,23 @@ class MsvcCompiler(Compiler):
         linkArgs = args
   
       if self.importLibrary:
-        cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
+        importLibrary = configuration.abspath(self.importLibrary)
+        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       
-      cake.filesys.makeDirs(cake.path.dirName(target))
+      absTarget = configuration.abspath(target)
+      cake.filesys.makeDirs(absTargetDir)
       try:
         p = subprocess.Popen(
           args=linkArgs,
-          executable=self.__linkExe,
+          executable=configuration.abspath(self.__linkExe),
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,
           stdout=subprocess.PIPE,
           stderr=subprocess.STDOUT,
+          cwd=configuration.baseDir,
           )
       except EnvironmentError, e:
-        engine.raiseError(
+        configuration.engine.raiseError(
           "cake: failed to launch %s: %s\n" % (self.__linkExe, str(e))
           )
 
@@ -987,7 +1006,9 @@ class MsvcCompiler(Compiler):
         sys.stderr.flush()
 
       if exitCode != 0:
-        engine.raiseError("link: failed with exit code %i\n" % exitCode)
+        configuration.engine.raiseError(
+          "link: failed with exit code %i\n" % exitCode
+          )
        
     @makeCommand(args) 
     def linkWithManifestIncremental():
@@ -1000,26 +1021,28 @@ class MsvcCompiler(Compiler):
           embeddedRc,
           ]
 
-        engine.logger.outputDebug(
+        configuration.engine.logger.outputDebug(
           "run",
           "run: %s\n" % " ".join(rcArgs),
           )
         
-        cake.filesys.makeDirs(cake.path.dirName(embeddedRes))
+        cake.filesys.makeDirs(absTargetDir)
         try:
           p = subprocess.Popen(
             args=rcArgs,
-            executable=self.__rcExe,
+            executable=configuration.abspath(self.__rcExe),
             env=self._getProcessEnv(),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            cwd=configuration.baseDir,
             )
         except EnvironmentError, e:
-          engine.raiseError("cake: failed to launch %s: %s\n" % (
-            self.__rcExe,
-            str(e),
-            ))
+          configuration.engine.raiseError(
+            "cake: failed to launch %s: %s\n" % (
+              self.__rcExe,
+              str(e),
+              ))
           
         p.stdin.close()
         output = [line for line in str(p.stdout.read()).splitlines() if line.strip()]
@@ -1039,7 +1062,7 @@ class MsvcCompiler(Compiler):
           sys.stderr.flush()
         
         if exitCode != 0:
-          engine.raiseError("rc: failed with exit code %i" % exitCode)
+          configuration.engine.raiseError("rc: failed with exit code %i" % exitCode)
       
       def updateEmbeddedManifestFile():
         """Updates the embedded manifest file based on the manifest file
@@ -1057,26 +1080,29 @@ class MsvcCompiler(Compiler):
           "/out:" + embeddedManifest,
           ]
 
-        engine.logger.outputDebug(
+        configuration.engine.logger.outputDebug(
           "run",
           "run: %s\n" % " ".join(mtArgs),
           )
         
-        cake.filesys.makeDirs(cake.path.dirName(embeddedManifest))
+        
+        cake.filesys.makeDirs(absTargetDir)
         try:
           p = subprocess.Popen(
             args=mtArgs,
-            executable=self.__mtExe,
+            executable=configuration.abspath(self.__mtExe),
             env=self._getProcessEnv(),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            cwd=configuration.baseDir
             )
         except EnvironmentError, e:
-          engine.raiseError("cake: failed to launch %s: %s\n" % (
-            self.__mtExe,
-            str(e),
-            ))
+          configuration.engine.raiseError(
+            "cake: failed to launch %s: %s\n" % (
+              self.__mtExe,
+              str(e),
+              ))
           
         p.stdin.close()
         output = p.stdout.read()
@@ -1096,19 +1122,23 @@ class MsvcCompiler(Compiler):
         # avoid a second link if the manifest file hasn't changed.
         
         if exitCode != 0 and exitCode != 1090650113:
-          engine.raiseError("mt: failed with exit code %i\n" % exitCode)
+          configuration.engine.raiseError(
+            "mt: failed with exit code %i\n" % exitCode
+            )
 
         return exitCode != 0
       
       # Create an empty embeddable manifest if one doesn't already exist
-      if not cake.filesys.isFile(embeddedManifest):
-        engine.logger.outputInfo("Creating dummy manifest: %s\n" % embeddedManifest)
-        cake.filesys.makeDirs(cake.path.dirName(embeddedManifest))
-        open(embeddedManifest, 'wb').close()
+      if not cake.filesys.isFile(absEmbeddedManifest):
+        configuration.engine.logger.outputInfo(
+          "Creating dummy manifest: %s\n" % embeddedManifest
+          )
+        cake.filesys.makeDirs(absTargetDir)
+        open(absEmbeddedManifest, 'wb').close()
       
       # Generate .embed.manifest.rc
-      engine.logger.outputInfo("Creating %s\n" % embeddedRc)
-      f = open(embeddedRc, 'w')
+      configuration.engine.logger.outputInfo("Creating %s\n" % embeddedRc)
+      f = open(absEmbeddedRc, 'w')
       try:
         # Use numbers so we don't have to include any headers
         # 24 - RT_MANIFEST
@@ -1122,7 +1152,7 @@ class MsvcCompiler(Compiler):
       compileRcToRes()
       link()
       
-      if cake.filesys.isFile(intermediateManifest) and updateEmbeddedManifestFile():
+      if cake.filesys.isFile(absIntermediateManifest) and updateEmbeddedManifestFile():
         # Manifest file changed so we need to re-link to embed it
         compileRcToRes()
         link()
@@ -1139,8 +1169,10 @@ class MsvcCompiler(Compiler):
       # If we are linking with static runtimes there may be no manifest
       # output, in which case we can skip embedding it.
       
-      if not cake.filesys.isFile(embeddedManifest):
-        engine.logger.outputInfo("Skipping embedding manifest: no manifest to embed\n")
+      if not cake.filesys.isFile(absEmbeddedManifest):
+        configuration.engine.logger.outputInfo(
+          "Skipping embedding manifest: no manifest to embed\n"
+          )
         return
       
       mtArgs = [
@@ -1150,7 +1182,7 @@ class MsvcCompiler(Compiler):
         "/outputresource:%s;%i" % (target, manifestResourceId),
         ]
       
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "run",
         "run: %s\n" % " ".join(mtArgs),
         )
@@ -1158,17 +1190,19 @@ class MsvcCompiler(Compiler):
       try:
         p = subprocess.Popen(
           args=mtArgs,
-          executable=self.__mtExe,
+          executable=configuration.abspath(self.__mtExe),
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,
           stdout=subprocess.PIPE,
           stderr=subprocess.STDOUT,
+          cwd=configuration.baseDir,
           )
       except EnvironmentError, e:
-        engine.raiseError("cake: failed to launch %s: %s\n" % (
-          self.__mtExe,
-          str(e),
-          ))
+        configuration.engine.raiseError(
+          "cake: failed to launch %s: %s\n" % (
+            self.__mtExe,
+            str(e),
+            ))
         
       p.stdin.close()
       output = p.stdout.read()
@@ -1184,7 +1218,9 @@ class MsvcCompiler(Compiler):
         sys.stderr.flush()
 
       if exitCode != 0:
-        engine.raiseError("mt: failed with exit code %i\n" % exitCode)
+        configuration.engine.raiseError(
+          "mt: failed with exit code %i\n" % exitCode
+          )
         
     @makeCommand("link-scan")
     def scan():

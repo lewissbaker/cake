@@ -113,16 +113,18 @@ class MwcwCompiler(Compiler):
 
     return outputText
 
-  def _executeProcess(self, args, target, engine):
+  def _executeProcess(self, args, target, configuration):
     engine.logger.outputDebug(
       "run",
       "run: %s\n" % " ".join(args),
       )
-    cake.filesys.makeDirs(cake.path.dirName(target))
+    absTarget = configuration.abspath(target)
+    cake.filesys.makeDirs(cake.path.dirName(absTarget))
 
     if self.useResponseFile:
       argsFile = target + '.args'
-      f = open(argsFile, 'wt')
+      absArgsFile = absTarget + '.args'
+      f = open(absArgsFile, 'wt')
       try:
         for arg in args[1:]:
           f.write('"' + arg + '"\n')
@@ -131,16 +133,18 @@ class MwcwCompiler(Compiler):
       args = [args[0], '@' + argsFile]
 
     try:
+      executable = configuration.abspath(args[0])
       p = subprocess.Popen(
         args=args,
-        executable=args[0],
-        env=self._getProcessEnv(args[0]),
+        executable=executable,
+        env=self._getProcessEnv(executable),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        cwd=configuration.baseDir
         )
     except EnvironmentError, e:
-      engine.raiseError(
+      configuration.engine.raiseError(
         "cake: failed to launch %s: %s\n" % (args[0], str(e))
         )
   
@@ -152,7 +156,7 @@ class MwcwCompiler(Compiler):
       sys.stderr.write(self._formatMessage(output.decode("latin1")).encode("latin1"))
         
     if exitCode != 0:
-      engine.raiseError(
+      configuration.engine.raiseError(
         "%s: failed with exit code %i\n" % (args[0], exitCode)
         )
 
@@ -261,17 +265,17 @@ class MwcwCompiler(Compiler):
         }.get(cake.path.extension(path).lower(), 'c++')
     return language
 
-  def getPchCommands(self, target, source, header, object, engine):
+  def getPchCommands(self, target, source, header, object, configuration):
     language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))
     args.extend([source, '-precompile', target])
     
     def compile():
-      self._executeProcess(args, target, engine)
+      self._executeProcess(args, target, configuration)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -279,20 +283,20 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        dependencyFile,
+        configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       return dependencies
 
     def command():
-      task = engine.createTask(compile)
+      task = configuration.engine.createTask(compile)
       task.start(immediate=True)
       return task
 
     canBeCached = True
     return command, args, canBeCached   
           
-  def getObjectCommands(self, target, source, pch, engine):
+  def getObjectCommands(self, target, source, pch, configuration):
     language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))
@@ -303,10 +307,10 @@ class MwcwCompiler(Compiler):
     args.extend([source, '-o', target])
     
     def compile():
-      self._executeProcess(args, target, engine)
+      self._executeProcess(args, target, configuration)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -314,7 +318,7 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        dependencyFile,
+        configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       if pch is not None:
@@ -322,7 +326,7 @@ class MwcwCompiler(Compiler):
       return dependencies
 
     def command():
-      task = engine.createTask(compile)
+      task = configuration.engine.createTask(compile)
       task.start(immediate=True)
       return task
 
@@ -335,15 +339,15 @@ class MwcwCompiler(Compiler):
     args.extend(self._getCommonArgs())
     return args
   
-  def getLibraryCommand(self, target, sources, engine):
+  def getLibraryCommand(self, target, sources, configuration):
     args = list(self._getCommonLibraryArgs())
     args.extend(['-o', target])
     args.extend(sources)
     
     @makeCommand(args)
     def archive():
-      cake.filesys.remove(target)
-      self._executeProcess(args, target, engine)
+      cake.filesys.remove(configuration.abspath(target))
+      self._executeProcess(args, target, configuration)
 
     @makeCommand("lib-scan")
     def scan():
@@ -368,14 +372,14 @@ class MwcwCompiler(Compiler):
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
-  def getProgramCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=False)
+  def getProgramCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=False)
   
-  def getModuleCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=True)
+  def getModuleCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=True)
 
-  def _getLinkCommands(self, target, sources, engine, dll):
-    resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
+  def _getLinkCommands(self, target, sources, configuration, dll):
+    resolvedPaths, unresolvedLibs = self._resolveLibraries(configuration)
     sources = sources + resolvedPaths
     
     args = list(self._getCommonLinkArgs(dll))
@@ -388,7 +392,7 @@ class MwcwCompiler(Compiler):
       
     @makeCommand(args)
     def link():
-      self._executeProcess(args, target, engine)      
+      self._executeProcess(args, target, configuration)      
     
     @makeCommand("link-scan")
     def scan():

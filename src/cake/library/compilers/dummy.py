@@ -41,7 +41,7 @@ class DummyCompiler(Compiler):
     args.extend('/FI%s' % p for p in getPathsAndTasks(self.forcedIncludes)[0])
     return args
 
-  def getPchCommands(self, target, source, header, object, engine):
+  def getPchCommands(self, target, source, header, object, configuration):
 
     language = self.language
     if not language:
@@ -54,23 +54,24 @@ class DummyCompiler(Compiler):
     compilerArgs += ['/H' + header, source, '/o' + target]
     
     def compile():
-      engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      f = open(target, 'wb')
+      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
+      absTarget = configuration.abspath(target)
+      cake.filesys.makeDirs(cake.path.dirName(absTarget))
+      f = open(absTarget, 'wb')
       f.close()
         
       dependencies = [source]
       return dependencies
 
     def command():
-      task = engine.createTask(compile)
+      task = configuration.engine.createTask(compile)
       task.start(immediate=True)
       return task
 
     canBeCached = True
     return command, compilerArgs, canBeCached
 
-  def getObjectCommands(self, target, source, pch, engine):
+  def getObjectCommands(self, target, source, pch, configuration):
 
     language = self.language
     if not language:
@@ -83,9 +84,10 @@ class DummyCompiler(Compiler):
     compilerArgs += [source, '/o' + target]
     
     def compile():
-      engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      f = open(target, 'wb')
+      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
+      absTarget = configuration.abspath(target)
+      cake.filesys.makeDirs(cake.path.dirName(absTarget))
+      f = open(absTarget, 'wb')
       f.close()
         
       dependencies = [source]
@@ -94,22 +96,23 @@ class DummyCompiler(Compiler):
       return dependencies
 
     def command():
-      task = engine.createTask(compile)
+      task = configuration.engine.createTask(compile)
       task.start(immediate=True)
       return task
 
     canBeCached = True
     return command, compilerArgs, canBeCached
 
-  def getLibraryCommand(self, target, sources, engine):
+  def getLibraryCommand(self, target, sources, configuration):
     
     args = ['ar'] + sources + ['/o' + target]
 
     @makeCommand(args)
     def archive():
-      engine.logger.outputDebug("run", "%s\n" % " ".join(args))
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      f = open(target, 'wb')
+      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
+      absTarget = configuration.abspath(target)
+      cake.filesys.makeDirs(cake.path.dirName(absTarget))
+      f = open(absTarget, 'wb')
       f.close()
       
     @makeCommand("dummy-scanner")
@@ -118,14 +121,15 @@ class DummyCompiler(Compiler):
       
     return archive, scan
   
-  def getProgramCommands(self, target, sources, engine):
+  def getProgramCommands(self, target, sources, configuration):
     args = ['ld'] + sources + ['/o' + target]
     
     @makeCommand(args)
     def link():
-      engine.logger.outputDebug("run", "%s\n" % " ".join(args))
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      f = open(target, 'wb')
+      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
+      absTarget = configuration.abspath(target)
+      cake.filesys.makeDirs(cake.path.dirName(absTarget))
+      f = open(absTarget, 'wb')
       f.close()
     
     @makeCommand("dummy-scanner")
@@ -134,6 +138,6 @@ class DummyCompiler(Compiler):
     
     return link, scan
     
-  def getModuleCommands(self, target, sources, engine):
+  def getModuleCommands(self, target, sources, configuration):
     # Lazy
-    return self.getProgramCommands(target, sources, engine)
+    return self.getProgramCommands(target, sources, configuration)

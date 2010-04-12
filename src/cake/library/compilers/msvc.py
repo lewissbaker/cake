@@ -765,6 +765,7 @@ class MsvcCompiler(Compiler):
           stdin=subprocess.PIPE,
           stdout=subprocess.PIPE,
           stderr=subprocess.STDOUT,
+          cwd=configuration.baseDir,
           )
       except EnvironmentError, e:
         configuration.engine.raiseError(

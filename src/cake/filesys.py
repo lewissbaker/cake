@@ -8,7 +8,13 @@
 import shutil
 import os
 import os.path
+import time
 
+def toUtc(timestamp):
+  """Convert a timestamp from local time-zone to UTC.
+  """
+  return time.mktime(time.gmtime(timestamp))
+  
 def exists(path):
   """Check if a file or directory exists at the path.
   
@@ -57,6 +63,20 @@ def remove(path):
     # Ignore failure if file doesn't exist. Fail if it's a directory.
     if os.path.exists(path):
       raise
+
+def removeTree(path):
+  """Recursively delete all files in the directory at specified path.
+
+  @param path: Path to the directory containing the tree to remove
+  """
+  for root, dirs, files in os.walk(path, topdown=False):
+    for name in files:
+      p = os.path.join(root, name)
+      remove(p)
+    for name in dirs:
+      p = os.path.join(root, name)
+      os.rmdir(p)
+  os.rmdir(path)
   
 def copyFile(source, target):
   """Copy a file from source path to target path.

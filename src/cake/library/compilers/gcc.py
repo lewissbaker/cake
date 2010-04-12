@@ -429,12 +429,12 @@ class GccCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, engine, dll):
     
-    resolvedPaths, unresolvedLibs = self._resolveLibraries(engine)
-    sources = sources + resolvedPaths
+    objects, libraries = self._resolveObjects(engine)
 
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
-    args.extend('-l' + l for l in unresolvedLibs)    
+    args.extend(objects)
+    args.extend('-l' + l for l in libraries)    
     args.extend(['-o', target])
 
     if self.outputMapFile:
@@ -451,7 +451,7 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources
+      return [args[0]] + sources + objects + self._scanForLibraries(engine, libraries)
     
     return link, scan
 

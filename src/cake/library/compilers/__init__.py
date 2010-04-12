@@ -200,7 +200,7 @@ class Compiler(Tool):
     MSVC: /GL
     MWCW: -opt level=4  
   """
-  debugSymbols = False
+  debugSymbols = None
   """Enable debug symbols.
 
   Enabling debug symbols will allow you to debug your code, but will
@@ -267,7 +267,7 @@ class Compiler(Tool):
     MSVC: /W4
   @type: int or None
   """
-  warningsAsErrors = False
+  warningsAsErrors = None
   """Treat warnings as errors.
   
   If enabled warnings will be treated as errors and may prevent compilation
@@ -279,49 +279,7 @@ class Compiler(Tool):
     MWCW: -w error  
   @type: bool
   """
-  objectSuffix = '.o'
-  """The suffix to use for object files.
-  
-  @type: string
-  """
-  libraryPrefixSuffixes = [('lib', '.a')]
-  """A collection of prefixes and suffixes to use for library files.
-  
-  The first prefix and suffix in the collection will be used as the
-  default prefix/suffix.
-  @type: list of tuple(string, string)
-  """
-  moduleSuffix = '.so'
-  """The suffix to use for module files.
-
-  @type: string
-  """
-  programSuffix = ''
-  """The suffix to use for program files.
-
-  @type: string
-  """
-  pchSuffix = '.gch'
-  """The suffix to use for precompiled header files.
-
-  @type: string
-  """
-  pchObjectSuffix = None
-  """The suffix to use for precompiled header object files.
-
-  @type: string or None
-  """
-  manifestSuffix = None
-  """The suffix to use for manifest files.
-
-  @type: string or None
-  """
-  resourceSuffix = ''
-  """The suffix to use for resource files.
-
-  @type: string or None
-  """
-  linkObjectsInLibrary = False
+  linkObjectsInLibrary = None
   """Link objects rather than libraries.
   
   Linking objects can provide faster program/module links, especially
@@ -337,7 +295,7 @@ class Compiler(Tool):
   """
 # TODO: Should this be a string mapFile name? It's inconsistent with importLibrary
 # at the moment.
-  outputMapFile = False
+  outputMapFile = None
   """Output a map file.
   
   If enabled the compiler will output a map file that matches the name of
@@ -350,7 +308,7 @@ class Compiler(Tool):
     MWCW: -map <target>.map
   @type: bool
   """
-  useResponseFile = False
+  useResponseFile = None
   """Use a response file.
   
   If enabled a response file will be generated containing the compiler
@@ -524,7 +482,7 @@ class Compiler(Tool):
     MSVC: /IMPLIB
   @type: string or None
   """
-  embedManifest = False
+  embedManifest = None
   """Embed the manifest in the executable.
   
   If True the manifest file is embedded within the executable, otherwise
@@ -534,7 +492,7 @@ class Compiler(Tool):
     MSVC: /MANIFESTFILE
   @type: bool
   """
-  useSse = False
+  useSse = None
   """Use Streaming SIMD Extensions.
   
   If SSE if turned on the compiler may choose to optimise scalar floating
@@ -548,7 +506,49 @@ class Compiler(Tool):
     GCC: -msse
   @type: bool
   """
+  objectSuffix = '.o'
+  """The suffix to use for object files.
   
+  @type: string
+  """
+  libraryPrefixSuffixes = [('lib', '.a')]
+  """A collection of prefixes and suffixes to use for library files.
+  
+  The first prefix and suffix in the collection will be used as the
+  default prefix/suffix.
+  @type: list of tuple(string, string)
+  """
+  moduleSuffix = '.so'
+  """The suffix to use for module files.
+
+  @type: string
+  """
+  programSuffix = ''
+  """The suffix to use for program files.
+
+  @type: string
+  """
+  pchSuffix = '.gch'
+  """The suffix to use for precompiled header files.
+
+  @type: string
+  """
+  pchObjectSuffix = None
+  """The suffix to use for precompiled header object files.
+
+  @type: string or None
+  """
+  manifestSuffix = None
+  """The suffix to use for manifest files.
+
+  @type: string or None
+  """
+  resourceSuffix = ''
+  """The suffix to use for resource files.
+
+  @type: string or None
+  """
+    
   # Map of engine to map of library path to list of object paths
   __libraryObjects = weakref.WeakKeyDictionary()
   
@@ -1241,23 +1241,38 @@ class Compiler(Tool):
   ###########################
   # Internal methods not part of public API
   
-  def _resolveLibraries(self, engine):
-    """Resolve the list of library names to library paths.
-    
-    Searches for each library in the libraryPaths.
-    If self.linkObjectsInLibrary is True then returns the paths of object files
-    that comprise the library instead of the library path.
+  def _resolveObjects(self, engine):
+    """Resolve the list of library names to object file paths.
     
     @param engine: The engine to use for logging error messages.
     @type engine: cake.engine.Engine
     
-    @return: A tuple containing a list of paths to resolved
-    libraries/objects, followed by a list of unresolved libraries.
+    @return: A tuple containing a list of paths to resolved objects,
+    followed by a list of unresolved libraries.
     @rtype: tuple of (list of string, list of string)
     """
-    libraryPaths = []
-    unresolvedLibs = []
-    for library in reversed(self.libraries):
+    objects = []
+    libraries = [l for l in reversed(self.libraries)]
+
+    if not self.linkObjectsInLibrary:
+      return objects, libraries 
+
+    paths = self._scanForLibraries(engine, libraries, True)
+    newLibraries = []
+      
+    for i, path in enumerate(paths):
+      if path is not None:
+        objectsInLib = self._getObjectsInLibrary(engine, path)
+        if objectsInLib is not None:
+          objects.extend(objectsInLib)
+          continue
+      newLibraries.append(libraries[i])
+        
+    return objects, newLibraries
+
+  def _scanForLibraries(self, engine, libraries, flagMissing=False):
+    paths = []
+    for library in libraries:
       fileNames = [library]
 
       libraryExtension = os.path.normcase(cake.path.extension(library))
@@ -1268,26 +1283,17 @@ class Compiler(Tool):
       # Add [""] so we search for the full path first 
       for candidate in cake.path.join(reversed(self.libraryPaths + [""]), fileNames):
         if cake.filesys.isFile(candidate):
-          libraryPaths.append(candidate)
+          paths.append(candidate)
           break
       else:
-        engine.logger.outputDebug(
-          "scan",
-          "scan: Ignoring missing library '" + library + "'\n",
-          )
-        unresolvedLibs.append(library)
-      
-    if self.linkObjectsInLibrary:
-      results = []
-      for libraryPath in libraryPaths:
-        objects = self._getObjectsInLibrary(engine, libraryPath)
-        if objects is None:
-          results.append(libraryPath)
+        if flagMissing:
+          paths.append(None)
         else:
-          results.extend(objects)
-      return results, unresolvedLibs
-    else:
-      return libraryPaths, unresolvedLibs
+          engine.logger.outputDebug(
+            "scan",
+            "scan: Ignoring missing library '" + library + "'\n",
+            )
+    return paths
   
   def buildPch(self, target, source, header, object, engine):
     compile, args, _ = self.getPchCommands(

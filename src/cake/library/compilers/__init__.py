@@ -1491,11 +1491,12 @@ class Compiler(Tool):
           cachedObjectDigestStr[1],
           cachedObjectDigestStr
           )
+        cachedObjectPath = configuration.abspath(cachedObjectPath)
         if cake.filesys.isFile(cachedObjectPath):
           configuration.engine.logger.outputInfo("Cached %s\n" % source)
           cake.filesys.copyFile(
             target=configuration.abspath(target),
-            source=configuration.abspath(cachedObjectPath),
+            source=cachedObjectPath,
             )
           configuration.storeDependencyInfo(newDependencyInfo)
           return
@@ -1513,16 +1514,21 @@ class Compiler(Tool):
      
       # Since we are sharing this object in the object cache we need to
       # make any paths in this workspace relative to the current workspace.
+      abspath = configuration.abspath
+      normpath = os.path.normpath
       dependencies = []
       if self.objectCacheWorkspaceRoot is None:
-        dependencies = [configuration.abspath(p) for p in compileTask.result]
+        dependencies = [
+          normpath(abspath(p))
+          for p in compileTask.result
+          ]
       else:
         workspaceRoot = os.path.normcase(
           configuration.abspath(self.objectCacheWorkspaceRoot)
           ) + os.path.sep
         workspaceRootLen = len(workspaceRoot)
         for path in compileTask.result:
-          path = configuration.abspath(path)
+          path = normpath(abspath(path))
           pathNorm = os.path.normcase(path)
           if pathNorm.startswith(workspaceRoot):
             path = path[workspaceRootLen:]
@@ -1558,6 +1564,7 @@ class Compiler(Tool):
             objectDigestStr[1],
             objectDigestStr,
             )
+          cacheObjectPath = configuration.abspath(cacheObjectPath)
 
           # Copy the object file first, then the dependency file
           # so that other processes won't find the dependency until

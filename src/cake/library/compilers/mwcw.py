@@ -288,13 +288,8 @@ class MwcwCompiler(Compiler):
         ))
       return dependencies
 
-    def command():
-      task = configuration.engine.createTask(compile)
-      task.start(immediate=True)
-      return task
-
     canBeCached = True
-    return command, args, canBeCached   
+    return compile, args, canBeCached   
           
   def getObjectCommands(self, target, source, pch, configuration):
     language = self.getLanguage(source)
@@ -325,13 +320,8 @@ class MwcwCompiler(Compiler):
         dependencies.append(pch.path)
       return dependencies
 
-    def command():
-      task = configuration.engine.createTask(compile)
-      task.start(immediate=True)
-      return task
-
     canBeCached = True
-    return command, args, canBeCached    
+    return compile, args, canBeCached    
 
   @memoise
   def _getCommonLibraryArgs(self):

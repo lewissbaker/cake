@@ -702,15 +702,10 @@ class MsvcCompiler(Compiler):
     # into the same .pdb.
     canBeCached = pdbFile is None
 
-    def startCompile():
-      if pdbFile is None:
-        compileTask = configuration.engine.createTask(compile)
-        compileTask.start(immediate=True)
-      else:
-        compileTask = compileWhenPdbIsFree()
-      return compileTask
-      
-    return startCompile, args, canBeCached
+    if pdbFile is None:
+      return compile, args, canBeCached
+    else:
+      return compileWhenPdbIsFree, args, canBeCached
 
   @memoise
   def _getCommonLibraryArgs(self):

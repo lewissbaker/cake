@@ -24,6 +24,7 @@ import cake.tools
 import cake.task
 import cake.path
 import cake.hash
+import cake.threadpool
 
 class BuildError(Exception):
   """Exception raised when a build fails.
@@ -88,6 +89,13 @@ class Variant(object):
 
 class Engine(object):
   """Main object that holds all of the singleton resources for a build.
+  
+  @ivar scriptThreadPool: The scriptThreadPool is a single-threaded thread
+  pool that is used to speed up incremental builds on multi-core platforms.
+  It is used to execute scripts and check dependencies, both of which
+  mainly use Python code. Threaded Python code executes under a
+  notoriously slow GIL (Global Interpreter Lock). By executing most
+  Python code on the same thread we can avoid the expensive GIL locking.  
   """
   
   forceBuild = False
@@ -105,6 +113,7 @@ class Engine(object):
     self.buildFailureCallbacks = []
     self._searchUpCache = {}
     self._configurations = {}
+    self.scriptThreadPool = cake.threadpool.ThreadPool(1)
   
   def searchUpForFile(self, path, fileName):
     """Attempt to find a file in a particular path or any of its parent
@@ -462,7 +471,7 @@ class Engine(object):
     
     @raise EnvironmentError: if the dependency info could not be retrieved.
     """
-    dependencyInfo = self._dependencyInfoCache.get(targetPath, None)
+    dependencyInfo = self._dependencyInfoCache.get(target, None)
     if dependencyInfo is None:
       depPath = target + '.dep'
       
@@ -822,7 +831,7 @@ class Configuration(object):
             "Finished %s\n" % script.path,
             )
           )
-        task.start()
+        task.start(threadPool=self.engine.scriptThreadPool)
     finally:
       self._executedLock.release()
 

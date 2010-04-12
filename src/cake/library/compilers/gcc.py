@@ -236,7 +236,10 @@ class GccCompiler(Compiler):
         )
   
     p.stdin.close()
-    output = p.stdout.read()
+    try:
+      output = p.stdout.read()
+    finally:
+      p.stdout.close()
     exitCode = p.wait()
     
     if output:

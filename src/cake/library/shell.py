@@ -53,7 +53,12 @@ class ShellTool(Tool):
           cake.filesys.makeDirs(cake.path.dirName(t))
 
       # Output the command-line we're about to run.
-      engine.logger.outputInfo("%s\n" % " ".join(args))
+      engine.logger.outputInfo("Running %s\n" % args[0])
+
+      engine.logger.outputDebug(
+        "run",
+        "run: %s\n" % " ".join(args),
+        )
 
       try:
         p = subprocess.Popen(

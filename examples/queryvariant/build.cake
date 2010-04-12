@@ -1,16 +1,18 @@
 from cake.tools import variant, logging
 
 if variant.platform in ["windows"]:
-  logging.outputInfo("Current platform is '%s'.\n" % variant.platform)
+  logging.outputInfo("The platform is Windows.\n")
 else:
-  logging.outputWarning("Unknown platform '%s'.\n" % variant.platform)
+  logging.outputInfo("The platform is not Windows.\n")
 
-if variant.release in ["debug", "release"]:
-  logging.outputInfo("Current release is '%s'.\n" % variant.release)
+if variant.release in ["debug"]:
+  logging.outputInfo("This is debug mode.\n")
 else:
-  logging.outputWarning("Unknown release '%s'.\n" % variant.release)
+  logging.outputInfo("This is not debug mode.\n")
 
-if variant.compiler in ["dummy", "msvc", "mingw", "gcc"]:
-  logging.outputInfo("Current compiler is '%s'.\n" % variant.compiler)
+if variant.compiler in ["mingw", "gcc"]:
+  logging.outputInfo("The compiler is a GNU C Compiler.\n")
+elif variant.compiler in ["msvc"]:
+  logging.outputInfo("The compiler is Microsoft Visual C.\n")
 else:
-  logging.outputWarning("Unknown compiler '%s'.\n" % variant.compiler)
+  logging.outputInfo("The compiler is %s.\n" % variant.compiler.capitalize())

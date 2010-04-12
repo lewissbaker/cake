@@ -120,6 +120,16 @@ class ProgramTarget(CompilerTarget):
     else:
       self.manifest = FileTarget(manifest, task)
 
+class ResourceTarget(CompilerTarget):
+  """A resource target.
+
+  @ivar resource: The resource file target.
+  @type resource: L{FileTarget}
+  """
+  def __init__(self, path, task, compiler):
+    CompilerTarget.__init__(self, path, task, compiler)
+    self.resource = FileTarget(path, task)
+
 def getLinkPathsAndTasks(files):
   paths = []
   tasks = []
@@ -303,6 +313,11 @@ class Compiler(Tool):
   """
   manifestSuffix = None
   """The suffix to use for manifest files.
+
+  @type: string or None
+  """
+  resourceSuffix = ''
+  """The suffix to use for resource files.
 
   @type: string or None
   """
@@ -689,7 +704,7 @@ class Compiler(Tool):
     """
     self.includePaths.append(path)
     self._clearCache()
-    
+
   def addDefine(self, name, value=None):
     """Add a define to the preprocessor command-line.
 
@@ -1183,7 +1198,57 @@ class Compiler(Tool):
       compiler=self,
       manifest=manifest,
       )
-        
+      
+  def resource(self, target, source, forceExtension=True, **kwargs):
+    """Build a resource from a collection of sources.
+    
+    @param target: Path of the resource file to build.
+    @type target: string
+    
+    @param source: Path of the source file to compile.
+    @type source: string
+    
+    @param forceExtension: If True then the target path will have
+    the default resource extension appended to it if it not already
+    present.
+    
+    @return: A FileTarget object representing the resource that will
+    be built and the task that will build it.
+    """
+
+    # Take a snapshot of the current compiler settings
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+  
+    return compiler._resource(target, source, forceExtension)
+  
+  def _resource(self, target, source, forceExtension=True):
+    
+    if forceExtension:
+      target = cake.path.forceExtension(target, self.resourceSuffix)
+
+    if self.enabled:
+      script = Script.getCurrent()
+      engine = script.engine
+      configuration = script.configuration
+  
+      path, task = getPathAndTask(source)
+      
+      resourceTask = engine.createTask(
+        lambda t=target, s=path, cn=configuration, c=self:
+          c.buildResource(t, s, cn)
+        )
+      resourceTask.startAfter(task, threadPool=engine.scriptThreadPool)
+    else:
+      resourceTask = None
+    
+    return ResourceTarget(
+      path=target,
+      task=resourceTask,
+      compiler=self,
+      )
+          
   ###########################
   # Internal methods not part of public API
   
@@ -1717,3 +1782,52 @@ class Compiler(Tool):
     returns the list of dependencies. 
     """
     configuration.engine.raiseError("Don't know how to link %s\n" % target)
+    
+  def buildResource(self, target, source, configuration):
+    """Perform the actual build of a resource.
+    
+    @param target: Path of the target resource file.
+    @type target: string
+    
+    @param source: Path of the source file.
+    @type source: string
+    
+    @param configuration: The Configuration object to use for dependency checking
+    etc.
+    """
+
+    compile, scan = self.getResourceCommand(target, source, configuration)
+    
+    args = repr(compile)
+    
+    # Check if the target needs building
+    _, reasonToBuild = configuration.checkDependencyInfo(target, args)
+    if not reasonToBuild:
+      return # Target is up to date
+    configuration.engine.logger.outputDebug(
+      "reason",
+      "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
+      )
+
+    def command():
+      configuration.engine.logger.outputInfo("Compiling %s\n" % source)
+      
+      compile()
+      
+      dependencies = scan()
+      
+      newDependencyInfo = configuration.createDependencyInfo(
+        targets=[target],
+        args=args,
+        dependencies=dependencies,
+        )
+      
+      configuration.storeDependencyInfo(newDependencyInfo)
+
+    resourceTask = configuration.engine.createTask(command)
+    resourceTask.start(immediate=True)
+  
+  def getResourceCommand(self, target, sources, configuration):
+    """Get the command for constructing a resource.
+    """
+    configuration.engine.raiseError("Don't know how to compile %s\n" % target)

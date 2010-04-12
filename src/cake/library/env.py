@@ -18,7 +18,7 @@ class Environment(Tool):
   def __init__(self):
     """Default constructor.
     """
-    self.__vars = {}
+    self.vars = {}
     
   def __getitem__(self, key):
     """Return an environment variables value given its key.
@@ -26,7 +26,7 @@ class Environment(Tool):
     @param key:  The key of the environment variable to get.
     @return: The value of the environment variable.
     """
-    return self.__vars[key]
+    return self.vars[key]
   
   def __setitem__(self, key, value):
     """Set a new value for an environment variable.
@@ -34,14 +34,14 @@ class Environment(Tool):
     @param key: The key of the environment variable to set.
     @param value: The value to set the environment variable to.
     """
-    self.__vars[key] = value
+    self.vars[key] = value
     
   def __delitem__(self, key):
     """Delete an environment variable given its key.
     
     @param key: The key of the environment variable to delete. 
     """
-    del self.__vars[key]
+    del self.vars[key]
 
   def get(self, key, default=None):
     """Return an environment variable or default value if not found.
@@ -49,7 +49,7 @@ class Environment(Tool):
     @param key: The key of the environment variable to get.
     @param default: The value to return if the key is not found.
     """
-    return self.__vars.get(key, default)
+    return self.vars.get(key, default)
 
   def set(self, **kwargs):    
     """Set a series of keys/values.
@@ -78,7 +78,7 @@ class Environment(Tool):
         )
     """
     for a in arguments:
-      del self.__vars[a]
+      del self.vars[a]
       
   def update(self, values):
     """Update the environment with key/value pairs from 'values'.
@@ -91,7 +91,7 @@ class Environment(Tool):
     @param values: An iterable sequence of key/value pairs to update
     from.
     """
-    self.__vars.update(values)
+    self.vars.update(values)
     
   def expand(self, value):
     """Expand variables in the specified string.
@@ -108,7 +108,7 @@ class Environment(Tool):
     @return: The expanded string.
     @rtype: string
     """
-    return cake.path.expandVars(value, self.__vars)
+    return cake.path.expandVars(value, self.vars)
 
   def choose(self, key, default=None, **kwargs):
     """Choose and return an argument depending on the key given.
@@ -129,4 +129,4 @@ class Environment(Tool):
     @return: The argument whose key matches the environment variables value
     or default if there was no match.
     """
-    return kwargs.get(self.__vars[key], default)
+    return kwargs.get(self.vars[key], default)

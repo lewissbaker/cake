@@ -183,14 +183,14 @@ class Engine(object):
 
     return self.searchUpForFile(path, bootScriptName)
   
-  def getConfiguration(self, bootScript):
+  def getConfiguration(self, path):
     """Get the configuration for a specified boot script path.
     
     Executes the boot script if not already executed.
     
-    @param bootScript: Absolute path of the boot script used to
+    @param path: Absolute path of the boot script used to
     populate the configuration.
-    @type bootScript: string
+    @type path: string
     
     @return: The Configuration that has been configured with the
     specified boot script.
@@ -787,6 +787,8 @@ class Configuration(object):
 
     if cake.filesys.isDir(absPath):
       absPath = cake.path.join(absPath, self.defaultBuildScriptName)
+
+    absPath = os.path.normpath(absPath)
 
     path = cake.path.relativePath(absPath, self.baseDir)
 

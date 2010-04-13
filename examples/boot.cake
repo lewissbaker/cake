@@ -1,6 +1,7 @@
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
 from cake.library.variant import VariantTool
+from cake.library.zipping import ZipTool
 from cake.library.logging import LoggingTool
 from cake.library.project import ProjectTool
 from cake.library.env import Environment
@@ -27,6 +28,7 @@ base = Variant()
 base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
 base.tools["variant"] = VariantTool()
+base.tools["zipping"] = ZipTool()
 base.tools["logging"] = LoggingTool()
 env = base.tools["env"] = Environment()
 env["EXAMPLES"] = "."

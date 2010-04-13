@@ -22,9 +22,13 @@ import cake.path
 import cake.filesys
 import cake.threadpool
 
+# Make sure stat() returns floats so timestamps are consistent across
+# Python versions (2.4 used longs, 2.5+ uses floats).
+os.stat_float_times(True)
+
 def callOnce(f):
   """Decorator that handles calling a function only once.
-  
+
   The second and subsequent times it is called the cached
   result is returned.
   """

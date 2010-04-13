@@ -7,6 +7,7 @@ script.execute(script.cwd([
   "createproject/build.cake",
   "pythontool/build.cake",
   "queryvariant/build.cake",
+  "unzip/build.cake",
   "uselibrary/build.cake",
   "usemodule/build.cake",
   "usepch/build.cake",

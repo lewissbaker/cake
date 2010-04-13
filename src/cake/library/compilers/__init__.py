@@ -543,7 +543,7 @@ class Compiler(Tool):
 
   @type: string or None
   """
-  resourceSuffix = ''
+  resourceSuffix = '.o'
   """The suffix to use for resource files.
 
   @type: string or None
@@ -552,7 +552,7 @@ class Compiler(Tool):
   # Map of engine to map of library path to list of object paths
   __libraryObjects = weakref.WeakKeyDictionary()
   
-  def __init__(self):
+  def __init__(self, binPaths=None):
     super(Compiler, self).__init__()
     self.cFlags = []
     self.cppFlags = []
@@ -567,6 +567,7 @@ class Compiler(Tool):
     self.libraries = []
     self.moduleScripts = []
     self.modules = []
+    self.__binPaths = binPaths
 
   @classmethod
   def _getObjectsInLibrary(cls, engine, path):
@@ -1241,6 +1242,29 @@ class Compiler(Tool):
   ###########################
   # Internal methods not part of public API
   
+  @memoise
+  def _getProcessEnv(self):
+    temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
+    env = {
+      'COMSPEC' : os.environ.get('COMSPEC', ''),
+      'PATH' : '',
+      'PATHEXT' : ".COM;.EXE;.BAT;.CMD",
+      'SYSTEMROOT' : os.environ.get('SYSTEMROOT', ''),
+      'TEMP' : temp,
+      'TMP' : temp,
+      }
+    if self.__binPaths is not None:
+      env['PATH'] = os.path.pathsep.join(
+        [env['PATH']] + self.__binPaths
+        )
+    if env['SYSTEMROOT']:
+      env['PATH'] = os.path.pathsep.join([
+        env['PATH'],
+        os.path.join(env['SYSTEMROOT'], 'System32'),
+        env['SYSTEMROOT'],
+        ])
+    return env
+    
   def _resolveObjects(self, engine):
     """Resolve the list of library names to object file paths.
     

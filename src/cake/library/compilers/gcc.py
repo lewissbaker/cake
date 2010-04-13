@@ -91,8 +91,10 @@ def findMinGWCompiler():
   """
   try:
     installDir = _getMinGWInstallDir()
-    arExe = cake.path.join(installDir, "bin", "ar.exe")
-    gccExe = cake.path.join(installDir, "bin", "gcc.exe")
+    binDir = cake.path.join(installDir, "bin")
+    arExe = cake.path.join(binDir, "ar.exe")
+    gccExe = cake.path.join(binDir, "gcc.exe")
+    rcExe = cake.path.join(binDir, "windres.exe")
     
     def checkFile(path):
       if not cake.filesys.isFile(path):
@@ -100,10 +102,13 @@ def findMinGWCompiler():
 
     checkFile(arExe)
     checkFile(gccExe)
+    checkFile(rcExe)
 
     return WindowsGccCompiler(
       arExe=arExe,
       gccExe=gccExe,
+      rcExe=rcExe,
+      binPaths=[binDir],
       )
   except WindowsError:
     raise CompilerNotFoundError("Could not find MinGW install directory.")
@@ -142,9 +147,15 @@ def findGccCompiler(platform=None):
     else:
       constructor = GccCompiler 
     
+    binPaths = list(set([
+      cake.path.dirName(arExe),
+      cake.path.dirName(gccExe),
+      ]))
+    
     return constructor(
       arExe=arExe,
       gccExe=gccExe,
+      binPaths=binPaths,
       )
   except EnvironmentError:
     raise CompilerNotFoundError("Could not find GCC compiler and AR archiver.")
@@ -155,29 +166,11 @@ class GccCompiler(Compiler):
     self,
     arExe=None,
     gccExe=None,
+    binPaths=None,
     ):
-    Compiler.__init__(self)
+    Compiler.__init__(self, binPaths)
     self.__arExe = arExe
     self.__gccExe = gccExe
-  
-  @memoise
-  def _getProcessEnv(self, executable):
-    temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
-    env = {
-      'COMPSPEC' : os.environ.get('COMSPEC', ''),
-      'PATHEXT' : ".com;.exe;.bat;.cmd",
-      'SYSTEMROOT' : os.environ.get('SYSTEMROOT', ''),
-      'TMP' : temp,
-      'TEMP' : temp,  
-      'PATH' : cake.path.dirName(executable),
-      }
-    if env['SYSTEMROOT']:
-      env['PATH'] = os.path.pathsep.join([
-        env['PATH'],
-        os.path.join(env['SYSTEMROOT'], 'System32'),
-        env['SYSTEMROOT'],
-        ])
-    return env
 
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
@@ -225,7 +218,7 @@ class GccCompiler(Compiler):
       p = subprocess.Popen(
         args=args,
         executable=args[0],
-        env=self._getProcessEnv(args[0]),
+        env=self._getProcessEnv(),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -464,7 +457,18 @@ class WindowsGccCompiler(GccCompiler):
   libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
   moduleSuffix = '.dll'
   programSuffix = '.exe'
+  resourceSuffix = '.obj'
 
+  def __init__(
+    self,
+    arExe=None,
+    gccExe=None,
+    rcExe=None,
+    binPaths=None,
+    ):
+    GccCompiler.__init__(self, arExe, gccExe, binPaths)
+    self.__rcExe = rcExe
+    
   @memoise
   def _getCommonLinkArgs(self, dll):
     args = GccCompiler._getCommonLinkArgs(self, dll)
@@ -477,6 +481,34 @@ class WindowsGccCompiler(GccCompiler):
       
     return args
 
+  @memoise
+  def _getCommonResourceArgs(self):
+    args = [self.__rcExe]
+    
+    args.extend("-D" + define for define in self.defines)
+    args.extend("-I" + path for path in reversed(self.includePaths))
+    
+    return args
+
+  def getResourceCommand(self, target, source, engine):
+    
+    # TODO: Dependency scanning of .h files (can we use gcc and '-MD'?)
+    args = list(self._getCommonResourceArgs())
+    args.append('-o' + target)
+    args.append('-i' + source)
+
+    @makeCommand(args)
+    def compile():
+      cake.filesys.remove(target)
+      self._executeProcess(args, target, engine)
+
+    @makeCommand("rc-scan")
+    def scan():
+      # TODO: Add dependencies on DLLs used by rc.exe
+      return [args[0], source]
+
+    return compile, scan
+  
 class MacGccCompiler(GccCompiler):
 
   @memoise

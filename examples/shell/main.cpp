@@ -2,13 +2,12 @@
 
 int main(int argc, char **argv)
 {
-	if (argc > 0)
+	if (argc == 0)
 	{
-	    printf("The answer is: %s\n", argv[argc - 1]);
+		printf("ERROR: Expected a parameter.\n");
+		return 1;
 	}
-	else
-	{
-	    printf("ERROR: Expected a parameter.\n");
-	}
+
+	printf("The answer is: %s\n", argv[argc - 1]);
     return 0;
 }

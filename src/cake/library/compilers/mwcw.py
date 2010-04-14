@@ -114,7 +114,7 @@ class MwcwCompiler(Compiler):
     return outputText
 
   def _executeProcess(self, args, target, configuration):
-    engine.logger.outputDebug(
+    configuration.engine.logger.outputDebug(
       "run",
       "run: %s\n" % " ".join(args),
       )

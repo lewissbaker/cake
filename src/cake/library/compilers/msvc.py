@@ -1295,7 +1295,7 @@ class MsvcCompiler(Compiler):
           cwd=configuration.baseDir,
           )
       except EnvironmentError, e:
-        engine.raiseError("cake: failed to launch %s: %s\n" % (self.__rcExe, str(e)))
+        configuration.engine.raiseError("cake: failed to launch %s: %s\n" % (self.__rcExe, str(e)))
     
       p.stdin.close()
       output = p.stdout.read()
@@ -1311,7 +1311,7 @@ class MsvcCompiler(Compiler):
         sys.stderr.flush()
           
       if exitCode != 0:
-        engine.raiseError("rc: failed with exit code %i\n" % exitCode)
+        configuration.engine.raiseError("rc: failed with exit code %i\n" % exitCode)
 
     @makeCommand("rc-scan")
     def scan():

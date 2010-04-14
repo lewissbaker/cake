@@ -35,7 +35,7 @@ env["EXAMPLES"] = "."
 projectTool = base.tools["project"] = ProjectTool()
 projectTool.product = projectTool.VS2008
 projectTool.enabled = engine.createProjects
-engine.addBuildSuccessCallback(lambda e=engine: projectTool.build(e))
+engine.addBuildSuccessCallback(lambda c=configuration: projectTool.build(c))
 
 def createVariants(parent):
   for release in ["debug", "release"]:

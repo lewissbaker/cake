@@ -499,7 +499,7 @@ class ProjectTool(Tool):
 
     return SolutionTarget(path=target, task=None, tool=self)
   
-  def build(self, engine):
+  def build(self, configuration):
     """Build project and solution files.
     
     This function will actually write the project and solution files,
@@ -507,8 +507,8 @@ class ProjectTool(Tool):
     If the engine.forceBuild flag is set to True the files will be written
     regardless of any differences.
     
-    @param engine: The cake.engine instance.
-    @type engine: L{Engine}
+    @param configuration: The configuration to resolve paths with.
+    @type configuration: L{cake.engine.Configuration}
     """
     if not self.enabled:
       return
@@ -519,17 +519,17 @@ class ProjectTool(Tool):
     # the time).
     for solution in self._solutions.solutions.values():
       generator = MsvsSolutionGenerator(solution, self._projects)
-      generator.build(engine)
+      generator.build(configuration)
 
     for project in self._projects.projects.values():
       if project.version == '4.0':
         generator = MsBuildProjectGenerator(project)
-        generator.build(engine)
+        generator.build(configuration)
         generator = MsBuildFiltersGenerator(project)
-        generator.build(engine)
+        generator.build(configuration)
       else:
         generator = MsvsProjectGenerator(project)
-        generator.build(engine)
+        generator.build(configuration)
 
 def escapeAttr(value):
   """Utility function for escaping xml attribute values.
@@ -754,11 +754,13 @@ class MsvsProjectGenerator(object):
     self.platforms = list(frozenset(c.platform for c in self.configs))
     self.platforms.sort()
 
-  def build(self, engine):
+  def build(self, configuration):
     """Create and write the .vcproj file.
 
     Throws an exception if building the project file fails.
     """
+    engine = configuration.engine
+    
     stream = StringIO.StringIO()
     self.file = codecs.getwriter(self.encoding)(stream)
     try:
@@ -771,12 +773,12 @@ class MsvsProjectGenerator(object):
     self.file.close()
     self.file = None
     
-    shouldBuild = engine.forceBuild
+    shouldBuild = configuration.engine.forceBuild
     if not shouldBuild:
       # Compare new file contents against existing file
       existingFileContents = None
       try:
-        f = open(self.projectFilePath, "rb")
+        f = open(configuration.abspath(self.projectFilePath), "rb")
         try:
           existingFileContents = f.read()
           shouldBuild = newFileContents != existingFileContents
@@ -787,8 +789,12 @@ class MsvsProjectGenerator(object):
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Project %s\n" % self.projectFilePath)
-      cake.filesys.makeDirs(self.projectDir)
-      open(self.projectFilePath, "wb").write(newFileContents)
+      cake.filesys.makeDirs(configuration.abspath(self.projectDir))
+      f = open(configuration.abspath(self.projectFilePath), "wb")
+      try:
+        f.write(newFileContents)
+      finally:
+        f.close()
     else:
       engine.logger.outputDebug(
         "project",
@@ -1103,11 +1109,12 @@ class MsBuildProjectGenerator(object):
     self.version = project.version
     self.configs = project.configurations.values()
 
-  def build(self, engine):
+  def build(self, configuration):
     """Create and write the .vcproj file.
 
     Throws an exception if building the project file fails.
     """
+    engine = configuration.engine
     stream = StringIO.StringIO()
     self.file = codecs.getwriter(self.encoding)(stream)
     try:
@@ -1125,7 +1132,7 @@ class MsBuildProjectGenerator(object):
       # Compare new file contents against existing file
       existingFileContents = None
       try:
-        f = open(self.projectFilePath, "rb")
+        f = open(configuration.abspath(self.projectFilePath), "rb")
         try:
           existingFileContents = f.read()
           shouldBuild = newFileContents != existingFileContents
@@ -1136,8 +1143,12 @@ class MsBuildProjectGenerator(object):
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Project %s\n" % self.projectFilePath)
-      cake.filesys.makeDirs(self.projectDir)
-      open(self.projectFilePath, "wb").write(newFileContents)
+      cake.filesys.makeDirs(configuration.abspath(self.projectDir))
+      f = open(configuration.abspath(self.projectFilePath), "wb")
+      try:
+        f.write(newFileContents)
+      finally:
+        f.close()
     else:
       engine.logger.outputDebug(
         "project",
@@ -1429,11 +1440,12 @@ class MsBuildFiltersGenerator(object):
     self.version = project.version
     self.configs = project.configurations.values()
 
-  def build(self, engine):
+  def build(self, configuration):
     """Create and write the .vcproj file.
 
     Throws an exception if building the project file fails.
     """
+    engine = configuration.engine
     stream = StringIO.StringIO()
     self.file = codecs.getwriter(self.encoding)(stream)
     try:
@@ -1451,7 +1463,7 @@ class MsBuildFiltersGenerator(object):
       # Compare new file contents against existing file
       existingFileContents = None
       try:
-        f = open(self.projectFiltersPath, "rb")
+        f = open(configuration.abspath(self.projectFiltersPath), "rb")
         try:
           existingFileContents = f.read()
           shouldBuild = newFileContents != existingFileContents
@@ -1462,8 +1474,12 @@ class MsBuildFiltersGenerator(object):
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Filters %s\n" % self.projectFiltersPath)
-      cake.filesys.makeDirs(self.projectDir)
-      open(self.projectFiltersPath, "wb").write(newFileContents)
+      cake.filesys.makeDirs(configuration.abspath(self.projectDir))
+      f = open(configuration.abspath(self.projectFiltersPath), "wb")
+      try:
+        f.write(newFileContents)
+      finally:
+        f.close()
     else:
       engine.logger.outputDebug(
         "project",
@@ -1665,9 +1681,10 @@ class MsvsSolutionGenerator(object):
     """
     return cake.path.relativePath(path, self.solutionDir)
 
-  def build(self, engine):
+  def build(self, configuration):
     """Actually write the target file.
     """
+    engine = configuration.engine
     stream = StringIO.StringIO()
     self.file = codecs.getwriter(self.encoding)(stream)
     try:
@@ -1685,7 +1702,7 @@ class MsvsSolutionGenerator(object):
     if not shouldBuild:
       existingFileContents = None
       try:
-        f = open(self.solutionFilePath, "rb")
+        f = open(configuration.abspath(self.solutionFilePath), "rb")
         try:
           existingFileContents = f.read()
           shouldBuild = newFileContents != existingFileContents
@@ -1696,8 +1713,12 @@ class MsvsSolutionGenerator(object):
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Solution %s\n" % self.solutionFilePath)
-      cake.filesys.makeDirs(self.solutionDir)
-      open(self.solutionFilePath, "wb").write(newFileContents)
+      cake.filesys.makeDirs(configuration.abspath(self.solutionDir))
+      f = open(configuration.abspath(self.solutionFilePath), "wb")
+      try:
+        f.write(newFileContents)
+      finally:
+        f.close()
     else:
       engine.logger.outputDebug(
         "project",

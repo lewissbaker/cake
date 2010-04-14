@@ -27,7 +27,7 @@ class ShellTool(Tool):
 
     env = deepCopyBuiltins(self.__env)
 
-    def spawnProcess():
+    def spawnProcess(cwd=cwd):
 
       if targets:
         # Check dependencies to see if they've changed
@@ -61,7 +61,12 @@ class ShellTool(Tool):
         cwd = abspath(cwd)
 
       # Output the command-line we're about to run.
-      engine.logger.outputInfo("%s\n" % " ".join(args))
+      engine.logger.outputInfo("Running %s\n" % args[0])
+
+      engine.logger.outputDebug(
+        "run",
+        "run: %s\n" % " ".join(args),
+        )
 
       try:
         p = subprocess.Popen(

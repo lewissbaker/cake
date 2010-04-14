@@ -149,7 +149,10 @@ class MwcwCompiler(Compiler):
         )
   
     p.stdin.close()
-    output = p.stdout.read()
+    try:
+      output = p.stdout.read()
+    finally:
+      p.stdout.close()
     exitCode = p.wait()
     
     if output:
@@ -369,12 +372,13 @@ class MwcwCompiler(Compiler):
     return self._getLinkCommands(target, sources, configuration, dll=True)
 
   def _getLinkCommands(self, target, sources, configuration, dll):
-    resolvedPaths, unresolvedLibs = self._resolveLibraries(configuration)
-    sources = sources + resolvedPaths
+    
+    objects, libraries = self._resolveObjects(configuration)
     
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
-    args.extend('-l' + l for l in unresolvedLibs)    
+    args.extend(objects)
+    args.extend('-l' + l for l in libraries)    
     args.extend(['-o', target])
 
     if self.outputMapFile:
@@ -389,7 +393,7 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources
+      return [args[0]] + sources + objects + self._scanForLibraries(configuration, libraries)
     
     return link, scan
 

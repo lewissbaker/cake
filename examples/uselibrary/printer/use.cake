@@ -5,4 +5,5 @@ from cake.tools import compiler, env, script
 # filename to the compiler.
 compiler.addIncludePath(script.cwd("include"))
 compiler.addLibraryScript(script.cwd("build.cake"))
-compiler.addLibrary(env.expand("${BUILD}/uselibrary/printer/lib/printer"))
+compiler.addLibraryPath(env.expand("${BUILD}/uselibrary/printer/lib"))
+compiler.addLibrary("printer")

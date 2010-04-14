@@ -1,6 +1,7 @@
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
 from cake.library.variant import VariantTool
+from cake.library.shell import ShellTool
 from cake.library.zipping import ZipTool
 from cake.library.logging import LoggingTool
 from cake.library.project import ProjectTool
@@ -8,6 +9,7 @@ from cake.library.env import Environment
 from cake.library.compilers import CompilerNotFoundError
 from cake.engine import Script, Variant
 import cake.system
+import os
 
 script = Script.getCurrent()
 engine = script.engine
@@ -28,6 +30,8 @@ base = Variant()
 base.tools["script"] = ScriptTool()
 base.tools["filesys"] = FileSystemTool()
 base.tools["variant"] = VariantTool()
+shell = base.tools["shell"] = ShellTool()
+shell.update(os.environ)
 base.tools["zipping"] = ZipTool()
 base.tools["logging"] = LoggingTool()
 env = base.tools["env"] = Environment()
@@ -88,7 +92,12 @@ if cake.system.platform() == 'Windows':
   for a in ["x86", "x64", "ia64"]:
     try:
       msvc = base.clone(platform="windows", compiler="msvc", architecture=a)
-      msvc.tools["compiler"] = findMsvcCompiler(architecture=a) 
+      compiler = msvc.tools["compiler"] = findMsvcCompiler(architecture=a)
+      compiler.outputFullPath = True
+      compiler.bigObjects = True
+      compiler.addDefine("WIN32")
+      if a in ["x64", "ia64"]:
+        compiler.addDefine("WIN64")
       createVariants(msvc)
     except CompilerNotFoundError:
       pass

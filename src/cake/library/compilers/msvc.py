@@ -86,18 +86,15 @@ def _createMsvcCompiler(
   platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
 
   if architecture == 'x86':
-    defines = ['WIN32']
     msvcLibDir = cake.path.join(msvcProductDir, "lib")
     platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
   elif architecture in ['x64', 'amd64']:
-    defines = ['WIN32', 'WIN64']
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
     platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
     # External Platform SDKs may use 'x64' instead of 'amd64'
     if not cake.filesys.isDir(platformSdkLibDir):
       platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
   elif architecture == 'ia64':
-    defines = ['WIN32', 'WIN64']
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
     platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "IA64")
 
@@ -148,9 +145,6 @@ def _createMsvcCompiler(
   compiler.addIncludePath(platformSdkIncludeDir)
   compiler.addLibraryPath(platformSdkLibDir)
   
-  for d in defines:
-    compiler.addDefine(d)
-
   return compiler
 
 def findMsvcCompiler(
@@ -240,7 +234,7 @@ def _mungePathToSymbol(path):
 
 class MsvcCompiler(Compiler):
 
-  outputFullPath = True
+  outputFullPath = None
   """Tell the compiler to output full paths.
   
   When set to True the compiler will output full (absolute) paths to
@@ -249,6 +243,18 @@ class MsvcCompiler(Compiler):
 
   Related compiler options::
     /FC
+  @type: bool
+  """
+  bigObjects = None
+  """Increase the number of sections an object file can contain.
+  
+  When set to True the compiler may produce bigger object files
+  but each object file may contain more addressable sections (up
+  to 2^32 in Msvc). If set to False only 2^16 addressable sections
+  are available.
+
+  Related compiler options::
+    /bigobj
   @type: bool
   """
   memoryLimit = None
@@ -283,7 +289,7 @@ class MsvcCompiler(Compiler):
     /VERSION
   @type: string or None
   """
-  useStringPooling = False
+  useStringPooling = None
   """Use string pooling.
   
   When set to True the compiler may eliminate duplicate strings by sharing
@@ -293,7 +299,7 @@ class MsvcCompiler(Compiler):
     /GF
   @type: bool
   """
-  useMinimalRebuild = False
+  useMinimalRebuild = None
   """Use minimal rebuild.
   
   When set to True the compiler may choose not to recompile your source file
@@ -304,7 +310,7 @@ class MsvcCompiler(Compiler):
     /Gm
   @type: bool
   """
-  useEditAndContinue = False
+  useEditAndContinue = None
   """Use Edit and Continue.
   
   When set to True the compiler will produce debug information that supports
@@ -422,7 +428,6 @@ class MsvcCompiler(Compiler):
     args = [
       self.__clExe,
       "/nologo",
-      "/bigobj",
       "/showIncludes",
       "/c",
       ]
@@ -432,6 +437,9 @@ class MsvcCompiler(Compiler):
 
     if self.outputFullPath:
       args.append("/FC")
+      
+    if self.bigObjects:
+      args.append("/bigobj")
 
     if self.memoryLimit is not None:
       args.append("/Zm%i" % self.memoryLimit)
@@ -891,8 +899,7 @@ class MsvcCompiler(Compiler):
 
   def _getLinkCommands(self, target, sources, configuration, dll):
     
-    resolvedPaths, unresolvedLibs = self._resolveLibraries(configuration)
-    sources = sources + resolvedPaths
+    objects, libraries = self._resolveObjects(configuration)
     
     absTarget = configuration.abspath(target)
     absTargetDir = cake.path.dirName(absTarget)
@@ -945,7 +952,14 @@ class MsvcCompiler(Compiler):
     
     args.append('/OUT:' + target)
     args.extend(sources)
-    args.extend(unresolvedLibs)
+    args.extend(objects)
+
+    # Msvc requires a .lib extension otherwise it will assume an .obj
+    libraryPrefix, librarySuffix = self.libraryPrefixSuffixes[0]
+    for l in libraries:
+      if not cake.path.hasExtension(l):
+        l = cake.path.forcePrefixSuffix(l, libraryPrefix, librarySuffix)
+      args.append(l)
     
     @makeCommand(args)
     def link():
@@ -1221,7 +1235,7 @@ class MsvcCompiler(Compiler):
         
     @makeCommand("link-scan")
     def scan():
-      return [self.__linkExe] + sources
+      return [self.__linkExe] + sources + objects + self._scanForLibraries(configuration, libraries)
     
     if self.embedManifest:
       if self.useIncrementalLinking is None or self.useIncrementalLinking:

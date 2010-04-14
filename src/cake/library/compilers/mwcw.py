@@ -26,29 +26,11 @@ class MwcwCompiler(Compiler):
     self,
     ccExe=None,
     ldExe=None,
+    binPaths=None,
     ):
-    Compiler.__init__(self)
+    Compiler.__init__(self, binPaths)
     self.__ccExe = ccExe
     self.__ldExe = ldExe
-
-  @memoise
-  def _getProcessEnv(self, executable):
-    temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
-    env = {
-      'COMPSPEC' : os.environ.get('COMSPEC', ''),
-      'PATHEXT' : ".com;.exe;.bat;.cmd",
-      'SYSTEMROOT' : os.environ.get('SYSTEMROOT', ''),
-      'TMP' : temp,
-      'TEMP' : temp,  
-      'PATH' : cake.path.dirName(executable),
-      }
-    if env['SYSTEMROOT']:
-      env['PATH'] = os.path.pathsep.join([
-        env['PATH'],
-        os.path.join(env['SYSTEMROOT'], 'System32'),
-        env['SYSTEMROOT'],
-        ])
-    return env
 
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
@@ -137,7 +119,7 @@ class MwcwCompiler(Compiler):
       p = subprocess.Popen(
         args=args,
         executable=executable,
-        env=self._getProcessEnv(executable),
+        env=self._getProcessEnv(),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

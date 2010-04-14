@@ -128,7 +128,7 @@ def _createMsvcCompiler(
   checkDirectory(msvcLibDir)
   checkDirectory(platformSdkLibDir)
   
-  dllPaths = [msvcHostBinDir, msvsInstallDir]
+  binPaths = [msvcHostBinDir, msvsInstallDir]
 
   compiler = MsvcCompiler(
     clExe=clExe,
@@ -136,7 +136,7 @@ def _createMsvcCompiler(
     linkExe=linkExe,
     rcExe=rcExe,
     mtExe=mtExe,
-    dllPaths=dllPaths,
+    binPaths=binPaths,
     architecture=architecture,
     )
 
@@ -367,16 +367,15 @@ class MsvcCompiler(Compiler):
     linkExe=None,
     mtExe=None,
     rcExe=None,
-    dllPaths=None,
+    binPaths=None,
     architecture=None,
     ):
-    super(MsvcCompiler, self).__init__()
+    Compiler.__init__(self, binPaths)
     self.__clExe = clExe
     self.__libExe = libExe
     self.__linkExe = linkExe
     self.__mtExe = mtExe
     self.__rcExe = rcExe
-    self.__dllPaths = dllPaths
     self.__architecture = architecture
     self.forcedUsings = []
     self.forcedUsingScripts = []
@@ -530,31 +529,6 @@ class MsvcCompiler(Compiler):
     else:
       return False
     
-  @memoise
-  def _getProcessEnv(self):
-    temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
-    env = {
-      'COMPSPEC' : os.environ.get('COMSPEC', ''),
-      'PATHEXT' : ".com;.exe;.bat;.cmd",
-      'SYSTEMROOT' : os.environ.get('SYSTEMROOT', ''),
-      'TMP' : temp,
-      'TEMP' : temp,  
-      'PATH' : '.',
-      }
-    if self.__dllPaths is not None:
-      env['PATH'] = os.path.pathsep.join(
-        [env['PATH']] + self.__dllPaths
-        )
-    
-    if env['SYSTEMROOT']:
-      env['PATH'] = os.path.pathsep.join([
-        env['PATH'],
-        os.path.join(env['SYSTEMROOT'], 'System32'),
-        env['SYSTEMROOT'],
-        ])
-      
-    return env
-  
   def getLanguage(self, path):
     language = self.language
     if language is None:

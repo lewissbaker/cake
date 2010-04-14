@@ -84,7 +84,7 @@ if cake.system.platform() == 'Windows':
       msvc = base.clone(platform="windows", compiler="msvc", architecture=a)
       compiler = msvc.tools["compiler"] = findMsvcCompiler(architecture=a)
       compiler.outputFullPath = True
-      compiler.bigObjects = True
+      compiler.useBigObjects = True
       compiler.addDefine("WIN32")
       if a in ["x64", "ia64"]:
         compiler.addDefine("WIN64")

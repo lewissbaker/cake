@@ -245,7 +245,7 @@ class MsvcCompiler(Compiler):
     /FC
   @type: bool
   """
-  bigObjects = None
+  useBigObjects = None
   """Increase the number of sections an object file can contain.
   
   When set to True the compiler may produce bigger object files
@@ -437,7 +437,7 @@ class MsvcCompiler(Compiler):
     if self.outputFullPath:
       args.append("/FC")
       
-    if self.bigObjects:
+    if self.useBigObjects:
       args.append("/bigobj")
 
     if self.memoryLimit is not None:

@@ -99,22 +99,185 @@ class Engine(object):
   """
   
   forceBuild = False
+  defaultBootScriptName = "boot.cake"
   
   def __init__(self, logger):
     """Default Constructor.
     """
-    self._variants = {}
-    self.defaultVariants = []
     self._byteCodeCache = {}
     self._timestampCache = {}
     self._digestCache = {}
     self._dependencyInfoCache = {}
-    self._executed = {}
-    self._executedLock = threading.Lock()
     self.logger = logger
     self.buildSuccessCallbacks = []
     self.buildFailureCallbacks = []
+    self._searchUpCache = {}
+    self._configurations = {}
     self.scriptThreadPool = cake.threadpool.ThreadPool(1)
+  
+  def searchUpForFile(self, path, fileName):
+    """Attempt to find a file in a particular path or any of its parent
+    directories.
+    
+    Caches previous search results for efficiency.
+    
+    @param path: The path to search for the file.
+    @type path: string
+    
+    @param fileName: The name of the file to search for.
+    @type path: string
+    
+    @return: Absolute path of the file found in the path or its nearest
+    ancestor that contains the file, otherwise None if the file wasn't
+    found.
+    @rtype: string or None
+    """
+    
+    searchUpCache = self._searchUpCache.get(fileName, None)
+    if searchUpCache is None:
+      searchUpCache = self._searchUpCache.setdefault(fileName, {})
+    
+    undefined = object()
+    undefinedPaths = []
+    path = os.path.normcase(os.path.abspath(path))
+    while True:
+      configPath = searchUpCache.get(path, undefined)
+      if configPath is not undefined:
+        break
+      
+      undefinedPaths.append(path)
+      
+      candidate = cake.path.join(path, fileName)
+      if cake.filesys.isFile(candidate):
+        configPath = cake.path.fileSystemPath(candidate)
+        break
+      
+      parent = cake.path.dirName(path)
+      if parent == path:
+        configPath = None
+        break
+      
+      path = parent
+
+    for undefinedPath in undefinedPaths:
+      searchUpCache[undefinedPath] = configPath
+
+    return configPath
+  
+  def findBootScriptPath(self, path, bootScriptName=None):
+    """Attempt to find the path of the boot script to use for building
+    a particular path.
+    
+    @param path: Absolute path to start searching for the boot script file.
+    @type path: string
+    
+    @param bootScriptName: Name of the boot script file to search for
+    or None to use the default bootScriptName.
+    @type bootScriptName: string or None
+    
+    @return: Path to the boot script file if found otherwise None.
+    @rtype: string or None
+    """
+    if bootScriptName is None:
+      bootScriptName = self.defaultBootScriptName
+
+    return self.searchUpForFile(path, bootScriptName)
+  
+  def getConfiguration(self, path):
+    """Get the configuration for a specified boot script path.
+    
+    Executes the boot script if not already executed.
+    
+    @param path: Absolute path of the boot script used to
+    populate the configuration.
+    @type path: string
+    
+    @return: The Configuration that has been configured with the
+    specified boot script.
+    @rtype: L{Configuration}
+    """
+    configuration = self._configurations.get(path, None)
+    if configuration is None:
+      configuration = Configuration(path=path, engine=self)
+      script = Script(
+        path=path,
+        configuration=configuration,
+        variant=None,
+        engine=self,
+        task=None,
+        parent=None,
+        )
+      script.execute()
+      configuration = self._configurations.setdefault(path, configuration)
+    return configuration
+  
+  def findConfiguration(self, path, bootScriptName=None):
+    """Find the configuration for a particular path.
+    
+    @param path: Absolute path to start searching for a boot script.
+    @type path: string
+    
+    @param bootScriptName: Name of the boot script to search for.
+    If not supplied then self.defaultBootScriptName is used.
+    @type bootScriptName: string or None
+
+    @return: The initialised Configuration object corresponding
+    to the found boot script.
+    @rtype: L{Configuration}
+    """
+    # TODO: Handle boot script not found error
+    bootScript = self.findBootScriptPath(path, bootScriptName)
+    return self.getConfiguration(bootScript)
+  
+  def execute(self, path, bootScript=None, bootScriptName=None, keywords={}):
+    """Execute a script at specified path with all matching variants.
+    
+    The variants the script is executed with are determined by the
+    defaultKeywords set by the boot script and the keywords specified
+    here.
+    
+    @param path: Absolute path of the script to execute.
+    @type path: string.
+    
+    @param bootScript: Absolute path of the boot script to execute the
+    script with, pass None to search for the boot script.
+    @type bootScript: string or None
+    
+    @param bootScriptName: Name of the boot script file to search for
+    if bootScript was passed as None. If None then use the engine's
+    default boot script name.
+    @type bootScriptName: string or None
+    
+    @param keywords: Keywords used to filter the set of variants the
+    script will be executed with. Any keywords specified here will
+    override the defaultKeywords set in the boot script.
+    @type keywords: dictionary of string -> string or list of string
+
+    @return: A task that will complete when the script and any tasks
+    it spawns finishes executing.
+    @rtype: L{Task}
+    """
+    if bootScript is None:
+      configuration = self.findConfiguration(path, bootScriptName)
+    else:
+      configuration = self.getConfiguration(bootScript)
+
+    path = cake.path.relativePath(path, configuration.baseDir)
+
+    tasks = []
+    for variant in configuration.findDefaultVariants(keywords):
+      task = configuration.execute(path, variant)
+      tasks.append(task)
+      
+    if not tasks:
+      self.raiseError("No build variants for %s" % path)
+    elif len(tasks) > 1:
+      task = self.createTask()
+      task.completeAfter(tasks)
+      task.start()
+      return task
+    else:
+      return tasks[0]
   
   def addBuildSuccessCallback(self, callback):
     """Register a callback to be run if the build completes successfully.
@@ -145,67 +308,7 @@ class Engine(object):
     for callback in self.buildFailureCallbacks:
       callback()
 
-  def addVariant(self, variant, default=False):
-    """Register a new variant with this engine.
-    
-    @param variant: The Variant object to register.
-    @type variant: L{Variant}
-    
-    @param default: If True then make this newly added variant the default
-    build variant.
-    @type default: C{bool}
-    """
-    key = frozenset(variant.keywords.iteritems())
-    if key in self._variants:
-      raise KeyError("Already added variant with these keywords: %r" % variant)
-    
-    self._variants[key] = variant
-    if default:
-      self.defaultVariants.append(variant)
-    
-  def findAllVariants(self, keywords):
-    """Find all variants that match the specified keywords.
-    """
-    for variant in self._variants.itervalues():
-      if variant.matches(**keywords):
-        yield variant
-  
-  def findVariant(self, keywords, baseVariant=None):
-    """Find the variant that matches the specified keywords.
-    
-    @param keywords: A dictionary of key/value pairs the variant needs
-    to match. The value can be either a string, "all", a list of
-    strings or None.
-    
-    @param baseVariant: If specified then attempts to find the 
-    
-    @raise LookupError: If no variants matched or more than one variant
-    matched the criteria.
-    """
-    if baseVariant is None:
-      results = [v for v in self.findAllVariants(keywords)]
-    else:
-      results = []
-      getBaseValue = baseVariant.keywords.get
-      for variant in self.findAllVariants(keywords):
-        for key, value in variant.keywords.iteritems():
-          if key not in keywords:
-            baseValue = getBaseValue(key, None)
-            if value != baseValue:
-              break
-        else:
-          results.append(variant) 
-    
-    if not results:
-      raise LookupError("No variants matched criteria.")
-    elif len(results) > 1:
-      msg = "Found %i variants that matched criteria.\n"
-      msg += "".join("- %r\n" % v for v in results)
-      raise LookupError(msg)
-
-    return results[0]
-    
-  def createTask(self, func):
+  def createTask(self, func=None):
     """Construct a new task that will call the specified function.
     
     This function wraps the function in an exception handler that prints out
@@ -219,6 +322,9 @@ class Engine(object):
     @return: The newly created Task.
     @rtype: L{Task}
     """
+    if func is None:
+      return cake.task.Task()
+    
     def _wrapper():
       try:
         return func()
@@ -266,64 +372,6 @@ class Engine(object):
     self.logger.outputError(message)
     raise BuildError(message)
     
-  def execute(self, path, variant):
-    """Execute the script with the specified variant.
-    
-    @param path: Path of the Cake script file to execute.
-    @type path: string
-
-    @param variant: The build variant to execute this script with.
-    @type variant: L{Variant} 
-
-    @return: A Task object that completes when the script and any
-    tasks it starts finish executing.
-    @rtype: L{cake.task.Task}
-    """
-
-    path = os.path.normpath(path)
-
-    key = (os.path.normcase(path), variant)
-
-    currentScript = Script.getCurrent()
-    if currentScript:
-      currentVariant = currentScript.variant
-    else:
-      currentVariant = None
-    
-    self._executedLock.acquire()
-    try:
-      if key in self._executed:
-        script = self._executed[key]
-        task = script.task
-      else:
-        def execute():
-          cake.tools.__dict__.clear()
-          for name, tool in variant.tools.items():
-            setattr(cake.tools, name, tool.clone())
-          if variant is not currentVariant:
-            self.logger.outputInfo("Building with %s\n" % str(variant))
-          self.logger.outputInfo("Executing %s\n" % script.path)
-          script.execute()
-        task = self.createTask(execute)
-        script = Script(
-          path=path,
-          variant=variant,
-          task=task,
-          engine=self,
-          )
-        self._executed[key] = script
-        task.addCallback(
-          lambda: self.logger.outputDebug(
-            "script",
-            "Finished %s\n" % script.path,
-            )
-          )
-        task.start(threadPool=self.scriptThreadPool)
-    finally:
-      self._executedLock.release()
-
-    return task
-
   def getByteCode(self, path):
     """Load a python file and return the compiled byte-code.
     
@@ -409,23 +457,23 @@ class Engine(object):
       
     return digest
     
-  def getDependencyInfo(self, targetPath):
+  def getDependencyInfo(self, target):
     """Load the dependency info for the specified target.
     
     The dependency info contains information about the parameters and
     dependencies of a target at the time it was last built.
     
-    @param targetPath: The path of the target.
-    @type targetPath: string 
+    @param target: The absolute path of the target.
+    @type target: string
     
     @return: A DependencyInfo object for the target.
     @rtype: L{DependencyInfo}
     
     @raise EnvironmentError: if the dependency info could not be retrieved.
     """
-    dependencyInfo = self._dependencyInfoCache.get(targetPath, None)
+    dependencyInfo = self._dependencyInfoCache.get(target, None)
     if dependencyInfo is None:
-      depPath = targetPath + '.dep'
+      depPath = target + '.dep'
       
       # Read entire file at once otherwise thread-switching will kill
       # performance
@@ -441,93 +489,20 @@ class Engine(object):
       if not isinstance(dependencyInfo, DependencyInfo):
         raise EnvironmentError("invalid dependency file")
 
-      self._dependencyInfoCache[targetPath] = dependencyInfo
+      self._dependencyInfoCache[target] = dependencyInfo
       
     return dependencyInfo
-
-  def checkDependencyInfo(self, targetPath, args):
-    """Check dependency info to see if the target is up to date.
     
-    The dependency info contains information about the parameters and
-    dependencies of a target at the time it was last built.
+  def storeDependencyInfo(self, target, dependencyInfo):
+    """Store dependency info for the specified target.
     
-    @param targetPath: The path of the target.
-    @type targetPath: string 
-    @param args: The current arguments.
-    @type args: list of string 
-
-    @return: A tuple containing the previous DependencyInfo or None if not
-    found, and the string reason to build or None if the target is up
-    to date.
-    @rtype: tuple of (L{DependencyInfo} or None, string or None)
+    @param target: Absolute path of the target.
+    @type target: string
+    
+    @param dependencyInfo: The dependency info object to store.
+    @type dependencyInfo: L{DependencyInfo}
     """
-    try:
-      dependencyInfo = self.getDependencyInfo(targetPath)
-    except EnvironmentError:
-      return None, "'" + targetPath + ".dep' doesn't exist"
-
-    if dependencyInfo.version != DependencyInfo.VERSION:
-      return None, "'" + targetPath + ".dep' version has changed"
-
-    if self.forceBuild:
-      return dependencyInfo, "rebuild has been forced"
-
-    if args != dependencyInfo.args:
-      return dependencyInfo, "'" + repr(args) + "' != '" + repr(dependencyInfo.args) + "'"
-    
-    isFile = cake.filesys.isFile
-    for target in dependencyInfo.targets:
-      if not isFile(target):
-        return dependencyInfo, "'" + target + "' doesn't exist"
-    
-    getTimestamp = self.getTimestamp
-    paths = dependencyInfo.depPaths
-    timestamps = dependencyInfo.depTimestamps
-    assert len(paths) == len(timestamps)
-    for i in xrange(len(paths)):
-      path = paths[i]
-      try:
-        if getTimestamp(path) != timestamps[i]:
-          return dependencyInfo, "'" + path + "' has changed since last build"
-      except EnvironmentError:
-        return dependencyInfo, "'" + path + "' no longer exists" 
-    
-    return dependencyInfo, None
-
-  def createDependencyInfo(self, targets, args, dependencies, calculateDigests=False):
-    """Construct a new DependencyInfo object.
-    
-    @param targets: A list of file paths of targets.
-    @type targets: list of string
-    @param args: A value representing the parameters of the build.
-    @type args: object
-    @param dependencies: A list of file paths of dependencies.
-    @type dependencies: list of string
-    @param calculateDigests: Whether or not to store the digests of
-    dependencies in the DependencyInfo.
-    @type calculateDigests: bool
-    
-    @return: A DependencyInfo object.
-    """
-    dependencyInfo = DependencyInfo(targets=list(targets), args=args)
-    paths = dependencyInfo.depPaths = list(dependencies)
-    getTimestamp = self.getTimestamp
-    dependencyInfo.depTimestamps = [getTimestamp(p) for p in paths]
-    if calculateDigests:
-      getFileDigest = self.getFileDigest
-      dependencyInfo.depDigests = [getFileDigest(p) for p in paths]
-    return dependencyInfo
-
-  def storeDependencyInfo(self, dependencyInfo):
-    """Call this method after a target was built to save the
-    dependencies of the target.
-    
-    @param dependencyInfo: The dependency info object to be stored.
-    @type dependencyInfo: L{DependencyInfo}  
-    """
-    depPath = dependencyInfo.targets[0] + '.dep'
-    for target in dependencyInfo.targets:
-      self._dependencyInfoCache[target] = dependencyInfo
+    depPath = target + '.dep'
     
     dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
     
@@ -537,6 +512,8 @@ class Engine(object):
       f.write(dependencyString)
     finally:
       f.close()
+      
+    self._dependencyInfoCache[target] = dependencyInfo
     
 class DependencyInfo(object):
   """Object that holds the dependency info for a target.
@@ -560,61 +537,17 @@ class DependencyInfo(object):
     self.depTimestamps = None
     self.depDigests = None
 
-  def primeFileDigestCache(self, engine):
-    """Prime the engine's file-digest cache using any cached
-    information stored in this dependency info.
-    """
-    if self.depDigests and self.depTimestamps:
-      assert len(self.depDigests) == len(self.depPaths)
-      assert len(self.depTimestamps) == len(self.depPaths)
-      paths = self.depPaths
-      timestamps = self.depTimestamps
-      digests = self.depDigests
-      updateFileDigestCache = engine.updateFileDigestCache
-      for i in xrange(len(paths)):
-        updateFileDigestCache(paths[i], timestamps[i], digests[i])
-
-  def calculateDigest(self, engine):
-    """Calculate the digest of the sources/dependencies.
-
-    @param engine: The engine instance.
-    @type engine: L{Engine}
-    @return: The current digest of the dependency info.
-    @rtype: string of 20 bytes
-    """
-    self.primeFileDigestCache(engine)
-    
-    hasher = cake.hash.sha1()
-    addToDigest = hasher.update
-    
-    encodeToUtf8 = lambda value, encode=codecs.utf_8_encode: encode(value)[0]
-    getFileDigest = engine.getFileDigest 
-    
-    # Include the paths of the targets in the digest
-    for target in self.targets:
-      addToDigest(encodeToUtf8(target))
-      
-    # Include parameters of the build    
-    addToDigest(encodeToUtf8(repr(self.args)))
-    
-    for path in self.depPaths:
-      # Include the dependency file's path and content digest in
-      # this digest.
-      addToDigest(encodeToUtf8(path))
-      addToDigest(getFileDigest(path))
-      
-    return hasher.digest()
-
 class Script(object):
   """A class that represents an instance of a Cake script. 
   """
   
   _current = threading.local()
   
-  def __init__(self, path, variant, engine, task, parent=None):
+  def __init__(self, path, configuration, variant, engine, task, parent=None):
     """Constructor.
     
     @param path: The path to the script file.
+    @param configuration: The configuration to build.
     @param variant: The variant to build.
     @param engine: The engine instance.
     @param task: A task that should complete when all tasks within
@@ -622,7 +555,8 @@ class Script(object):
     @param parent: The parent script or None if this is the root script. 
     """
     self.path = path
-    self.dir = os.path.dirname(path)
+    self.dir = cake.path.dirName(path)
+    self.configuration = configuration
     self.variant = variant
     self.engine = engine
     self.task = task
@@ -676,6 +610,7 @@ class Script(object):
       path=path,
       variant=self.variant,
       engine=self.engine,
+      configuration=self.configuration,
       task=self.task,
       parent=self,
       )
@@ -688,7 +623,7 @@ class Script(object):
     # Use an absolute path so an absolute path is embedded in the .pyc file.
     # This will make exceptions clickable in Eclipse, but it means copying
     # your .pyc files may cause their embedded paths to be incorrect.
-    absPath = os.path.abspath(self.path)
+    absPath = self.configuration.abspath(self.path)
     byteCode = self.engine.getByteCode(absPath)
     old = Script.getCurrent()
     Script._current.value = self
@@ -696,3 +631,342 @@ class Script(object):
       exec byteCode in {}
     finally:
       Script._current.value = old
+
+class Configuration(object):
+  """A configuration is a collection of related Variants.
+  
+  It is typically populated by a boot.cake script.
+  
+  @ivar engine: The Engine this configuration object belongs to.
+  @type engine: L{Engine}
+  
+  @ivar path: The absolute path of the boot script that was used to
+  initialise this configuration.
+  @type path: string
+  
+  @ivar dir: The absolute path of the directory containing the boot
+  script.
+  @type dir: string
+  
+  @ivar baseDir: The absolute path of the directory that all relative
+  paths will be assumed to be relative to. Defaults to the directory
+  of the boot script but may be overridden by the boot script.
+  @type baseDir: string
+  
+  @ivar defaultKeywords: A dictionary of default keyword values used
+  to filter the set of variants a script will be built with.
+  @type defaultKeywords: dict of string -> string or list of string.
+  """
+  
+  defaultBuildScriptName = 'build.cake'
+  """The name of the build script to execute if the user asked to
+  build a directory.
+  """
+  
+  def __init__(self, path, engine):
+    """Construct a new Configuration.
+    
+    @param path: Absolute path of the boot script that will be 
+    used to initialise this configuration.
+    @type path: string
+    
+    @param engine: The Engine object this configuration belongs to.
+    @type engine: L{Engine}
+    """
+    self.engine = engine
+    self.path = path
+    self.dir = cake.path.dirName(path)
+    self.baseDir = self.dir
+    self._variants = {}
+    self._executed = {}
+    self._executedLock = threading.Lock()
+    self.defaultKeywords = {}
+    
+  def abspath(self, path):
+    """Convert a path to be absolute.
+    
+    @param path: The path to convert to an absolute path.
+    @type path: string
+    
+    @return: If the path was a relative path then returns the path
+    appended to self.baseDir, otherwise returns the path unchanged.
+    @rtype: string
+    """
+    if not os.path.isabs(path):
+      path = os.path.join(self.baseDir, path)
+    return path
+    
+  def addVariant(self, variant):
+    """Register a new variant with this engine.
+    
+    @param variant: The Variant object to register.
+    @type variant: L{Variant}
+    
+    @param default: If True then make this newly added variant the default
+    build variant.
+    @type default: C{bool}
+    """
+    key = frozenset(variant.keywords.iteritems())
+    if key in self._variants:
+      raise KeyError("Already added variant with these keywords: %r" % variant)
+    
+    self._variants[key] = variant
+
+  def findDefaultVariants(self, keywords={}):
+    """Find all variants that match the specified keywords.
+    
+    Keywords not specified will assume the 'defaultKeywords' values.
+    """
+    mergedKeywords = dict(self.defaultKeywords)
+    mergedKeywords.update(keywords)
+    return self.findAllVariants(mergedKeywords)
+    
+  def findAllVariants(self, keywords={}):
+    """Find all variants that match the specified keywords.
+    
+    @param keywords: A collection of keywords to match against.
+    @type keywords: dictionary of string -> string or list of string
+    
+    @return: Sequence of Variant objects that match the keywords.
+    @rtype: sequence of L{Variant}
+    """
+    for variant in self._variants.itervalues():
+      if variant.matches(**keywords):
+        yield variant
+  
+  def findVariant(self, keywords, baseVariant=None):
+    """Find the variant that matches the specified keywords.
+    
+    @param keywords: A dictionary of key/value pairs the variant needs
+    to match. The value can be either a string, "all", a list of
+    strings or None.
+    
+    @param baseVariant: If specified then attempts to find the variant
+    that has the same keywords as this variant when the keyword is
+    not specified in 'keywords'.
+    @type baseVariant: L{Variant} or C{None}
+    
+    @return: The variant that matches the keywords.
+    @rtype: L{Variant}
+    
+    @raise LookupError: If no variants matched or more than one variant
+    matched the criteria.
+    """
+    if baseVariant is None:
+      results = list(self.findAllVariants(keywords))
+    else:
+      results = []
+      getBaseValue = baseVariant.keywords.get
+      for variant in self.findAllVariants(keywords):
+        for key, value in variant.keywords.iteritems():
+          if key not in keywords:
+            baseValue = getBaseValue(key, None)
+            if value != baseValue:
+              break
+        else:
+          results.append(variant)
+    
+    if not results:
+      raise LookupError("No variants matched criteria.")
+    elif len(results) > 1:
+      msg = "Found %i variants that matched criteria.\n"
+      msg += "".join("- %r\n" % v for v in results)
+      raise LookupError(msg)
+
+    return results[0]
+
+  def execute(self, path, variant):
+    """Execute a build script.
+    
+    Uses this configuration with specified build variant.
+    
+    @param path: Path of the build script.
+    @param variant: The variant to execute the script with.
+    """
+    absPath = self.abspath(path)
+
+    if cake.filesys.isDir(absPath):
+      absPath = cake.path.join(absPath, self.defaultBuildScriptName)
+
+    absPath = os.path.normpath(absPath)
+
+    path = cake.path.relativePath(absPath, self.baseDir)
+
+    key = (os.path.normcase(path), variant)
+
+    currentScript = Script.getCurrent()
+    if currentScript:
+      currentVariant = currentScript.variant
+      currentConfiguration = currentScript.configuration
+    else:
+      currentVariant = None
+      currentConfiguration = None
+    
+    self._executedLock.acquire()
+    try:
+      script = self._executed.get(key, None)
+      if script is not None:
+        task = script.task
+      else:
+        def execute():
+          cake.tools.__dict__.clear()
+          for name, tool in variant.tools.items():
+            setattr(cake.tools, name, tool.clone())
+          if self is not currentConfiguration:
+            self.engine.logger.outputInfo("Building with %s - %s\n" % (self.path, variant))
+          elif variant is not currentVariant:
+            self.engine.logger.outputInfo("Building with %s\n" % str(variant))
+          self.engine.logger.outputInfo("Executing %s\n" % script.path)
+          script.execute()
+        task = self.engine.createTask(execute)
+        script = Script(
+          path=path,
+          configuration=self,
+          variant=variant,
+          task=task,
+          engine=self.engine,
+          )
+        self._executed[key] = script
+        task.addCallback(
+          lambda: self.engine.logger.outputDebug(
+            "script",
+            "Finished %s\n" % script.path,
+            )
+          )
+        task.start(threadPool=self.engine.scriptThreadPool)
+    finally:
+      self._executedLock.release()
+
+    return task
+
+  def createDependencyInfo(self, targets, args, dependencies, calculateDigests=False):
+    """Construct a new DependencyInfo object.
+    
+    @param targets: A list of file paths of targets.
+    @type targets: list of string
+    @param args: A value representing the parameters of the build.
+    @type args: object
+    @param dependencies: A list of file paths of dependencies.
+    @type dependencies: list of string
+    @param calculateDigests: Whether or not to store the digests of
+    dependencies in the DependencyInfo.
+    @type calculateDigests: bool
+    
+    @return: A DependencyInfo object.
+    """
+    dependencyInfo = DependencyInfo(targets=list(targets), args=args)
+    paths = dependencyInfo.depPaths = list(dependencies)
+    abspath = self.abspath
+    paths = [abspath(p) for p in paths]
+    getTimestamp = self.engine.getTimestamp
+    dependencyInfo.depTimestamps = [getTimestamp(p) for p in paths]
+    if calculateDigests:
+      getFileDigest = self.engine.getFileDigest
+      dependencyInfo.depDigests = [getFileDigest(p) for p in paths]
+    return dependencyInfo
+
+  def storeDependencyInfo(self, dependencyInfo):
+    """Call this method after a target was built to save the
+    dependencies of the target.
+    
+    @param dependencyInfo: The dependency info object to be stored.
+    @type dependencyInfo: L{DependencyInfo}  
+    """
+    absTargetPath = self.abspath(dependencyInfo.targets[0])
+    self.engine.storeDependencyInfo(absTargetPath, dependencyInfo)
+
+  def checkDependencyInfo(self, targetPath, args):
+    """Check dependency info to see if the target is up to date.
+    
+    The dependency info contains information about the parameters and
+    dependencies of a target at the time it was last built.
+    
+    @param targetPath: The path of the target.
+    @type targetPath: string 
+    @param args: The current arguments.
+    @type args: list of string 
+
+    @return: A tuple containing the previous DependencyInfo or None if not
+    found, and the string reason to build or None if the target is up
+    to date.
+    @rtype: tuple of (L{DependencyInfo} or None, string or None)
+    """
+    abspath = self.abspath
+    absTargetPath = abspath(targetPath)
+    try:
+      dependencyInfo = self.engine.getDependencyInfo(absTargetPath)
+    except EnvironmentError:
+      return None, "'" + targetPath + ".dep' doesn't exist"
+
+    if dependencyInfo.version != DependencyInfo.VERSION:
+      return None, "'" + targetPath + ".dep' version has changed"
+
+    if self.engine.forceBuild:
+      return dependencyInfo, "rebuild has been forced"
+
+    if args != dependencyInfo.args:
+      return dependencyInfo, "'" + repr(args) + "' != '" + repr(dependencyInfo.args) + "'"
+    
+    isFile = cake.filesys.isFile
+    for target in dependencyInfo.targets:
+      if not isFile(abspath(target)):
+        return dependencyInfo, "'" + target + "' doesn't exist"
+    
+    getTimestamp = self.engine.getTimestamp
+    paths = dependencyInfo.depPaths
+    timestamps = dependencyInfo.depTimestamps
+    assert len(paths) == len(timestamps)
+    for i in xrange(len(paths)):
+      path = paths[i]
+      try:
+        if getTimestamp(abspath(path)) != timestamps[i]:
+          return dependencyInfo, "'" + path + "' has changed since last build"
+      except EnvironmentError:
+        return dependencyInfo, "'" + path + "' no longer exists" 
+    
+    return dependencyInfo, None
+
+  def primeFileDigestCache(self, dependencyInfo):
+    """Prime the engine's file-digest cache using any cached
+    information stored in this dependency info.
+    """
+    if dependencyInfo.depDigests and dependencyInfo.depTimestamps:
+      paths = dependencyInfo.depPaths
+      timestamps = dependencyInfo.depTimestamps
+      digests = dependencyInfo.depDigests
+      assert len(digests) == len(paths)
+      assert len(timestamps) == len(paths)
+      updateFileDigestCache = self.engine.updateFileDigestCache
+      abspath = self.abspath
+      for i in xrange(len(paths)):
+        updateFileDigestCache(abspath(paths[i]), timestamps[i], digests[i])
+
+  def calculateDigest(self, dependencyInfo):
+    """Calculate the digest of the sources/dependencies.
+
+    @return: The current digest of the dependency info.
+    @rtype: string of 20 bytes
+    """
+    self.primeFileDigestCache(dependencyInfo)
+    
+    hasher = cake.hash.sha1()
+    addToDigest = hasher.update
+    
+    encodeToUtf8 = lambda value, encode=codecs.utf_8_encode: encode(value)[0]
+    getFileDigest = self.engine.getFileDigest
+    
+    # Include the paths of the targets in the digest
+    for target in dependencyInfo.targets:
+      addToDigest(encodeToUtf8(target))
+      
+    # Include parameters of the build    
+    addToDigest(encodeToUtf8(repr(dependencyInfo.args)))
+
+    abspath = self.abspath
+    for path in dependencyInfo.depPaths:
+      # Include the dependency file's path and content digest in
+      # this digest.
+      addToDigest(encodeToUtf8(path))
+      addToDigest(getFileDigest(abspath(path)))
+      
+    return hasher.digest()

@@ -31,6 +31,12 @@ class ScriptTool(Tool):
     return Script.getCurrent().engine
   
   @property
+  def configuration(self):
+    """The Configuration the currently executing script belongs to.
+    """
+    return Script.getCurrent().configuration
+  
+  @property
   def variant(self):
     """The Variant the currently executing script is being built with.
     """
@@ -71,6 +77,12 @@ class ScriptTool(Tool):
   def execute(self, scripts, **keywords):
     """Execute another script as a background task.
 
+    Executes the other script using the current script's configuration
+    but potentially a different build variant.
+    
+    If you need to execute a script using a different configuration
+    then use the 'executeNoContext' method instead. 
+
     @param scripts: A path or sequence of paths of scripts to execute.
     @type scripts: string or sequence of string
 
@@ -79,13 +91,74 @@ class ScriptTool(Tool):
     @rtype: L{Task} or C{list} of L{Task}
     """
     script = Script.getCurrent()
-    engine = script.engine
-    variant = engine.findVariant(keywords, baseVariant=script.variant)
-    execute = engine.execute
+    configuration = script.configuration
+    variant = configuration.findVariant(keywords, baseVariant=script.variant)
+    execute = configuration.execute
     if isinstance(scripts, basestring):
       return execute(scripts, variant)
     else:
       return [execute(path, variant) for path in scripts]
+
+  def executeNoContext(self, scripts, bootScript=None, bootScriptName=None, **keywords):
+    """Execute another script as a background task.
+    
+    Does not use any context from the current script's variant or
+    configuration.
+    
+    @param scripts: Paths of scripts to execute.
+    @type scripts: string or list of string
+    
+    @param bootScript: Path of the boot script to execute these scripts
+    with or None to find the boot script for each script.
+    @type bootScript: string or None
+    
+    @param bootScriptName: If bootScript is None then this specifies
+    the name of the boot script to search for. If None then use the
+    default boot script name specified by the Engine.
+    @type bootScriptName: string or None
+    
+    @param keywords: Collection of keywords that specify the variant
+    to execute the script with.
+    """
+    
+    script = Script.getCurrent()
+    engine = script.engine
+    if bootScript is None:
+      # Calculate the boot script for each script path
+      if isinstance(scripts, basestring):
+        path = self.abspath(scripts)
+        configuration = engine.findConfiguration(
+          path=path,
+          bootScriptName=bootScriptName,
+          )
+        variant = configuration.findVariant(keywords)
+        result = configuration.execute(scripts, variant)
+      else:
+        result = []
+        abspath = self.abspath
+        for path in scripts:
+          path = abspath(path)
+          configuration = engine.findConfiguration(
+            path=path,
+            bootScriptName=bootScriptName,
+            )
+          variant = configuration.findVariant(keywords)
+          result.append(configuration.execute(path, variant))
+    else:
+      # Calculate boot script once and reuse for each script path
+      abspath = self.abspath
+      bootScript = abspath(bootScript)
+      configuration = engine.getConfiguration(bootScript)
+      variant = configuration.findVariant(keywords)
+      execute = configuration.execute
+      if isinstance(scripts, basestring):
+        result = execute(abspath(scripts), variant)
+      else:
+        result = []
+        for path in scripts:
+          result.append(execute(abspath(path), variant))
+          
+    return result
 
   def run(self, func, args=None, targets=None, sources=[]):
     """Execute the specified python function as a task.
@@ -99,6 +172,7 @@ class ScriptTool(Tool):
     """
     script = Script.getCurrent()
     engine = script.engine
+    configuration = script.configuration
 
     sourcePaths, sourceTasks = getPathsAndTasks(sources)
 
@@ -107,7 +181,10 @@ class ScriptTool(Tool):
       if targets:
         buildArgs = (args, sourcePaths)
         try:
-          _, reason = engine.checkDependencyInfo(targets[0], buildArgs)
+          _, reason = configuration.checkDependencyInfo(
+            targets[0],
+            buildArgs,
+            )
           if reason is None:
             # Up to date
             return
@@ -123,12 +200,12 @@ class ScriptTool(Tool):
         return func()
       finally:
         if targets:
-          newDependencyInfo = engine.createDependencyInfo(
+          newDependencyInfo = configuration.createDependencyInfo(
             targets=targets,
             args=buildArgs,
             dependencies=sourcePaths,
             )
-          engine.storeDependencyInfo(newDependencyInfo)
+          configuration.storeDependencyInfo(newDependencyInfo)
 
     task = engine.createTask(_run)
     task.startAfter(sourceTasks)

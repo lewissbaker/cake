@@ -267,7 +267,7 @@ class GccCompiler(Compiler):
         }.get(cake.path.extension(path).lower(), 'c++')
     return language
   
-  def getPchCommands(self, target, source, header, object, engine):
+  def getPchCommands(self, target, source, header, object, configuration):
     language = self.getLanguage(source)
     
     # Pch must be compiled as a header, eg: 'c++-header'
@@ -278,10 +278,10 @@ class GccCompiler(Compiler):
     args.extend([source, '-o', target])
 
     def compile():
-      self._runProcess(engine, args, target)
+      self._runProcess(configuration, args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -289,7 +289,7 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        dependencyFile,
+        configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       return dependencies
@@ -297,7 +297,7 @@ class GccCompiler(Compiler):
     canBeCached = True
     return compile, args, canBeCached
   
-  def getObjectCommands(self, target, source, pch, engine):
+  def getObjectCommands(self, target, source, pch, configuration):
     language = self.getLanguage(source)
     args = list(self._getCompileArgs(language))
   
@@ -310,10 +310,10 @@ class GccCompiler(Compiler):
     args.extend([source, '-o', target])
     
     def compile():
-      self._runProcess(engine, args, target)
+      self._runProcess(configuration, args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -321,7 +321,7 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        dependencyFile,
+        configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       if pch is not None:
@@ -369,15 +369,15 @@ class GccCompiler(Compiler):
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
-  def getProgramCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=False)
+  def getProgramCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=False)
   
-  def getModuleCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=True)
+  def getModuleCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=True)
 
-  def _getLinkCommands(self, target, sources, engine, dll):
+  def _getLinkCommands(self, target, sources, configuration, dll):
     
-    objects, libraries = self._resolveObjects(engine)
+    objects, libraries = self._resolveObjects(configuration)
 
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
@@ -391,15 +391,16 @@ class GccCompiler(Compiler):
     @makeCommand(args)
     def link():
       if self.importLibrary:
-        cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
-      self._runProcess(engine, args, target)      
+        importLibrary = configuration.abspath(self.importLibrary)
+        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
+      self._runProcess(configuration, args, target)
     
     @makeCommand("link-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + objects + self._scanForLibraries(engine, libraries)
+      return [args[0]] + sources + objects + self._scanForLibraries(configuration, libraries)
     
     return link, scan
 
@@ -442,7 +443,7 @@ class WindowsGccCompiler(GccCompiler):
     
     return args
 
-  def getResourceCommand(self, target, source, engine):
+  def getResourceCommand(self, target, source, configuration):
     
     # TODO: Dependency scanning of .h files (can we use gcc and '-MD'?)
     args = list(self._getCommonResourceArgs())
@@ -451,8 +452,8 @@ class WindowsGccCompiler(GccCompiler):
 
     @makeCommand(args)
     def compile():
-      cake.filesys.remove(target)
-      self._runProcess(engine, args, target)
+      cake.filesys.remove(configuration.abspath(target))
+      self._runProcess(configuration, args, target)
 
     @makeCommand("rc-scan")
     def scan():

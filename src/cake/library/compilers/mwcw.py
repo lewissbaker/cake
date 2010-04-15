@@ -198,17 +198,17 @@ class MwcwCompiler(Compiler):
         }.get(cake.path.extension(path).lower(), 'c++')
     return language
 
-  def getPchCommands(self, target, source, header, object, engine):
+  def getPchCommands(self, target, source, header, object, configuration):
     language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))
     args.extend([source, '-precompile', target])
     
     def compile():
-      self._runProcess(engine, args, target)
+      self._runProcess(configuration, args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -216,7 +216,7 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        dependencyFile,
+        configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       return dependencies
@@ -224,7 +224,7 @@ class MwcwCompiler(Compiler):
     canBeCached = True
     return compile, args, canBeCached   
           
-  def getObjectCommands(self, target, source, pch, engine):
+  def getObjectCommands(self, target, source, pch, configuration):
     language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))
@@ -235,10 +235,10 @@ class MwcwCompiler(Compiler):
     args.extend([source, '-o', target])
     
     def compile():
-      self._runProcess(engine, args, target)
+      self._runProcess(configuration, args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      engine.logger.outputDebug(
+      configuration.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -246,7 +246,7 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        dependencyFile,
+        configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       if pch is not None:
@@ -262,15 +262,15 @@ class MwcwCompiler(Compiler):
     args.extend(self._getCommonArgs())
     return args
   
-  def getLibraryCommand(self, target, sources, engine):
+  def getLibraryCommand(self, target, sources, configuration):
     args = list(self._getCommonLibraryArgs())
     args.extend(['-o', target])
     args.extend(sources)
     
     @makeCommand(args)
     def archive():
-      cake.filesys.remove(target)
-      self._runProcess(engine, args, target)
+      cake.filesys.remove(configuration.abspath(target))
+      self._runProcess(configuration, args, target)
 
     @makeCommand("lib-scan")
     def scan():
@@ -295,15 +295,15 @@ class MwcwCompiler(Compiler):
     args.extend('-L' + p for p in reversed(self.libraryPaths))
     return args
   
-  def getProgramCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=False)
+  def getProgramCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=False)
   
-  def getModuleCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=True)
+  def getModuleCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=True)
 
-  def _getLinkCommands(self, target, sources, engine, dll):
+  def _getLinkCommands(self, target, sources, configuration, dll):
     
-    objects, libraries = self._resolveObjects(engine)
+    objects, libraries = self._resolveObjects(configuration)
     
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
@@ -316,14 +316,14 @@ class MwcwCompiler(Compiler):
       
     @makeCommand(args)
     def link():
-      self._runProcess(engine, args, target)      
+      self._runProcess(configuration, args, target)      
     
     @makeCommand("link-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + objects + self._scanForLibraries(engine, libraries)
+      return [args[0]] + sources + objects + self._scanForLibraries(configuration, libraries)
     
     return link, scan
 

@@ -12,6 +12,7 @@ script.execute(script.cwd([
   "uselibrary/build.cake",
   "usemodule/build.cake",
   "usepch/build.cake",
+  "zip/build.cake",
   ]))
 
 hostPlatform = cake.system.platform().lower()

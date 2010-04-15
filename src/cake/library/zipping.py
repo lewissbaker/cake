@@ -125,10 +125,14 @@ class ZipTool(Tool):
 
     sourcePath, sourceTask = getPathAndTask(source)
 
-    engine = Script.getCurrent().engine
+    script = Script.getCurrent()
+    engine = script.engine
+    configuration = script.configuration
     
     def doIt():
-      file = zipfile.ZipFile(sourcePath, "r")
+      absTargetDir = configuration.abspath(targetDir)
+      absTargetDir = os.path.normpath(absTargetDir)
+      file = zipfile.ZipFile(configuration.abspath(sourcePath), "r")
       try:
         zipInfos = file.infolist()
         
@@ -149,19 +153,20 @@ class ZipTool(Tool):
         if removeStale:
           zipFiles = set()
           for zipInfo in zipInfos:
-            path = os.path.join(targetDir, zipInfo.filename)
-            zipFiles.add(os.path.normpath(os.path.normcase(path)))
+            path = os.path.join(absTargetDir, zipInfo.filename)
+            zipFiles.add(os.path.normcase(os.path.normpath(path)))
           
-          for path in _walkTree(targetDir):
-            if os.path.normcase(path) not in zipFiles:
-              engine.logger.outputInfo("Deleting %s\n" % path)
-              if os.path.isdir(path):
-                cake.filesys.removeTree(path)
+          for absPath in _walkTree(absTargetDir):
+            if os.path.normcase(absPath) not in zipFiles:
+              relPath = cake.path.relativePath(absPath, absTargetDir)
+              engine.logger.outputInfo("Deleting %s\n" % relPath)
+              if os.path.isdir(absPath):
+                cake.filesys.removeTree(absPath)
               else:
-                cake.filesys.remove(path)
+                cake.filesys.remove(absPath)
         
         for zipinfo in zipInfos:
-          _extractFile(engine, file, zipinfo, targetDir, onlyNewer)   
+          _extractFile(engine, file, zipinfo, absTargetDir, onlyNewer)   
       finally:
         file.close()
 
@@ -209,13 +214,18 @@ class ZipTool(Tool):
 
     sourcePath, sourceTask = getPathAndTask(source)
 
-    engine = Script.getCurrent().engine
+    script = Script.getCurrent()
+    engine = script.engine
+    configuration = script.configuration
     
     def doIt():
       toZip = {}
-      if os.path.isdir(source):
-        firstChar = len(source)+1
-        for path in _walkTree(source):
+      absSource = configuration.abspath(source)
+      absTarget = configuration.abspath(target)
+      absTarget = os.path.normpath(absTarget)
+      if os.path.isdir(absSource):
+        firstChar = len(absSource)+1
+        for path in _walkTree(absSource):
           targetPath = path[firstChar:] # Strip the source dir name
           if includeMatch is not None and not includeMatch(targetPath):
             continue
@@ -223,8 +233,8 @@ class ZipTool(Tool):
             continue
           toZip[os.path.normcase(targetPath)] = (path, targetPath)
       else:
-        targetPath = os.path.basename(source)
-        toZip[os.path.normcase(targetPath)] = (source, targetPath)
+        targetPath = os.path.basename(absSource)
+        toZip[os.path.normcase(targetPath)] = (absSource, targetPath)
       
       if onlyNewer:
         recreate = False
@@ -233,7 +243,7 @@ class ZipTool(Tool):
       
       if not recreate:
         try:
-          file = zipfile.ZipFile(target, "r")
+          file = zipfile.ZipFile(absTarget, "r")
           try:
             zipInfos = file.infolist()
           finally:
@@ -267,8 +277,8 @@ class ZipTool(Tool):
               break
       
       if recreate:
-        cake.filesys.makeDirs(os.path.dirname(target))
-        file = zipfile.ZipFile(target, "w")
+        cake.filesys.makeDirs(os.path.dirname(absTarget))
+        file = zipfile.ZipFile(absTarget, "w")
         try:
           for sourcePath, targetPath in toZip.itervalues():
             _writeFile(engine, file, target, sourcePath, targetPath)
@@ -281,7 +291,7 @@ class ZipTool(Tool):
             path = os.path.normcase(targetPath)
             if path not in fromZip:
               if file is None:
-                file = zipfile.ZipFile(target, "a")
+                file = zipfile.ZipFile(absTarget, "a")
               _writeFile(engine, file, target, sourcePath, targetPath)
         finally:
           if file is not None:

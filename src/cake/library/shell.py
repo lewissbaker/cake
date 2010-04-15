@@ -10,7 +10,7 @@ import subprocess
 import cake.filesys
 import cake.path
 from cake.library import Tool, FileTarget, deepCopyBuiltins, getPathsAndTasks
-from cake.engine import Script, DependencyInfo
+from cake.engine import Script
 
 _undefined = object()
 
@@ -23,16 +23,17 @@ class ShellTool(Tool):
 
     script = Script.getCurrent()
     engine = script.engine
+    configuration = script.configuration
 
     env = deepCopyBuiltins(self.__env)
 
-    def spawnProcess():
+    def spawnProcess(cwd=cwd):
 
       if targets:
         # Check dependencies to see if they've changed
         buildArgs = args + sourcePaths + targets
         try:
-          _, reasonToBuild = engine.checkDependencyInfo(
+          _, reasonToBuild = configuration.checkDependencyInfo(
             targets[0],
             buildArgs,
             )
@@ -48,9 +49,16 @@ class ShellTool(Tool):
           )
         
       # Create target directories first
+      abspath = configuration.abspath
+      
       if targets:
         for t in targets:
-          cake.filesys.makeDirs(cake.path.dirName(t))
+          cake.filesys.makeDirs(cake.path.dirName(abspath(t)))
+
+      if cwd is None:
+        cwd = configuration.baseDir
+      else:
+        cwd = abspath(cwd)
 
       # Output the command-line we're about to run.
       engine.logger.outputInfo("Running %s\n" % args[0])
@@ -79,12 +87,12 @@ class ShellTool(Tool):
         engine.raiseError(msg)
 
       if targets:
-        newDependencyInfo = engine.createDependencyInfo(
+        newDependencyInfo = configuration.createDependencyInfo(
           targets=targets,
           args=buildArgs,
           dependencies=sourcePaths,
           )
-        engine.storeDependencyInfo(newDependencyInfo)
+        configuration.storeDependencyInfo(newDependencyInfo)
 
     sourcePaths, tasks = getPathsAndTasks(sources)
 

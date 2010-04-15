@@ -11,7 +11,17 @@ from cake.engine import Script, Variant
 import cake.system
 import os
 
-engine = Script.getCurrent().engine
+script = Script.getCurrent()
+engine = script.engine
+configuration = script.configuration
+
+# This is how you set default keywords passed on the command-line
+configuration.defaultKeywords["compiler"] = "all"
+configuration.defaultKeywords["release"] = ["debug", "release"]
+
+# This is how you set an alternative base-directory
+# All relative paths will be relative to this absolute path.
+#configuration.baseDir = configuration.baseDir + '/..'
 
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
@@ -29,7 +39,7 @@ env["EXAMPLES"] = "."
 projectTool = base.tools["project"] = ProjectTool()
 projectTool.product = projectTool.VS2008
 projectTool.enabled = engine.createProjects
-engine.addBuildSuccessCallback(lambda e=engine: projectTool.build(e))
+engine.addBuildSuccessCallback(lambda c=configuration: projectTool.build(c))
 
 def createVariants(parent):
   for release in ["debug", "release"]:
@@ -68,7 +78,7 @@ def createVariants(parent):
     if engine.createProjects:
       compiler.enabled = False
 
-    engine.addVariant(variant, default=True)
+    configuration.addVariant(variant)
 
 # Dummy
 from cake.library.compilers.dummy import DummyCompiler

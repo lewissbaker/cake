@@ -411,9 +411,9 @@ class MsvcCompiler(Compiler):
       if self.forcedUsingScripts:
         script = Script.getCurrent()
         variant = script.variant
-        engine = script.engine
+        execute = script.configuration.execute
         for path in self.forcedUsingScripts:
-          tasks.append(engine.execute(path, variant))
+          tasks.append(execute(path, variant))
           
       tasks.extend(getPathsAndTasks(self.forcedUsings)[1])
     
@@ -535,7 +535,7 @@ class MsvcCompiler(Compiler):
         language = 'c++'
     return language
 
-  def getPchCommands(self, target, source, header, object, engine):
+  def getPchCommands(self, target, source, header, object, configuration):
     language = self.getLanguage(source)
     
     args = list(self._getCompileCommonArgs(language))
@@ -553,9 +553,9 @@ class MsvcCompiler(Compiler):
 
     args.append('/Fo' + object)
 
-    return self._getObjectCommands(target, source, args, None, engine)
+    return self._getObjectCommands(target, source, args, None, configuration)
     
-  def getObjectCommands(self, target, source, pch, engine):
+  def getObjectCommands(self, target, source, pch, configuration):
     language = self.getLanguage(source)
 
     args = list(self._getCompileCommonArgs(language))
@@ -577,9 +577,9 @@ class MsvcCompiler(Compiler):
 
     args.append('/Fo' + target)
     
-    return self._getObjectCommands(target, source, args, deps, engine)
+    return self._getObjectCommands(target, source, args, deps, configuration)
     
-  def _getObjectCommands(self, target, source, args, deps, engine):
+  def _getObjectCommands(self, target, source, args, deps, configuration):
     
     if self._needPdbFile:
       if self.pdbFile is not None:
@@ -620,7 +620,7 @@ class MsvcCompiler(Compiler):
           self.outputStdout("\n".join(outputLines) + "\n")
 
       self._runProcess(
-        engine=engine,
+        configuration=configuration,
         args=args,
         target=target,
         processStdout=processStdout,
@@ -629,28 +629,22 @@ class MsvcCompiler(Compiler):
       return dependencies
       
     def compileWhenPdbIsFree():
+      absPdbFile = configuration.abspath(pdbFile)
       self._pdbQueueLock.acquire()
       try:
-        predecessor = self._pdbQueue.get(pdbFile, None)
-        if predecessor is None or predecessor.completed:
-          # No prior compiles using this .pdb can start this
-          # one immediately in the same task.
-          compileTask = Task.getCurrent()
-          compileNow = True
+        predecessor = self._pdbQueue.get(absPdbFile, None)
+        compileTask = configuration.engine.createTask(compile)
+        if predecessor is not None:
+          predecessor.addCallback(
+            lambda: compileTask.start(immediate=True)
+            )
         else:
-          # Another compile task is using this .pdb
-          # We'll start after it finishes
-          compileTask = engine.createTask(compile)
-          predecessor.addCallback(compileTask.start)
-          compileNow = False
-        self._pdbQueue[pdbFile] = compileTask
+          compileTask.start(immediate=True)
+        self._pdbQueue[absPdbFile] = compileTask
       finally:
         self._pdbQueueLock.release()
         
-      if compileNow:
-        return compile()
-      else:
-        return compileTask
+      return compileTask
       
     # Can only cache the object if it's debug info is not going into
     # a .pdb since multiple objects could all put their debug info
@@ -679,7 +673,7 @@ class MsvcCompiler(Compiler):
 
     return args
       
-  def getLibraryCommand(self, target, sources, engine):
+  def getLibraryCommand(self, target, sources, configuration):
     
     args = list(self._getCommonLibraryArgs())
 
@@ -689,7 +683,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def archive():
-      self._runProcess(engine, args, target)
+      self._runProcess(configuration, args, target)
 
     @makeCommand("lib-scan")
     def scan():
@@ -784,15 +778,18 @@ class MsvcCompiler(Compiler):
     
     return args
 
-  def getProgramCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=False)
+  def getProgramCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=False)
   
-  def getModuleCommands(self, target, sources, engine):
-    return self._getLinkCommands(target, sources, engine, dll=True)
+  def getModuleCommands(self, target, sources, configuration):
+    return self._getLinkCommands(target, sources, configuration, dll=True)
 
-  def _getLinkCommands(self, target, sources, engine, dll):
+  def _getLinkCommands(self, target, sources, configuration, dll):
     
-    objects, libraries = self._resolveObjects(engine)
+    objects, libraries = self._resolveObjects(configuration)
+    
+    absTarget = configuration.abspath(target)
+    absTargetDir = cake.path.dirName(absTarget)
     
     args = list(self._getLinkCommonArgs(dll))
 
@@ -807,23 +804,33 @@ class MsvcCompiler(Compiler):
 
     if self.optimisation == self.FULL_OPTIMISATION and \
        self.useIncrementalLinking:
-      engine.raiseError("Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n")
+      configuration.engine.raiseError(
+        "Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n"
+        )
     
     if self.embedManifest:
       if not self.__mtExe:
-        engine.raiseError("You must set path to mt.exe with embedManifest=True\n")
+        configuration.engine.raiseError(
+          "You must set path to mt.exe with embedManifest=True\n"
+          )
       
       if dll:
         manifestResourceId = 2
       else:
         manifestResourceId = 1
       embeddedManifest = target + '.embed.manifest'
+      absEmbeddedManifest = configuration.abspath(embeddedManifest)
       if self.useIncrementalLinking:
         if not self.__rcExe:
-          engine.raiseError("You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n")
+          configuration.engine.raiseError(
+            "You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n"
+            )
         
         intermediateManifest = target + '.intermediate.manifest'
+        absIntermediateManifest = absTarget + '.intermediate.manifest'
+        
         embeddedRc = embeddedManifest + '.rc'
+        absEmbeddedRc = absEmbeddedManifest + '.rc' 
         embeddedRes = embeddedManifest + '.res'
         args.append('/MANIFESTFILE:' + intermediateManifest)
         args.append(embeddedRes)
@@ -844,8 +851,9 @@ class MsvcCompiler(Compiler):
     @makeCommand(args)
     def link():
       if self.importLibrary:
-        cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
-      self._runProcess(engine, args, target)
+        importLibrary = configuration.abspath(self.importLibrary)
+        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
+      self._runProcess(configuration, args, target)
        
     @makeCommand(args) 
     def linkWithManifestIncremental():
@@ -870,7 +878,7 @@ class MsvcCompiler(Compiler):
             self.outputStdout("\n".join(outputLines) + "\n")
         
         self._runProcess(
-          engine=engine,
+          configuration=configuration,
           args=rcArgs,
           target=embeddedRes,
           processStdout=processStdout,
@@ -900,12 +908,12 @@ class MsvcCompiler(Compiler):
           # tool when the manifest file hasn't actually changed. We can
           # avoid a second link if the manifest file hasn't changed.
           if exitCode != 0 and exitCode != 1090650113:
-            engine.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
+            configuration.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
   
           result.append(exitCode != 0)
       
         self._runProcess(
-          engine=engine,
+          configuration=configuration,
           args=mtArgs,
           target=embeddedManifest,
           processExitCode=processExitCode,
@@ -914,14 +922,16 @@ class MsvcCompiler(Compiler):
         return result[0]
       
       # Create an empty embeddable manifest if one doesn't already exist
-      if not cake.filesys.isFile(embeddedManifest):
-        engine.logger.outputInfo("Creating dummy manifest: %s\n" % embeddedManifest)
-        cake.filesys.makeDirs(cake.path.dirName(embeddedManifest))
-        open(embeddedManifest, 'wb').close()
+      if not cake.filesys.isFile(absEmbeddedManifest):
+        configuration.engine.logger.outputInfo(
+          "Creating dummy manifest: %s\n" % embeddedManifest
+          )
+        cake.filesys.makeDirs(absTargetDir)
+        open(absEmbeddedManifest, 'wb').close()
       
       # Generate .embed.manifest.rc
-      engine.logger.outputInfo("Creating %s\n" % embeddedRc)
-      f = open(embeddedRc, 'w')
+      configuration.engine.logger.outputInfo("Creating %s\n" % embeddedRc)
+      f = open(absEmbeddedRc, 'w')
       try:
         # Use numbers so we don't have to include any headers
         # 24 - RT_MANIFEST
@@ -935,7 +945,7 @@ class MsvcCompiler(Compiler):
       compileRcToRes()
       link()
       
-      if cake.filesys.isFile(intermediateManifest) and updateEmbeddedManifestFile():
+      if cake.filesys.isFile(absIntermediateManifest) and updateEmbeddedManifestFile():
         # Manifest file changed so we need to re-link to embed it
         compileRcToRes()
         link()
@@ -952,8 +962,10 @@ class MsvcCompiler(Compiler):
       # If we are linking with static runtimes there may be no manifest
       # output, in which case we can skip embedding it.
       
-      if not cake.filesys.isFile(embeddedManifest):
-        engine.logger.outputInfo("Skipping embedding manifest: no manifest to embed\n")
+      if not cake.filesys.isFile(absEmbeddedManifest):
+        configuration.engine.logger.outputInfo(
+          "Skipping embedding manifest: no manifest to embed\n"
+          )
         return
       
       mtArgs = [
@@ -963,11 +975,11 @@ class MsvcCompiler(Compiler):
         "/outputresource:%s;%i" % (target, manifestResourceId),
         ]
       
-      self._runProcess(engine, mtArgs, embeddedManifest)
+      self._runProcess(configuration, mtArgs, embeddedManifest)
         
     @makeCommand("link-scan")
     def scan():
-      return [self.__linkExe] + sources + objects + self._scanForLibraries(engine, libraries)
+      return [self.__linkExe] + sources + objects + self._scanForLibraries(configuration, libraries)
     
     if self.embedManifest:
       if self.useIncrementalLinking is None or self.useIncrementalLinking:
@@ -986,7 +998,7 @@ class MsvcCompiler(Compiler):
     
     return args
 
-  def getResourceCommand(self, target, source, engine):
+  def getResourceCommand(self, target, source, configuration):
     
     args = list(self._getCommonResourceArgs())
     args.append('/fo' + _escapeArg(target))
@@ -994,7 +1006,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def compile():
-      self._runProcess(engine, args, target, allowResponseFile=False)
+      self._runProcess(configuration, args, target, allowResponseFile=False)
 
     @makeCommand("rc-scan")
     def scan():

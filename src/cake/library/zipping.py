@@ -221,7 +221,6 @@ class ZipTool(Tool):
       toZip = {}
       absSource = configuration.abspath(source)
       absTarget = configuration.abspath(target)
-      absTarget = os.path.normpath(absTarget)
       if os.path.isdir(absSource):
         firstChar = len(absSource)+1
         for path in _walkTree(absSource):

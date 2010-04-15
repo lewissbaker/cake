@@ -215,17 +215,6 @@ def findMsvcCompiler(
       "Could not find Microsoft Visual Studio C++ compiler."
       )
 
-def _escapeArg(arg):
-  if ' ' in arg:
-    if '"' in arg:
-      arg = arg.replace('"', '\\"')
-    return '"' + arg + '"'
-  else:
-    return arg
-
-def _escapeArgs(args):
-  return [_escapeArg(arg) for arg in args]
-
 def _mungePathToSymbol(path):
   return "_PCH_" + hex(abs(hash(path)))[2:]
 
@@ -677,9 +666,9 @@ class MsvcCompiler(Compiler):
     
     args = list(self._getCommonLibraryArgs())
 
-    args.append('/OUT:' + _escapeArg(target))
+    args.append('/OUT:' + target)
     
-    args.extend(_escapeArgs(sources))
+    args.extend(sources)
     
     @makeCommand(args)
     def archive():
@@ -908,7 +897,7 @@ class MsvcCompiler(Compiler):
           # tool when the manifest file hasn't actually changed. We can
           # avoid a second link if the manifest file hasn't changed.
           if exitCode != 0 and exitCode != 1090650113:
-            configuration.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
+            configuration.engine.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
   
           result.append(exitCode != 0)
       
@@ -1001,8 +990,8 @@ class MsvcCompiler(Compiler):
   def getResourceCommand(self, target, source, configuration):
     
     args = list(self._getCommonResourceArgs())
-    args.append('/fo' + _escapeArg(target))
-    args.append(_escapeArg(source))
+    args.append('/fo' + target)
+    args.append(source)
     
     @makeCommand(args)
     def compile():

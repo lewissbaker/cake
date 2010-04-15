@@ -503,15 +503,29 @@ class Engine(object):
     @type dependencyInfo: L{DependencyInfo}
     """
     depPath = target + '.dep'
-    
-    dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
+
+    # Remove existing file first to give the OS time to release
+    #  all handles
+    cake.filesys.remove(depPath)
     
     cake.filesys.makeDirs(cake.path.dirName(depPath))
-    f = open(depPath, 'wb')
+
+    dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
+
+    # Save it to disk. Save to a temporary file first in case the write fails
+    tmpPath = depPath + ".tmp"
+    
+    f = open(tmpPath, "wb")
     try:
       f.write(dependencyString)
     finally:
       f.close()
+
+    # Note: I have seen an 'Access is denied' exception here. Presumably its
+    #  because the OS has a handle to the destination file open after we have
+    #  called os.remove(). With any luck deleting the original file before writing
+    #  the temp file will give the OS enough time to release the handle.
+    cake.filesys.rename(tmpPath, depPath)
       
     self._dependencyInfoCache[target] = dependencyInfo
     

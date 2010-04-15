@@ -166,6 +166,17 @@ def makeCommand(args):
     return Command(args, func)
   return run
 
+def _escapeArg(arg):
+  if ' ' in arg:
+    if '"' in arg:
+      arg = arg.replace('"', '\\"')
+    return '"' + arg + '"'
+  else:
+    return arg
+
+def _escapeArgs(args):
+  return [_escapeArg(arg) for arg in args]
+
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
   """
@@ -1308,7 +1319,7 @@ class Compiler(Tool):
         f = open(absArgsFile, 'wt')
         try:
           for arg in args[1:]:
-            f.write(arg + '\n')
+            f.write(_escapeArg(arg) + '\n')
         finally:
           f.close()
         args = [args[0], '@' + argsFile]
@@ -1330,7 +1341,7 @@ class Compiler(Tool):
           stderr=stderr,
           )
       except EnvironmentError, e:
-        configuration.raiseError(
+        configuration.engine.raiseError(
           "cake: failed to launch %s: %s\n" % (args[0], str(e))
           )
       p.stdin.close()
@@ -1361,7 +1372,7 @@ class Compiler(Tool):
     if processExitCode is not None:
       processExitCode(exitCode)
     elif exitCode != 0:
-      configuration.raiseError(
+      configuration.engine.raiseError(
         "%s: failed with exit code %i\n" % (args[0], exitCode)
         )
   
@@ -1689,11 +1700,23 @@ class Compiler(Tool):
           
           if not cake.filesys.isFile(cacheDepPath):
             cake.filesys.makeDirs(targetCacheDir)
-            f = open(cacheDepPath, 'wb')
+            
+            dependencyString = pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL)
+
+            # Save it to disk. Save to a temporary file first in case the write fails
+            tmpPath = cacheDepPath + ".tmp"
+            
+            f = open(tmpPath, "wb")
             try:
-              f.write(pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL))
+              f.write(dependencyString)
             finally:
               f.close()
+        
+            # Note: I have seen an 'Access is denied' exception here. Presumably its
+            #  because the OS has a handle to the destination file open after we have
+            #  called os.remove(). With any luck deleting the original file before writing
+            #  the temp file will give the OS enough time to release the handle.
+            cake.filesys.rename(tmpPath, cacheDepPath)
             
         except EnvironmentError:
           # Don't worry if we can't put the object in the cache

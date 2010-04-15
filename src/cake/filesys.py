@@ -91,6 +91,16 @@ def copyFile(source, target):
   """
   makeDirs(os.path.dirname(target)) 
   shutil.copyfile(source, target)
+
+def rename(source, target):
+  """Rename a file or directory.
+
+  @param source: The path of the source file/directory.
+  @type source: string
+  @param target: The path of the target file/directory.
+  @type target: string
+  """
+  os.rename(source, target)
   
 def makeDirs(path):
   """Recursively create directories.

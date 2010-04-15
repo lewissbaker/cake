@@ -229,8 +229,13 @@ def relativePath(child, parent):
   path itself if the child was not relative to the parent.
   @rtype: string
   """
-  childSep = child.replace(os.path.altsep, os.path.sep)
-  parentSep = parent.replace(os.path.altsep, os.path.sep)
+  altsep = os.path.altsep
+  if altsep is not None:
+    childSep = child.replace(altsep, os.path.sep)
+    parentSep = parent.replace(altsep, os.path.sep)
+  else:
+    childSep = child
+    parentSep = parent
 
   if childSep and childSep[-1] == os.path.sep:
     childSep = childSep[:-1]

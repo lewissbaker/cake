@@ -7,11 +7,8 @@
 
 __all__ = ["MsvcCompiler", "findMsvcCompiler"]
 
-import sys
 import os
 import os.path
-import subprocess
-import tempfile
 import re
 import threading
 
@@ -222,7 +219,7 @@ def _escapeArg(arg):
   if ' ' in arg:
     if '"' in arg:
       arg = arg.replace('"', '\\"')
-    return '"%s"' % arg
+    return '"' + arg + '"'
   else:
     return arg
 
@@ -401,7 +398,7 @@ class MsvcCompiler(Compiler):
     """
     self.forcedUsingScripts.append(script)
     self._clearCache()
-    
+
   @memoise
   def _getObjectPrerequisiteTasks(self):
     tasks = super(MsvcCompiler, self)._getObjectPrerequisiteTasks()
@@ -581,7 +578,7 @@ class MsvcCompiler(Compiler):
     args.append('/Fo' + target)
     
     return self._getObjectCommands(target, source, args, deps, engine)
-  
+    
   def _getObjectCommands(self, target, source, args, deps, engine):
     
     if self._needPdbFile:
@@ -594,52 +591,21 @@ class MsvcCompiler(Compiler):
       pdbFile = None
       
     def compile():
-      engine.logger.outputDebug(
-        "run",
-        "run: %s\n" % " ".join(args),
-        )
+      dependencies = [args[0], source]
+      if deps is not None:
+        dependencies.extend(deps)
+      if self.language == 'c++/cli':
+        dependencies.extend(getPathsAndTasks(self.forcedUsings)[0])
+      dependenciesSet = set()
 
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      
-      errFile = tempfile.TemporaryFile()
-      try:
-        # Launch the process
-        try:
-          p = subprocess.Popen(
-            args=args,
-            executable=self.__clExe,
-            env=self._getProcessEnv(),
-            stdin=subprocess.PIPE,
-            stdout=errFile,
-            stderr=errFile,
-            )
-        except EnvironmentError, e:
-          engine.raiseError(
-            "cake: failed to launch %s: %s\n" % (self.__clExe, str(e))
-            )
-        p.stdin.close()
-        
-        exitCode = p.wait()
-        
-        sourceName = cake.path.baseName(source)
-
-        errFile.seek(0)
-        output = errFile.read()
-
+      def processStdout(text):
         includePrefix = ('Note: including file:')
         includePrefixLen = len(includePrefix)
-
-        dependencies = [self.__clExe, source]
-        if deps is not None:
-          dependencies.extend(deps)
-        if self.language == 'c++/cli':
-          dependencies.extend(getPathsAndTasks(self.forcedUsings)[0])
-        dependenciesSet = set()
         
+        sourceName = cake.path.baseName(source)
         outputLines = []
-        for line in str(output).splitlines():
-          line = line.rstrip()
-          if not line or line == sourceName:
+        for line in text.splitlines():
+          if line == sourceName:
             continue
           if line.startswith(includePrefix):
             path = line[includePrefixLen:].lstrip()
@@ -649,14 +615,16 @@ class MsvcCompiler(Compiler):
               dependencies.append(path)
           else:
             outputLines.append(line)
+        
         if outputLines:
-          sys.stderr.write("\n".join(outputLines) + "\n")
-          sys.stderr.flush()
+          self.outputStdout("\n".join(outputLines) + "\n")
 
-        if exitCode != 0:
-          raise engine.raiseError("cl: failed with exit code %i\n" % exitCode)
-      finally:
-        errFile.close()        
+      self._runProcess(
+        engine=engine,
+        args=args,
+        target=target,
+        processStdout=processStdout,
+        )
       
       return dependencies
       
@@ -710,7 +678,7 @@ class MsvcCompiler(Compiler):
       args.append('/WX')
 
     return args
-
+      
   def getLibraryCommand(self, target, sources, engine):
     
     args = list(self._getCommonLibraryArgs())
@@ -721,53 +689,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def archive():
-
-      engine.logger.outputDebug(
-        "run",
-        "run: %s\n" % " ".join(args),
-        )
-      
-      if self.useResponseFile:
-        argsFile = target + '.args'
-        cake.filesys.makeDirs(cake.path.dirName(argsFile))
-        f = open(argsFile, 'wt')
-        try:
-          for arg in args[2:]:
-            f.write(arg + '\n')
-        finally:
-          f.close()
-        libArgs = [args[0], args[1], '@' + argsFile]
-      else:
-        libArgs = args            
-
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      try:
-        p = subprocess.Popen(
-          args=libArgs,
-          executable=self.__libExe,
-          env=self._getProcessEnv(),
-          stdin=subprocess.PIPE,
-          stdout=subprocess.PIPE,
-          stderr=subprocess.STDOUT,
-          )
-      except EnvironmentError, e:
-        engine.raiseError("cake: failed to launch %s: %s\n" % (self.__libExe, str(e)))
-    
-      p.stdin.close()
-      output = p.stdout.read()
-      exitCode = p.wait()
-    
-      outputLines = []
-      for line in str(output).splitlines():
-        if not line.rstrip():
-          continue
-        outputLines.append(line)
-      if outputLines:
-        sys.stderr.write("\n".join(outputLines) + "\n")
-        sys.stderr.flush()
-          
-      if exitCode != 0:
-        engine.raiseError("lib: failed with exit code %i\n" % exitCode)
+      self._runProcess(engine, args, target)
 
     @makeCommand("lib-scan")
     def scan():
@@ -921,109 +843,39 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      engine.logger.outputDebug(
-        "run",
-        "run: %s\n" % " ".join(args),
-        )
-      
-      if self.useResponseFile:
-        argsFile = target + '.args'
-        cake.filesys.makeDirs(cake.path.dirName(argsFile))
-        f = open(argsFile, 'wt')
-        try:      
-          for arg in args[1:]:
-            f.write(_escapeArg(arg) + '\n')
-        finally:
-          f.close()
-        linkArgs = [args[0], '@' + argsFile]
-      else:
-        linkArgs = args
-  
       if self.importLibrary:
         cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
-      
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      try:
-        p = subprocess.Popen(
-          args=linkArgs,
-          executable=self.__linkExe,
-          env=self._getProcessEnv(),
-          stdin=subprocess.PIPE,
-          stdout=subprocess.PIPE,
-          stderr=subprocess.STDOUT,
-          )
-      except EnvironmentError, e:
-        engine.raiseError(
-          "cake: failed to launch %s: %s\n" % (self.__linkExe, str(e))
-          )
-
-      p.stdin.close()
-      output = p.stdout.read()
-      exitCode = p.wait()
-      
-      outputLines = []
-      for line in str(output).splitlines():
-        if not line.rstrip():
-          continue
-        outputLines.append(line)
-      if outputLines:
-        sys.stderr.write("\n".join(outputLines) + "\n")
-        sys.stderr.flush()
-
-      if exitCode != 0:
-        engine.raiseError("link: failed with exit code %i\n" % exitCode)
+      self._runProcess(engine, args, target)
        
     @makeCommand(args) 
     def linkWithManifestIncremental():
-      
+
       def compileRcToRes():
-        
         rcArgs = [
           self.__rcExe,
           "/fo" + embeddedRes,
           embeddedRc,
           ]
 
-        engine.logger.outputDebug(
-          "run",
-          "run: %s\n" % " ".join(rcArgs),
+        def processStdout(text):
+          outputLines = text.splitlines()
+  
+          # Skip any leading logo output by some of the later versions of rc.exe
+          if len(outputLines) >= 2 and \
+             outputLines[0].startswith('Microsoft (R) Windows (R) Resource Compiler Version ') and \
+             outputLines[1].startswith('Copyright (C) Microsoft Corporation.  All rights reserved.'):
+            outputLines = outputLines[2:]
+            
+          if outputLines:
+            self.outputStdout("\n".join(outputLines) + "\n")
+        
+        self._runProcess(
+          engine=engine,
+          args=rcArgs,
+          target=embeddedRes,
+          processStdout=processStdout,
+          allowResponseFile=False,
           )
-        
-        cake.filesys.makeDirs(cake.path.dirName(embeddedRes))
-        try:
-          p = subprocess.Popen(
-            args=rcArgs,
-            executable=self.__rcExe,
-            env=self._getProcessEnv(),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            )
-        except EnvironmentError, e:
-          engine.raiseError("cake: failed to launch %s: %s\n" % (
-            self.__rcExe,
-            str(e),
-            ))
-          
-        p.stdin.close()
-        output = [line for line in str(p.stdout.read()).splitlines() if line.strip()]
-        exitCode = p.wait()
-
-        # Skip any leading logo output by some of the later versions of rc.exe
-        if len(output) >= 2 and \
-           output[0].startswith('Microsoft (R) Windows (R) Resource Compiler Version ') and \
-           output[1].startswith('Copyright (C) Microsoft Corporation.  All rights reserved.'):
-          output = output[2:]
-
-        outputLines = []
-        for line in output:
-          outputLines.append(line)
-        if outputLines:
-          sys.stderr.write("\n".join(outputLines) + "\n")
-          sys.stderr.flush()
-        
-        if exitCode != 0:
-          engine.raiseError("rc: failed with exit code %i" % exitCode)
       
       def updateEmbeddedManifestFile():
         """Updates the embedded manifest file based on the manifest file
@@ -1040,49 +892,26 @@ class MsvcCompiler(Compiler):
           "/manifest", intermediateManifest,
           "/out:" + embeddedManifest,
           ]
+        
+        result = []
 
-        engine.logger.outputDebug(
-          "run",
-          "run: %s\n" % " ".join(mtArgs),
+        def processExitCode(exitCode):
+          # The magic number here is the exit code output by the mt.exe
+          # tool when the manifest file hasn't actually changed. We can
+          # avoid a second link if the manifest file hasn't changed.
+          if exitCode != 0 and exitCode != 1090650113:
+            engine.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
+  
+          result.append(exitCode != 0)
+      
+        self._runProcess(
+          engine=engine,
+          args=mtArgs,
+          target=embeddedManifest,
+          processExitCode=processExitCode,
           )
         
-        cake.filesys.makeDirs(cake.path.dirName(embeddedManifest))
-        try:
-          p = subprocess.Popen(
-            args=mtArgs,
-            executable=self.__mtExe,
-            env=self._getProcessEnv(),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            )
-        except EnvironmentError, e:
-          engine.raiseError("cake: failed to launch %s: %s\n" % (
-            self.__mtExe,
-            str(e),
-            ))
-          
-        p.stdin.close()
-        output = p.stdout.read()
-        exitCode = p.wait()
-        
-        outputLines = []
-        for line in str(output).splitlines():
-          if not line.rstrip():
-            continue
-          outputLines.append(line)
-        if outputLines:
-          sys.stderr.write("\n".join(outputLines) + "\n")
-          sys.stderr.flush()
-        
-        # The magic number here is the exit code output by the mt.exe
-        # tool when the manifest file hasn't actually changed. We can
-        # avoid a second link if the manifest file hasn't changed.
-        
-        if exitCode != 0 and exitCode != 1090650113:
-          engine.raiseError("mt: failed with exit code %i\n" % exitCode)
-
-        return exitCode != 0
+        return result[0]
       
       # Create an empty embeddable manifest if one doesn't already exist
       if not cake.filesys.isFile(embeddedManifest):
@@ -1134,41 +963,7 @@ class MsvcCompiler(Compiler):
         "/outputresource:%s;%i" % (target, manifestResourceId),
         ]
       
-      engine.logger.outputDebug(
-        "run",
-        "run: %s\n" % " ".join(mtArgs),
-        )
-      
-      try:
-        p = subprocess.Popen(
-          args=mtArgs,
-          executable=self.__mtExe,
-          env=self._getProcessEnv(),
-          stdin=subprocess.PIPE,
-          stdout=subprocess.PIPE,
-          stderr=subprocess.STDOUT,
-          )
-      except EnvironmentError, e:
-        engine.raiseError("cake: failed to launch %s: %s\n" % (
-          self.__mtExe,
-          str(e),
-          ))
-        
-      p.stdin.close()
-      output = p.stdout.read()
-      exitCode = p.wait()
-      
-      outputLines = []
-      for line in str(output).splitlines():
-        if not line.rstrip():
-          continue
-        outputLines.append(line)
-      if outputLines:
-        sys.stderr.write("\n".join(outputLines) + "\n")
-        sys.stderr.flush()
-
-      if exitCode != 0:
-        engine.raiseError("mt: failed with exit code %i\n" % exitCode)
+      self._runProcess(engine, mtArgs, embeddedManifest)
         
     @makeCommand("link-scan")
     def scan():
@@ -1199,53 +994,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def compile():
-
-      engine.logger.outputDebug(
-        "run",
-        "run: %s\n" % " ".join(args),
-        )
-      
-      if self.useResponseFile:
-        argsFile = target + '.args'
-        cake.filesys.makeDirs(cake.path.dirName(argsFile))
-        f = open(argsFile, 'wt')
-        try:
-          for arg in args[2:]:
-            f.write(arg + '\n')
-        finally:
-          f.close()
-        rcArgs = [args[0], args[1], '@' + argsFile]
-      else:
-        rcArgs = args            
-
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      try:
-        p = subprocess.Popen(
-          args=rcArgs,
-          executable=self.__rcExe,
-          env=self._getProcessEnv(),
-          stdin=subprocess.PIPE,
-          stdout=subprocess.PIPE,
-          stderr=subprocess.STDOUT,
-          )
-      except EnvironmentError, e:
-        engine.raiseError("cake: failed to launch %s: %s\n" % (self.__rcExe, str(e)))
-    
-      p.stdin.close()
-      output = p.stdout.read()
-      exitCode = p.wait()
-    
-      outputLines = []
-      for line in str(output).splitlines():
-        if not line.rstrip():
-          continue
-        outputLines.append(line)
-      if outputLines:
-        sys.stderr.write("\n".join(outputLines) + "\n")
-        sys.stderr.flush()
-          
-      if exitCode != 0:
-        engine.raiseError("rc: failed with exit code %i\n" % exitCode)
+      self._runProcess(engine, args, target, allowResponseFile=False)
 
     @makeCommand("rc-scan")
     def scan():

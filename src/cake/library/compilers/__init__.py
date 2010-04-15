@@ -7,9 +7,13 @@
 
 __all__ = ["Compiler"]
 
+import sys
 import weakref
+import os
 import os.path
 import binascii
+import tempfile
+import subprocess
 try:
   import cPickle as pickle
 except ImportError:
@@ -161,7 +165,7 @@ def makeCommand(args):
   def run(func):
     return Command(args, func)
   return run
-      
+
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
   """
@@ -1247,24 +1251,113 @@ class Compiler(Tool):
     temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
     env = {
       'COMSPEC' : os.environ.get('COMSPEC', ''),
-      'PATH' : '',
+      'PATH' : '.',
       'PATHEXT' : ".COM;.EXE;.BAT;.CMD",
       'SYSTEMROOT' : os.environ.get('SYSTEMROOT', ''),
       'TEMP' : temp,
       'TMP' : temp,
       }
+    
     if self.__binPaths is not None:
       env['PATH'] = os.path.pathsep.join(
         [env['PATH']] + self.__binPaths
         )
+      
     if env['SYSTEMROOT']:
       env['PATH'] = os.path.pathsep.join([
         env['PATH'],
         os.path.join(env['SYSTEMROOT'], 'System32'),
         env['SYSTEMROOT'],
         ])
+      
     return env
+
+  def _runProcess(
+    self,
+    engine,
+    args,
+    target=None,
+    processStdout=None,
+    processStderr=None,
+    processExitCode=None,
+    allowResponseFile=True,
+    ):
+    engine.logger.outputDebug(
+      "run",
+      "run: %s\n" % " ".join(args),
+      )
     
+    if target is not None:
+      cake.filesys.makeDirs(cake.path.dirName(target))
+
+      if allowResponseFile and self.useResponseFile:
+        argsFile = target + '.args'
+        f = open(argsFile, 'wt')
+        try:
+          for arg in args[1:]:
+            f.write(arg + '\n')
+        finally:
+          f.close()
+        args = [args[0], '@' + argsFile]
+
+    stdout = None
+    stderr = None
+    try:
+      stdout = tempfile.TemporaryFile()
+      stderr = tempfile.TemporaryFile()
+      try:
+        p = subprocess.Popen(
+          args=args,
+          executable=args[0],
+          env=self._getProcessEnv(),
+          stdin=subprocess.PIPE,
+          stdout=stdout,
+          stderr=stderr,
+          )
+      except EnvironmentError, e:
+        engine.raiseError(
+          "cake: failed to launch %s: %s\n" % (args[0], str(e))
+          )
+      p.stdin.close()
+  
+      exitCode = p.wait()
+  
+      stdout.seek(0)
+      stderr.seek(0)
+  
+      stdoutText = stdout.read().decode("latin1") 
+      stderrText = stderr.read().decode("latin1")
+    finally:
+      if stdout is not None:
+        stdout.close()
+      if stderr is not None:
+        stderr.close()
+    
+    if processStdout is not None:
+      processStdout(stdoutText)
+    else:
+      self.outputStdout(stdoutText)
+        
+    if processStderr is not None:
+      processStderr(stderrText)
+    else:
+      self.outputStderr(stderrText)
+      
+    if processExitCode is not None:
+      processExitCode(exitCode)
+    elif exitCode != 0:
+      engine.raiseError(
+        "%s: failed with exit code %i\n" % (args[0], exitCode)
+        )
+  
+  def outputStdout(self, text):
+    sys.stdout.write(text.encode("latin1"))
+    sys.stdout.flush()
+
+  def outputStderr(self, text):
+    sys.stderr.write(text.encode("latin1"))
+    sys.stderr.flush()
+        
   def _resolveObjects(self, engine):
     """Resolve the list of library names to object file paths.
     

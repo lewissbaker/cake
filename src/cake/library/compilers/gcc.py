@@ -8,8 +8,6 @@
 import os
 import os.path
 import re
-import sys
-import subprocess
 
 import cake.filesys
 import cake.path
@@ -197,52 +195,6 @@ class GccCompiler(Compiler):
     else:
       return ''
 
-  def _executeProcess(self, args, target, engine):
-    engine.logger.outputDebug(
-      "run",
-      "run: %s\n" % " ".join(args),
-      )
-    cake.filesys.makeDirs(cake.path.dirName(target))
-
-    if self.useResponseFile:
-      argsFile = target + '.args'
-      f = open(argsFile, 'wt')
-      try:
-        for arg in args[1:]:
-          f.write('"' + arg + '"\n')
-      finally:
-        f.close()
-      args = [args[0], '@' + argsFile]
-
-    try:
-      p = subprocess.Popen(
-        args=args,
-        executable=args[0],
-        env=self._getProcessEnv(),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        )
-    except EnvironmentError, e:
-      engine.raiseError(
-        "cake: failed to launch %s: %s\n" % (args[0], str(e))
-        )
-  
-    p.stdin.close()
-    try:
-      output = p.stdout.read()
-    finally:
-      p.stdout.close()
-    exitCode = p.wait()
-    
-    if output:
-      sys.stderr.write(self._formatMessage(output.decode("latin1")).encode("latin1"))
-        
-    if exitCode != 0:
-      engine.raiseError(
-        "%s: failed with exit code %i\n" % (args[0], exitCode)
-        )
-
   @memoise
   def _getCompileArgs(self, language):
     args = [self.__gccExe, '-c', '-MD']
@@ -326,7 +278,7 @@ class GccCompiler(Compiler):
     args.extend([source, '-o', target])
 
     def compile():
-      self._executeProcess(args, target, engine)
+      self._runProcess(engine, args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
       engine.logger.outputDebug(
@@ -358,7 +310,7 @@ class GccCompiler(Compiler):
     args.extend([source, '-o', target])
     
     def compile():
-      self._executeProcess(args, target, engine)
+      self._runProcess(engine, args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
       engine.logger.outputDebug(
@@ -394,7 +346,7 @@ class GccCompiler(Compiler):
     @makeCommand(args)
     def archive():
       cake.filesys.remove(target)
-      self._executeProcess(args, target, engine)
+      self._runProcess(engine, args, target)
 
     @makeCommand("lib-scan")
     def scan():
@@ -440,7 +392,7 @@ class GccCompiler(Compiler):
     def link():
       if self.importLibrary:
         cake.filesys.makeDirs(cake.path.dirName(self.importLibrary))
-      self._executeProcess(args, target, engine)      
+      self._runProcess(engine, args, target)      
     
     @makeCommand("link-scan")
     def scan():
@@ -500,7 +452,7 @@ class WindowsGccCompiler(GccCompiler):
     @makeCommand(args)
     def compile():
       cake.filesys.remove(target)
-      self._executeProcess(args, target, engine)
+      self._runProcess(engine, args, target)
 
     @makeCommand("rc-scan")
     def scan():

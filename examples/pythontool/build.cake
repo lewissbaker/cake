@@ -11,11 +11,13 @@ class TestTool(object):
     
   def build(self, target):
     engine = script.engine
+    configuration = script.configuration
 
     def run():
+      absTarget = configuration.abspath(target)
       logging.outputInfo("[%s] %s: (%s)\n" % (self.name, path, target))
-      cake.filesys.makeDirs(cake.path.dirName(target))
-      open(target, 'wb').close() 
+      cake.filesys.makeDirs(cake.path.dirName(absTarget))
+      open(absTarget, 'wb').close() 
 
     return script.run(run, targets=[target], args=[path, self.name])[0]
   

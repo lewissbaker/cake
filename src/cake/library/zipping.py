@@ -158,8 +158,7 @@ class ZipTool(Tool):
           
           for absPath in _walkTree(absTargetDir):
             if os.path.normcase(absPath) not in zipFiles:
-              relPath = cake.path.relativePath(absPath, absTargetDir)
-              engine.logger.outputInfo("Deleting %s\n" % relPath)
+              engine.logger.outputInfo("Deleting %s\n" % absPath)
               if os.path.isdir(absPath):
                 cake.filesys.removeTree(absPath)
               else:

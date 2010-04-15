@@ -1460,28 +1460,17 @@ class Compiler(Tool):
     compileTask.start(immediate=True)
 
     def storeDependencyInfoAndCache():
-     
-      # Since we are sharing this object in the object cache we need to
-      # make any paths in this workspace relative to the current workspace.
-      dependencies = []
-      if self.objectCacheWorkspaceRoot is None:
-        dependencies = [os.path.abspath(p) for p in compileTask.result]
-      else:
-        workspaceRoot = os.path.normcase(
-          os.path.abspath(self.objectCacheWorkspaceRoot)
-          ) + os.path.sep
-        workspaceRootLen = len(workspaceRoot)
-        for path in compileTask.result:
-          path = os.path.abspath(path)
-          pathNorm = os.path.normcase(path)
-          if pathNorm.startswith(workspaceRoot):
-            path = path[workspaceRootLen:]
-          dependencies.append(path)
-      
+      abspath = configuration.abspath
+      normpath = os.path.normpath
+      dependencies = [
+          normpath(abspath(p))
+          for p in compileTask.result
+          ]
       newDependencyInfo = configuration.createDependencyInfo(
-        targets=targets,
+        targets=[target],
         args=args,
         dependencies=dependencies,
+        calculateDigests=False,
         )
       configuration.storeDependencyInfo(newDependencyInfo)
         

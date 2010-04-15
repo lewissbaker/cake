@@ -69,8 +69,10 @@ class ShellTool(Tool):
         )
 
       try:
+        executable = abspath(args[0])
         p = subprocess.Popen(
           args=args,
+          executable=executable,
           env=env,
           stdin=subprocess.PIPE,
           cwd=cwd,

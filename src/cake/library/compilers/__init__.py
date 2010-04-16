@@ -1342,6 +1342,8 @@ class Compiler(Tool):
       executable = configuration.abspath(args[0])
       args = _escapeArgs(args)
       argsString = " ".join(args)
+      if cake.system.isWindows():
+        args = argsString
 
       configuration.engine.logger.outputDebug(
         "run",
@@ -1350,7 +1352,7 @@ class Compiler(Tool):
       
       try:
         p = subprocess.Popen(
-          args=argsString,
+          args=args,
           executable=executable,
           cwd=configuration.baseDir,
           env=self._getProcessEnv(),

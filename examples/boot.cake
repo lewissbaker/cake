@@ -96,6 +96,7 @@ if cake.system.platform() == 'Windows':
       compiler.outputFullPath = True
       compiler.useBigObjects = True
       compiler.addDefine("WIN32")
+      compiler.useResponseFile = True
       if a in ["x64", "ia64"]:
         compiler.addDefine("WIN64")
       createVariants(msvc)

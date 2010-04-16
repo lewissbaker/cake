@@ -1328,22 +1328,21 @@ class Compiler(Tool):
       absTarget = configuration.abspath(target)
       cake.filesys.makeDirs(cake.path.dirName(absTarget))
 
-      if allowResponseFile and self.useResponseFile:
-        argsFile = target + '.args'
-        absArgsFile = configuration.abspath(argsFile)
-        f = open(absArgsFile, 'wt')
-        try:
-          for arg in args[1:]:
-            f.write(_escapeArg(arg) + '\n')
-        finally:
-          f.close()
-        args = [args[0], '@' + argsFile]
-
     stdout = None
     stderr = None
+    argsPath = None 
     try:
       stdout = tempfile.TemporaryFile()
       stderr = tempfile.TemporaryFile()
+      
+      if allowResponseFile and self.useResponseFile:
+        argsTemp, argsPath = tempfile.mkstemp(text=True)
+        argsFile = os.fdopen(argsTemp, "wt")
+        for arg in args[1:]:
+          argsFile.write(_escapeArg(arg) + '\n')
+        argsFile.close()
+        args = [args[0], '@' + argsPath]
+        
       try:
         executable = configuration.abspath(args[0])
         p = subprocess.Popen(
@@ -1373,6 +1372,8 @@ class Compiler(Tool):
         stdout.close()
       if stderr is not None:
         stderr.close()
+      if argsPath is not None:
+        os.remove(argsPath)
     
     if stdoutText:
       if processStdout is not None:

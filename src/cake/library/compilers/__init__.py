@@ -1319,11 +1319,7 @@ class Compiler(Tool):
     processExitCode=None,
     allowResponseFile=True,
     ):
-    configuration.engine.logger.outputDebug(
-      "run",
-      "run: %s\n" % " ".join(args),
-      )
-    
+
     if target is not None:
       absTarget = configuration.abspath(target)
       cake.filesys.makeDirs(cake.path.dirName(absTarget))
@@ -1342,11 +1338,19 @@ class Compiler(Tool):
           argsFile.write(_escapeArg(arg) + '\n')
         argsFile.close()
         args = [args[0], '@' + argsPath]
-        
+      
+      executable = configuration.abspath(args[0])
+      args = _escapeArgs(args)
+      argsString = " ".join(args)
+
+      configuration.engine.logger.outputDebug(
+        "run",
+        "run: %s\n" % argsString,
+        )
+      
       try:
-        executable = configuration.abspath(args[0])
         p = subprocess.Popen(
-          args=args,
+          args=argsString,
           executable=executable,
           cwd=configuration.baseDir,
           env=self._getProcessEnv(),

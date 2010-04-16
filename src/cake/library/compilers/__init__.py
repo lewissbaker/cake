@@ -14,6 +14,7 @@ import os.path
 import binascii
 import tempfile
 import subprocess
+import zlib
 try:
   import cPickle as pickle
 except ImportError:
@@ -176,6 +177,19 @@ def _escapeArg(arg):
 
 def _escapeArgs(args):
   return [_escapeArg(arg) for arg in args]
+
+def _zipFile(source, target):
+  data = cake.filesys.readFile(source)
+  data = zlib.compress(data, 1)
+  cake.filesys.writeFile(target, data)
+
+def _unzipFile(source, target):
+  data = cake.filesys.readFile(source)
+  try:
+    data = zlib.decompress(data)
+  except zlib.error, e:
+    raise EnvironmentError(str(e))
+  cake.filesys.writeFile(target, data)
 
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
@@ -1278,6 +1292,7 @@ class Compiler(Tool):
       'SYSTEMROOT' : os.environ.get('SYSTEMROOT', ''),
       'TEMP' : temp,
       'TMP' : temp,
+      'TMPDIR' : temp,
       }
     
     if self.__binPaths is not None:
@@ -1359,15 +1374,17 @@ class Compiler(Tool):
       if stderr is not None:
         stderr.close()
     
-    if processStdout is not None:
-      processStdout(stdoutText)
-    else:
-      self.outputStdout(stdoutText)
-        
-    if processStderr is not None:
-      processStderr(stderrText)
-    else:
-      self.outputStderr(stderrText)
+    if stdoutText:
+      if processStdout is not None:
+        processStdout(stdoutText)
+      else:
+        self.outputStdout(stdoutText)
+    
+    if stderrText:
+      if processStderr is not None:
+        processStderr(stderrText)
+      else:
+        self.outputStderr(stderrText)
       
     if processExitCode is not None:
       processExitCode(exitCode)
@@ -1377,10 +1394,17 @@ class Compiler(Tool):
         )
   
   def outputStdout(self, text):
-    sys.stdout.write(text.encode("latin1"))
-    sys.stdout.flush()
+    # Output stdout to stderr as well. Some compilers will output errors
+    # to stderr, and all unexpected output should be treated as an error,
+    # or handled/output by client code.
+    # An example of a compiler outputting errors to stdout is Mavc's link
+    # error, "LINK : fatal error LNK1104: cannot open file '<filename>'".
+    text = text.replace("\r\n", "\n")
+    sys.stderr.write(text.encode("latin1"))
+    sys.stderr.flush()
 
   def outputStderr(self, text):
+    text = text.replace("\r\n", "\n")
     sys.stderr.write(text.encode("latin1"))
     sys.stderr.flush()
         
@@ -1620,10 +1644,10 @@ class Compiler(Tool):
         cachedObjectPath = configuration.abspath(cachedObjectPath)
         if cake.filesys.isFile(cachedObjectPath):
           configuration.engine.logger.outputInfo("Cached %s\n" % source)
-          cake.filesys.copyFile(
-            source=cachedObjectPath,
-            target=configuration.abspath(target),
-            )
+          try:
+            _unzipFile(cachedObjectPath, configuration.abspath(target))
+          except EnvironmentError:
+            continue # Invalid cache file
           configuration.storeDependencyInfo(newDependencyInfo)
           return
 
@@ -1695,28 +1719,14 @@ class Compiler(Tool):
           # Copy the object file first, then the dependency file
           # so that other processes won't find the dependency until
           # the object file is ready.
-          cake.filesys.makeDirs(cake.path.dirName(cacheObjectPath))
-          cake.filesys.copyFile(source=configuration.abspath(target), target=cacheObjectPath)
+# TODO: What about the case where you're updating the cache, and the .dep
+# already exists, but the object is only partially written (corrupted)?           
+          _zipFile(configuration.abspath(target), cacheObjectPath)
           
           if not cake.filesys.isFile(cacheDepPath):
-            cake.filesys.makeDirs(targetCacheDir)
-            
             dependencyString = pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL)
-
-            # Save it to disk. Save to a temporary file first in case the write fails
-            tmpPath = cacheDepPath + ".tmp"
             
-            f = open(tmpPath, "wb")
-            try:
-              f.write(dependencyString)
-            finally:
-              f.close()
-        
-            # Note: I have seen an 'Access is denied' exception here. Presumably its
-            #  because the OS has a handle to the destination file open after we have
-            #  called os.remove(). With any luck deleting the original file before writing
-            #  the temp file will give the OS enough time to release the handle.
-            cake.filesys.rename(tmpPath, cacheDepPath)
+            cake.filesys.writeFile(cacheDepPath, dependencyString)
             
         except EnvironmentError:
           # Don't worry if we can't put the object in the cache

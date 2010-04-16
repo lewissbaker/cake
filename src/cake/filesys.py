@@ -129,3 +129,51 @@ def makeDirs(path):
     # Ignore failure due to directory already existing.
     if not os.path.isdir(path):
       raise
+    
+def readFile(path):
+  """Read data from a file as safely as possible.
+
+  @param path: The path of the file to read.
+  @type path: string 
+  """
+  f = open(path, "rb")
+  try:
+    return f.read()
+  finally:
+    f.close()
+  
+def writeFile(path, data):
+  """Write data to a file as safely as possible.
+
+  @param path: The path of the file to write.
+  @type path: string 
+  @param data: The data to write to the file.
+  @type data: string 
+  """
+  # Remove existing file first to give the OS time to release
+  # all handles. We must remove the original file otherwise renaming
+  # will fail below.
+  remove(path)
+  
+  makeDirs(os.path.dirname(path))
+
+  tmpPath = path + ".tmp"
+  
+  f = open(tmpPath, "wb")
+  try:
+    f.write(data)
+  finally:
+    f.close()
+
+  # Note: When compiling small progams it is commond to get a 'Permission denied'
+  # exception here. Presumably it's because the OS has a handle to the destination
+  # file open after we have called os.remove(). For this reason we sit in a loop
+  # attempting to rename until we reach a timeout of 1 second.
+  timeout = time.clock() + 1.0
+  while True:
+    try:
+      rename(tmpPath, path)
+      break
+    except EnvironmentError:
+      if time.clock() >= timeout:
+        raise

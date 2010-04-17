@@ -1326,16 +1326,16 @@ class Compiler(Tool):
 
     stdout = None
     stderr = None
-    argsPath = None 
+    argsPath = None
     try:
       stdout = tempfile.TemporaryFile()
       stderr = tempfile.TemporaryFile()
       
       if allowResponseFile and self.useResponseFile:
         argsTemp, argsPath = tempfile.mkstemp(text=True)
+        argsFileString = " ".join(_escapeArgs(args[1:]))
         argsFile = os.fdopen(argsTemp, "wt")
-        for arg in args[1:]:
-          argsFile.write(_escapeArg(arg) + '\n')
+        argsFile.write(argsFileString)
         argsFile.close()
         args = [args[0], '@' + argsPath]
       
@@ -1345,9 +1345,13 @@ class Compiler(Tool):
       if cake.system.isWindows():
         args = argsString
 
+      debugString = "run: %s\n" % argsString
+      if argsPath is not None:
+        debugString += "contents of %s: %s\n" % (argsPath, argsFileString) 
+      
       configuration.engine.logger.outputDebug(
         "run",
-        "run: %s\n" % argsString,
+        debugString,
         )
       
       try:

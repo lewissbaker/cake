@@ -77,8 +77,10 @@ class Tool(object):
   @type: bool
   """
   
-  def __init__(self):
+  def __init__(self, configuration):
     self.__memoise = {}
+    self.configuration = configuration
+    self.engine = configuration.engine
   
   def __setattr__(self, name, value):
     if name != '_Tool__memoise' and hasattr(self, '_Tool__memoise'):
@@ -97,7 +99,7 @@ class Tool(object):
     member variables of the tool. You should override this method
     if you need a more sophisticated clone.
     """
-    new = self.__class__()
+    new = object.__new__(self.__class__)
     new.__dict__ = deepCopyBuiltins(self.__dict__)
     return new
 

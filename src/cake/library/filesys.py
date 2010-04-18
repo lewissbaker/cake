@@ -8,7 +8,6 @@
 import cake.path
 import cake.filesys
 from cake.library import Tool, FileTarget, getPathAndTask
-from cake.engine import Script
 
 class FileSystemTool(Tool):
   """Tool that provides file system related utilities. 
@@ -32,14 +31,13 @@ class FileSystemTool(Tool):
     
     sourcePath, sourceTask = getPathAndTask(source)
    
-    script = Script.getCurrent()
-    engine = script.engine
-    configuration = script.configuration
-   
     def doCopy():
       
-      targetAbsPath = configuration.abspath(target)
-      sourceAbsPath = configuration.abspath(sourcePath) 
+      abspath = self.configuration.abspath
+      engine = self.engine
+      
+      targetAbsPath = abspath(target)
+      sourceAbsPath = abspath(sourcePath) 
       
       if engine.forceBuild:
         reasonToBuild = "rebuild has been forced"
@@ -58,14 +56,13 @@ class FileSystemTool(Tool):
       engine.logger.outputInfo("Copying %s to %s\n" % (sourcePath, target))
       
       try:
-        cake.filesys.makeDirs(cake.path.dirName(targetAbsPath))
         cake.filesys.copyFile(sourceAbsPath, targetAbsPath)
       except EnvironmentError, e:
         engine.raiseError("%s: %s\n" % (target, str(e)))
 
-      engine.notifyFileChanged(target)
+      engine.notifyFileChanged(targetAbsPath)
       
-    copyTask = engine.createTask(doCopy)
+    copyTask = self.engine.createTask(doCopy)
     copyTask.startAfter(sourceTask)
 
     return FileTarget(path=target, task=copyTask)

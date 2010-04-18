@@ -5,18 +5,15 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script
 from cake.library import Tool
 
 class LoggingTool(Tool):
   
-  def __init__(self):
+  def __init__(self, configuration):
     """Initialise this tool.
     """    
-    Tool.__init__(self)
-    script = Script.getCurrent()
-    if script is not None:
-      self.logger = script.engine.logger
+    Tool.__init__(self, configuration)
+    self.logger = configuration.engine.logger
 
   def debugEnabled(self, keyword):
     """Returns True if currently debugging the given component.

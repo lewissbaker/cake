@@ -5,7 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script
 from cake.library import Tool, getPathAndTask
 import cake.filesys
 import zipfile
@@ -125,9 +124,8 @@ class ZipTool(Tool):
 
     sourcePath, sourceTask = getPathAndTask(source)
 
-    script = Script.getCurrent()
-    engine = script.engine
-    configuration = script.configuration
+    engine = self.engine
+    configuration = self.configuration
     
     def doIt():
       absTargetDir = configuration.abspath(targetDir)
@@ -213,9 +211,8 @@ class ZipTool(Tool):
 
     sourcePath, sourceTask = getPathAndTask(source)
 
-    script = Script.getCurrent()
-    engine = script.engine
-    configuration = script.configuration
+    engine = self.engine
+    configuration = self.configuration
     
     def doIt():
       toZip = {}

@@ -10,24 +10,23 @@ import subprocess
 import cake.filesys
 import cake.path
 from cake.library import Tool, FileTarget, deepCopyBuiltins, getPathsAndTasks
-from cake.engine import Script
 
 _undefined = object()
 
 class ShellTool(Tool):
 
-  def __init__(self):
+  def __init__(self, configuration):
+    Tool.__init__(self, configuration)
     self.__env = {}
 
   def run(self, args, targets=None, sources=[], cwd=None):
 
-    script = Script.getCurrent()
-    engine = script.engine
-    configuration = script.configuration
-
+    engine = self.engine
     env = deepCopyBuiltins(self.__env)
 
     def spawnProcess(cwd=cwd):
+
+      configuration = self.configuration
 
       if targets:
         # Check dependencies to see if they've changed

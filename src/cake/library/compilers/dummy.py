@@ -20,8 +20,8 @@ class DummyCompiler(Compiler):
   programSuffix = '.exe'
   pchSuffix = '.pch'
   
-  def __init__(self):
-    Compiler.__init__(self)
+  def __init__(self, configuration):
+    Compiler.__init__(self, configuration)
 
   @memoise
   def _getCompileArgs(self, language):
@@ -41,7 +41,7 @@ class DummyCompiler(Compiler):
     args.extend('/FI%s' % p for p in getPathsAndTasks(self.forcedIncludes)[0])
     return args
 
-  def getPchCommands(self, target, source, header, object, configuration):
+  def getPchCommands(self, target, source, header, object):
 
     language = self.language
     if not language:
@@ -54,19 +54,16 @@ class DummyCompiler(Compiler):
     compilerArgs += ['/H' + header, source, '/o' + target]
     
     def compile():
-      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
-      absTarget = configuration.abspath(target)
-      cake.filesys.makeDirs(cake.path.dirName(absTarget))
-      f = open(absTarget, 'wb')
-      f.close()
-        
+      self.engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
+      absTarget = self.configuration.abspath(target)
+      cake.filesys.writeFile(absTarget, "".encode("latin1"))
       dependencies = [source]
       return dependencies
 
     canBeCached = True
     return compile, compilerArgs, canBeCached
 
-  def getObjectCommands(self, target, source, pch, configuration):
+  def getObjectCommands(self, target, source, pch):
 
     language = self.language
     if not language:
@@ -79,11 +76,9 @@ class DummyCompiler(Compiler):
     compilerArgs += [source, '/o' + target]
     
     def compile():
-      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
-      absTarget = configuration.abspath(target)
-      cake.filesys.makeDirs(cake.path.dirName(absTarget))
-      f = open(absTarget, 'wb')
-      f.close()
+      self.engine.logger.outputDebug("run", "%s\n" % " ".join(compilerArgs))
+      absTarget = self.configuration.abspath(target)
+      cake.filesys.writeFile(absTarget, "".encode("latin1"))
         
       dependencies = [source]
       if pch is not None:
@@ -93,17 +88,15 @@ class DummyCompiler(Compiler):
     canBeCached = True
     return compile, compilerArgs, canBeCached
 
-  def getLibraryCommand(self, target, sources, configuration):
+  def getLibraryCommand(self, target, sources):
     
     args = ['ar'] + sources + ['/o' + target]
 
     @makeCommand(args)
     def archive():
-      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
-      absTarget = configuration.abspath(target)
-      cake.filesys.makeDirs(cake.path.dirName(absTarget))
-      f = open(absTarget, 'wb')
-      f.close()
+      self.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
+      absTarget = self.configuration.abspath(target)
+      cake.filesys.writeFile(absTarget, "".encode("latin1"))
       
     @makeCommand("dummy-scanner")
     def scan():
@@ -111,16 +104,14 @@ class DummyCompiler(Compiler):
       
     return archive, scan
   
-  def getProgramCommands(self, target, sources, configuration):
+  def getProgramCommands(self, target, sources):
     args = ['ld'] + sources + ['/o' + target]
     
     @makeCommand(args)
     def link():
-      configuration.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
-      absTarget = configuration.abspath(target)
-      cake.filesys.makeDirs(cake.path.dirName(absTarget))
-      f = open(absTarget, 'wb')
-      f.close()
+      self.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
+      absTarget = self.configuration.abspath(target)
+      cake.filesys.writeFile(absTarget, "".encode("latin1"))
     
     @makeCommand("dummy-scanner")
     def scan():
@@ -128,6 +119,6 @@ class DummyCompiler(Compiler):
     
     return link, scan
     
-  def getModuleCommands(self, target, sources, configuration):
+  def getModuleCommands(self, target, sources):
     # Lazy
-    return self.getProgramCommands(target, sources, configuration)
+    return self.getProgramCommands(target, sources)

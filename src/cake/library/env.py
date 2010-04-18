@@ -15,9 +15,10 @@ class Environment(Tool):
   used for path substitution.
   """
   
-  def __init__(self):
+  def __init__(self, configuration):
     """Default constructor.
     """
+    Tool.__init__(self, configuration)
     self.vars = {}
     
   def __getitem__(self, key):

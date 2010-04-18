@@ -1486,7 +1486,7 @@ class Compiler(Tool):
     compileTask = self.engine.createTask(command)
     compileTask.start(immediate=True)
 
-    def storeDependencyInfoAndCache():
+    def storeDependencyInfo():
       abspath = self.configuration.abspath
       normpath = os.path.normpath
       dependencies = [
@@ -1501,7 +1501,7 @@ class Compiler(Tool):
         )
       self.configuration.storeDependencyInfo(newDependencyInfo)
         
-    storeDependencyTask = self.engine.createTask(storeDependencyInfoAndCache)
+    storeDependencyTask = self.engine.createTask(storeDependencyInfo)
     storeDependencyTask.startAfter(compileTask, immediate=True)
 
   def buildObject(self, target, source, pch):

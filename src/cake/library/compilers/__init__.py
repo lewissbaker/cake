@@ -1508,7 +1508,7 @@ class Compiler(Tool):
     compileTask = configuration.engine.createTask(command)
     compileTask.start(immediate=True)
 
-    def storeDependencyInfoAndCache():
+    def storeDependencyInfo():
       abspath = configuration.abspath
       normpath = os.path.normpath
       dependencies = [
@@ -1523,7 +1523,7 @@ class Compiler(Tool):
         )
       configuration.storeDependencyInfo(newDependencyInfo)
         
-    storeDependencyTask = configuration.engine.createTask(storeDependencyInfoAndCache)
+    storeDependencyTask = configuration.engine.createTask(storeDependencyInfo)
     storeDependencyTask.startAfter(compileTask, immediate=True)
 
   def buildObject(self, target, source, pch, configuration):

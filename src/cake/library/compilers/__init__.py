@@ -180,7 +180,10 @@ def _escapeArgs(args):
 
 def _zipFile(source, target):
   data = cake.filesys.readFile(source)
-  data = zlib.compress(data, 1)
+  try:
+    data = zlib.compress(data, 1)
+  except zlib.error, e:
+    raise EnvironmentError(str(e))
   cake.filesys.writeFile(target, data)
 
 def _unzipFile(source, target):

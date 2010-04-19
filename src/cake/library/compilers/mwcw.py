@@ -179,12 +179,12 @@ class MwcwCompiler(Compiler):
         # to optimise a large program. 
         #args.extend(['-ipa', 'program']) # Whole program optimisation
   
-    for p in reversed(self.includePaths):
+    for p in self.getIncludePaths():
       args.extend(['-i', p])
 
-    args.extend('-D' + d for d in self.defines)
+    args.extend('-D' + d for d in self.getDefines())
     
-    for p in getPathsAndTasks(self.forcedIncludes)[0]:
+    for p in getPathsAndTasks(self.getForcedIncludes())[0]:
       args.extend(['-include', p])
     
     return args
@@ -292,7 +292,7 @@ class MwcwCompiler(Compiler):
     if self.linkerScript is not None:
       args.extend(['-lcf', self.linkerScript])
 
-    args.extend('-L' + p for p in reversed(self.libraryPaths))
+    args.extend('-L' + p for p in self.getLibraryPaths())
     return args
   
   def getProgramCommands(self, target, sources, configuration):

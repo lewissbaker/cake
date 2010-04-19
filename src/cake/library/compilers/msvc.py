@@ -499,9 +499,9 @@ class MsvcCompiler(Compiler):
     if self.useMinimalRebuild:
       args.append("/Gm") # Enable minimal rebuild
  
-    args.extend("/D" + define for define in self.defines)
-    args.extend("/I" + path for path in reversed(self.includePaths))
-    args.extend("/FI" + path for path in self.forcedIncludes)
+    args.extend("/D" + define for define in self.getDefines())
+    args.extend("/I" + path for path in self.getIncludePaths())
+    args.extend("/FI" + path for path in self.getForcedIncludes())
 
     return args 
     
@@ -763,7 +763,7 @@ class MsvcCompiler(Compiler):
     elif self.__architecture == 'ia64':
       args.append('/MACHINE:IA64')
     
-    args.extend('/LIBPATH:' + path for path in reversed(self.libraryPaths))
+    args.extend('/LIBPATH:' + path for path in self.getLibraryPaths())
     
     return args
 
@@ -982,8 +982,8 @@ class MsvcCompiler(Compiler):
   def _getCommonResourceArgs(self):
     args = [self.__rcExe, '/nologo']
     
-    args.extend("/d" + define for define in self.defines)
-    args.extend("/i" + path for path in reversed(self.includePaths))
+    args.extend("/d" + define for define in self.getDefines())
+    args.extend("/i" + path for path in self.getIncludePaths())
     
     return args
 

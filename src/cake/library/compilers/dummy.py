@@ -36,9 +36,9 @@ class DummyCompiler(Compiler):
       args.append('/ex')
     if language:
       args.append('/lang:%s' % language)
-    args.extend('/I%s' % p for p in reversed(self.includePaths))
-    args.extend('/D%s' % d for d in self.defines)
-    args.extend('/FI%s' % p for p in getPathsAndTasks(self.forcedIncludes)[0])
+    args.extend('/I%s' % p for p in self.getIncludePaths())
+    args.extend('/D%s' % d for d in self.getDefines())
+    args.extend('/FI%s' % p for p in getPathsAndTasks(self.getForcedIncludes())[0])
     return args
 
   def getPchCommands(self, target, source, header, object, configuration):

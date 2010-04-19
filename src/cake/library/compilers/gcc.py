@@ -248,12 +248,12 @@ class GccCompiler(Compiler):
     if self.useSse:
       args.append('-msse')
   
-    for p in reversed(self.includePaths):
+    for p in self.getIncludePaths():
       args.extend(['-I', p])
 
-    args.extend('-D' + d for d in self.defines)
+    args.extend('-D' + d for d in self.getDefines())
     
-    for p in getPathsAndTasks(self.forcedIncludes)[0]:
+    for p in getPathsAndTasks(self.getForcedIncludes())[0]:
       args.extend(['-include', p])
     
     return args
@@ -366,7 +366,7 @@ class GccCompiler(Compiler):
     if dll and self.importLibrary is not None:
       args.append('-Wl,--out-implib=' + self.importLibrary)
     
-    args.extend('-L' + p for p in reversed(self.libraryPaths))
+    args.extend('-L' + p for p in self.getLibraryPaths())
     return args
   
   def getProgramCommands(self, target, sources, configuration):
@@ -438,8 +438,8 @@ class WindowsGccCompiler(GccCompiler):
   def _getCommonResourceArgs(self):
     args = [self.__rcExe]
     
-    args.extend("-D" + define for define in self.defines)
-    args.extend("-I" + path for path in reversed(self.includePaths))
+    args.extend("-D" + define for define in self.getDefines())
+    args.extend("-I" + path for path in self.getIncludePaths())
     
     return args
 

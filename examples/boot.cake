@@ -46,13 +46,13 @@ def createVariants(parent):
     variant = parent.clone(release=release)
 
     platform = variant.keywords["platform"]
-    compiler = variant.keywords["compiler"]
+    compilerName = variant.keywords["compiler"]
     architecture = variant.keywords["architecture"]
     
     env = variant.tools["env"]
     env["BUILD"] = "build/" + "_".join([
       platform,
-      compiler,
+      compilerName,
       architecture,
       release,
       ])
@@ -78,6 +78,27 @@ def createVariants(parent):
     if engine.createProjects:
       compiler.enabled = False
 
+    projectTool = variant.tools["project"]
+    projectTool.projectConfigName = "%s (%s) %s (%s)" % (
+      platform.capitalize(),
+      architecture,
+      release.capitalize(),
+      compilerName,
+      )
+    if platform == "xbox360":
+      projectTool.projectPlatformName = "Xbox 360"
+    elif platform == "xbox":
+      projectTool.projectPlatformName = "Xbox"
+    else:
+      projectTool.projectPlatformName = "Win32"
+      
+    projectTool.solutionConfigName = release.capitalize()
+    projectTool.solutionPlatformName = "%s %s (%s)" % (
+      platform.capitalize(),
+      compilerName.capitalize(),
+      architecture,
+      )
+    
     configuration.addVariant(variant)
 
 # Dummy

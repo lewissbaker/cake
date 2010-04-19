@@ -9,6 +9,7 @@ import sys
 import threading
 import os.path
 import codecs
+import itertools
 try:
   import cStringIO as StringIO
 except ImportError:
@@ -19,36 +20,6 @@ import cake.filesys
 import cake.hash
 from cake.library import Tool, FileTarget
 from cake.engine import Script
-
-def getProjectConfigName():
-  keywords = Script.getCurrent().variant.keywords
-  return "%s (%s) %s (%s)" % (
-    keywords["platform"].capitalize(),
-    keywords["architecture"],
-    keywords["release"].capitalize(),
-    keywords["compiler"],
-    )
-  
-def getProjectPlatformName():
-  platform = Script.getCurrent().variant.keywords["platform"]
-  if platform == "xbox360":
-    return "Xbox 360"
-  elif platform == "xbox":
-    return "Xbox"
-  else:
-    return "Win32"
-
-def getSolutionConfigName():
-  keywords = Script.getCurrent().variant.keywords
-  return keywords["release"].capitalize()
-  
-def getSolutionPlatformName():
-  keywords = Script.getCurrent().variant.keywords
-  return "%s %s (%s)" % (
-    keywords["platform"].capitalize(),
-    keywords["compiler"].capitalize(),
-    keywords["architecture"],
-    )
   
 class _Project(object):
   
@@ -229,6 +200,32 @@ class SolutionTarget(ProjectToolTarget):
     
 class ProjectTool(Tool):
   
+  projectConfigName = None
+  """The project config name.
+  
+  This should be set to a string that uniquely identifies the project
+  configuration, eg. 'Windows (x86) Debug (msvc)' or
+  'PS3 (spu) Release (gcc)'.
+  """
+  projectPlatformName = None
+  """The project platform name.
+  
+  For Visual Studio this should be set to one of 'Win32', 'Xbox'
+  or 'Xbox 360' depending on the platform you are compiling for.
+  """
+  solutionConfigName = None
+  """The solution config name.
+  
+  This should be set to a string that identifies the solution
+  configuration, eg. 'Debug' or 'Release'.
+  """
+  solutionPlatformName = None
+  """The solution platform name.
+  
+  This should be set to a string that identifies the solution
+  platform, eg. 'Windows Msvc (x86) ' or 'PS3 Gcc (spu)'. 
+  """
+  
   VS2002 = 0
   """Visual Studio .NET 2002
   """
@@ -251,7 +248,7 @@ class ProjectTool(Tool):
   Can be one of L{VS2002}, L{VS2003}, L{VS2005}, L{VS2008} or L{VS2010}.
   @type: enum
   """
-  
+    
   _projects = _ProjectRegistry()
   _solutions = _SolutionRegistry()
   
@@ -365,17 +362,14 @@ class ProjectTool(Tool):
     
     outputPath = output.path
     compiler = output.compiler
-    defines = compiler.defines
-    includePaths = [p for p in reversed(compiler.includePaths)]
-    forcedIncludes = compiler.forcedIncludes
-
+    defines = compiler.getDefines()
+    includePaths = compiler.getIncludePaths()
+    forcedIncludes = compiler.getForcedIncludes()
+    
 # TODO: Fill these out when the compiler has them.
     compileAsManaged = ""
     assemblyPaths = []
-    if hasattr(compiler, "forcedUsings"):
-      forcedUsings = compiler.forcedUsings
-    else:
-      forcedUsings = []
+    forcedUsings = getattr(compiler, "forcedUsings", [])
 
     # Project name defaults the base filename without extension
     if name is None:
@@ -386,15 +380,15 @@ class ProjectTool(Tool):
       intermediateDir = cake.path.dirName(outputPath)
     
     script = Script.getCurrent()
-
-    configName = getProjectConfigName()
-    platformName = getProjectPlatformName()
+    configuration = script.configuration
+    configName = self.projectConfigName
+    platformName = self.projectPlatformName
 
     # Construct the build args
-    targetDir = cake.path.dirName(os.path.abspath(target))
-    pythonExe = os.path.abspath(sys.executable)
-    cakeScript = os.path.abspath(sys.argv[0])
-    scriptPath = os.path.abspath(script.path)
+    targetDir = cake.path.dirName(configuration.abspath(target))
+    pythonExe = configuration.abspath(sys.executable)
+    cakeScript = configuration.abspath(sys.argv[0])
+    scriptPath = configuration.abspath(script.path)
     keywords = script.variant.keywords
 
     buildArgs = [
@@ -473,10 +467,10 @@ class ProjectTool(Tool):
         for p in projects
         ]
     
-    configName = getSolutionConfigName()
-    platformName = getSolutionPlatformName()
-    projectConfigName = getProjectConfigName()
-    projectPlatformName = getProjectPlatformName()
+    configName = self.solutionConfigName
+    platformName = self.solutionPlatformName
+    projectConfigName = self.projectConfigName
+    projectPlatformName = self.projectPlatformName
     
     try:
       version = self._toSolutionVersion[self.product]
@@ -884,15 +878,7 @@ class MsvsProjectGenerator(object):
     forcedUsings = ';'.join(config.forcedUsings)
     compileAsManaged = config.compileAsManaged
 
-    def formatDefine(define):
-      if isinstance(define, tuple):
-        return "%s=%s" % (str(define[0]), str(define[1]))
-      else:
-        return str(define)
-
-    defines = [formatDefine(d) for d in config.defines]
-    defines = ';'.join(defines)
-      
+    defines = ';'.join(config.defines)
     name = "%s|%s" % (config.name, config.platform)
 
     def escapeArg(arg):
@@ -1259,19 +1245,11 @@ class MsBuildProjectGenerator(object):
     """
     output = cake.path.relativePath(config.output, self.projectDir)
 
-    includePaths = ';'.join(config.includePaths + ['$(NMakeIncludeSearchPath)'])
-    assemblyPaths = ';'.join(config.assemblyPaths + ['$(NMakeAssemblySearchPath)'])
-    forcedIncludes = ';'.join(config.forcedIncludes + ['$(NMakeForcedIncludes)'])
-    forcedUsings = ';'.join(config.forcedUsings + ['$(NMakeForcedUsingAssemblies)'])
-
-    def formatDefine(define):
-      if isinstance(define, tuple):
-        return "%s=%s" % (str(define[0]), str(define[1]))
-      else:
-        return str(define)
-
-    defines = [formatDefine(d) for d in config.defines]
-    defines = ';'.join(defines + ['$(NMakePreprocessorDefinitions)'])
+    includePaths = ';'.join(itertools.chain(config.includePaths, ['$(NMakeIncludeSearchPath)']))
+    assemblyPaths = ';'.join(itertools.chain(config.assemblyPaths, ['$(NMakeAssemblySearchPath)']))
+    forcedIncludes = ';'.join(itertools.chain(config.forcedIncludes, ['$(NMakeForcedIncludes)']))
+    forcedUsings = ';'.join(itertools.chain(config.forcedUsings, ['$(NMakeForcedUsingAssemblies)']))
+    defines = ';'.join(itertools.chain(config.defines, ['$(NMakePreprocessorDefinitions)']))
     
     def escapeArg(arg):
       if '"' in arg:

@@ -15,6 +15,7 @@ import binascii
 import tempfile
 import subprocess
 import zlib
+import itertools
 try:
   import cPickle as pickle
 except ImportError:
@@ -737,6 +738,14 @@ class Compiler(Tool):
     """
     self.includePaths.append(path)
     self._clearCache()
+    
+  def getIncludePaths(self):
+    """Get an iterator for include paths.
+    
+    The iterator will return include paths in the order they
+    should be searched. 
+    """
+    return reversed(self.includePaths)
 
   def addDefine(self, name, value=None):
     """Add a define to the preprocessor command-line.
@@ -754,6 +763,15 @@ class Compiler(Tool):
     else:
       self.defines.append("{0}={1}".format(name, value))
     self._clearCache()
+  
+  def getDefines(self):
+    """Get an iterator for preprocessor defines.
+    
+    The iterator will return defines in the order they should be
+    set. Defines set later should have precedence over those set
+    first.
+    """
+    return self.defines
 
   def addForcedInclude(self, path):
     """Add a file to be forcibly included on the command-line.
@@ -768,6 +786,14 @@ class Compiler(Tool):
     self.forcedIncludes.append(path)
     self._clearCache()
 
+  def getForcedIncludes(self):
+    """Get an iterator for forced includes.
+    
+    The iterator will return forced includes in the order they
+    should be included.
+    """
+    return self.forcedIncludes
+  
   def addLibrary(self, name):
     """Add a library to the list of libraries to link with.
     
@@ -780,6 +806,14 @@ class Compiler(Tool):
     self.libraries.append(name)
     self._clearCache()
 
+  def getLibraries(self):
+    """Get an iterator for libraries.
+    
+    The iterator will return libraries in the order they
+    should be searched.
+    """
+    return reversed(self.libraries)
+  
   def addLibraryPath(self, path):
     """Add a path to the list of library search paths.
     
@@ -792,6 +826,14 @@ class Compiler(Tool):
     self.libraryPaths.append(path)
     self._clearCache()
     
+  def getLibraryPaths(self):
+    """Get an iterator for library paths.
+    
+    The iterator will return library paths in the order they
+    should be searched.
+    """
+    return reversed(self.libraryPaths)
+
   def addLibraryScript(self, path):
     """Add a script to be executed before performing a link.
     
@@ -1421,7 +1463,7 @@ class Compiler(Tool):
     text = text.replace("\r\n", "\n")
     sys.stderr.write(text.encode("latin1"))
     sys.stderr.flush()
-        
+  
   def _resolveObjects(self, configuration):
     """Resolve the list of library names to object file paths.
     
@@ -1433,7 +1475,7 @@ class Compiler(Tool):
     @rtype: tuple of (list of string, list of string)
     """
     objects = []
-    libraries = [l for l in reversed(self.libraries)]
+    libraries = list(self.getLibraries())
 
     if not self.linkObjectsInLibrary:
       return objects, libraries 
@@ -1461,8 +1503,9 @@ class Compiler(Tool):
         if libraryExtension != os.path.normcase(suffix):
           fileNames.append(cake.path.addPrefix(library, prefix) + suffix)
 
-      # Add [""] so we search for the full path first 
-      for candidate in cake.path.join(reversed(self.libraryPaths + [""]), fileNames):
+      # Add [""] so we search for the full path first
+      libraryPaths = itertools.chain([""], self.getLibraryPaths()) 
+      for candidate in cake.path.join(libraryPaths, fileNames):
         absCandidate = configuration.abspath(candidate)
         if cake.filesys.isFile(absCandidate):
           paths.append(candidate)

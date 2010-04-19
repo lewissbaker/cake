@@ -27,6 +27,7 @@ def _toArchitectureDir(architecture):
   return {'x64':'amd64'}.get(architecture, architecture)
 
 def _createMsvcCompiler(
+  configuration,
   version,
   edition,
   architecture,
@@ -128,6 +129,7 @@ def _createMsvcCompiler(
   binPaths = [msvcHostBinDir, msvsInstallDir]
 
   compiler = MsvcCompiler(
+    configuration=configuration,
     clExe=clExe,
     libExe=libExe,
     linkExe=linkExe,
@@ -145,6 +147,7 @@ def _createMsvcCompiler(
   return compiler
 
 def findMsvcCompiler(
+  configuration,
   version=None,
   architecture=None,
   ):
@@ -206,7 +209,7 @@ def findMsvcCompiler(
   for v in versions:
     for e in editions:
       try:
-        return _createMsvcCompiler(v, e, architecture, hostArchitecture)
+        return _createMsvcCompiler(configuration, v, e, architecture, hostArchitecture)
       except WindowsError:
         # Try the next version/edition
         pass
@@ -348,6 +351,7 @@ class MsvcCompiler(Compiler):
   
   def __init__(
     self,
+    configuration,
     clExe=None,
     libExe=None,
     linkExe=None,
@@ -356,7 +360,7 @@ class MsvcCompiler(Compiler):
     binPaths=None,
     architecture=None,
     ):
-    Compiler.__init__(self, binPaths)
+    Compiler.__init__(self, configuration=configuration, binPaths=binPaths)
     self.__clExe = clExe
     self.__libExe = libExe
     self.__linkExe = linkExe
@@ -398,9 +402,8 @@ class MsvcCompiler(Compiler):
       tasks = list(tasks)
       
       if self.forcedUsingScripts:
-        script = Script.getCurrent()
-        variant = script.variant
-        execute = script.configuration.execute
+        variant = Script.getCurrent().variant
+        execute = self.configuration.execute
         for path in self.forcedUsingScripts:
           tasks.append(execute(path, variant))
           
@@ -524,7 +527,7 @@ class MsvcCompiler(Compiler):
         language = 'c++'
     return language
 
-  def getPchCommands(self, target, source, header, object, configuration):
+  def getPchCommands(self, target, source, header, object):
     language = self.getLanguage(source)
     
     args = list(self._getCompileCommonArgs(language))
@@ -542,9 +545,9 @@ class MsvcCompiler(Compiler):
 
     args.append('/Fo' + object)
 
-    return self._getObjectCommands(target, source, args, None, configuration)
+    return self._getObjectCommands(target, source, args, None)
     
-  def getObjectCommands(self, target, source, pch, configuration):
+  def getObjectCommands(self, target, source, pch):
     language = self.getLanguage(source)
 
     args = list(self._getCompileCommonArgs(language))
@@ -566,9 +569,9 @@ class MsvcCompiler(Compiler):
 
     args.append('/Fo' + target)
     
-    return self._getObjectCommands(target, source, args, deps, configuration)
+    return self._getObjectCommands(target, source, args, deps)
     
-  def _getObjectCommands(self, target, source, args, deps, configuration):
+  def _getObjectCommands(self, target, source, args, deps):
     
     if self._needPdbFile:
       if self.pdbFile is not None:
@@ -609,7 +612,6 @@ class MsvcCompiler(Compiler):
           self.outputStdout("\n".join(outputLines) + "\n")
 
       self._runProcess(
-        configuration=configuration,
         args=args,
         target=target,
         processStdout=processStdout,
@@ -618,11 +620,11 @@ class MsvcCompiler(Compiler):
       return dependencies
       
     def compileWhenPdbIsFree():
-      absPdbFile = configuration.abspath(pdbFile)
+      absPdbFile = self.configuration.abspath(pdbFile)
       self._pdbQueueLock.acquire()
       try:
         predecessor = self._pdbQueue.get(absPdbFile, None)
-        compileTask = configuration.engine.createTask(compile)
+        compileTask = self.engine.createTask(compile)
         if predecessor is not None:
           predecessor.addCallback(
             lambda: compileTask.start(immediate=True)
@@ -662,7 +664,7 @@ class MsvcCompiler(Compiler):
 
     return args
       
-  def getLibraryCommand(self, target, sources, configuration):
+  def getLibraryCommand(self, target, sources):
     
     args = list(self._getCommonLibraryArgs())
 
@@ -672,7 +674,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def archive():
-      self._runProcess(configuration, args, target)
+      self._runProcess(args, target)
 
     @makeCommand("lib-scan")
     def scan():
@@ -767,17 +769,17 @@ class MsvcCompiler(Compiler):
     
     return args
 
-  def getProgramCommands(self, target, sources, configuration):
-    return self._getLinkCommands(target, sources, configuration, dll=False)
+  def getProgramCommands(self, target, sources):
+    return self._getLinkCommands(target, sources, dll=False)
   
-  def getModuleCommands(self, target, sources, configuration):
-    return self._getLinkCommands(target, sources, configuration, dll=True)
+  def getModuleCommands(self, target, sources):
+    return self._getLinkCommands(target, sources, dll=True)
 
-  def _getLinkCommands(self, target, sources, configuration, dll):
+  def _getLinkCommands(self, target, sources, dll):
     
-    objects, libraries = self._resolveObjects(configuration)
+    objects, libraries = self._resolveObjects()
     
-    absTarget = configuration.abspath(target)
+    absTarget = self.configuration.abspath(target)
     absTargetDir = cake.path.dirName(absTarget)
     
     args = list(self._getLinkCommonArgs(dll))
@@ -793,13 +795,13 @@ class MsvcCompiler(Compiler):
 
     if self.optimisation == self.FULL_OPTIMISATION and \
        self.useIncrementalLinking:
-      configuration.engine.raiseError(
+      self.engine.raiseError(
         "Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n"
         )
     
     if self.embedManifest:
       if not self.__mtExe:
-        configuration.engine.raiseError(
+        self.engine.raiseError(
           "You must set path to mt.exe with embedManifest=True\n"
           )
       
@@ -808,10 +810,10 @@ class MsvcCompiler(Compiler):
       else:
         manifestResourceId = 1
       embeddedManifest = target + '.embed.manifest'
-      absEmbeddedManifest = configuration.abspath(embeddedManifest)
+      absEmbeddedManifest = self.configuration.abspath(embeddedManifest)
       if self.useIncrementalLinking:
         if not self.__rcExe:
-          configuration.engine.raiseError(
+          self.engine.raiseError(
             "You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n"
             )
         
@@ -840,9 +842,9 @@ class MsvcCompiler(Compiler):
     @makeCommand(args)
     def link():
       if self.importLibrary:
-        importLibrary = configuration.abspath(self.importLibrary)
+        importLibrary = self.configuration.abspath(self.importLibrary)
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
-      self._runProcess(configuration, args, target)
+      self._runProcess(args, target)
        
     @makeCommand(args) 
     def linkWithManifestIncremental():
@@ -867,7 +869,6 @@ class MsvcCompiler(Compiler):
             self.outputStdout("\n".join(outputLines) + "\n")
         
         self._runProcess(
-          configuration=configuration,
           args=rcArgs,
           target=embeddedRes,
           processStdout=processStdout,
@@ -897,12 +898,11 @@ class MsvcCompiler(Compiler):
           # tool when the manifest file hasn't actually changed. We can
           # avoid a second link if the manifest file hasn't changed.
           if exitCode != 0 and exitCode != 1090650113:
-            configuration.engine.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
+            self.engine.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
   
           result.append(exitCode != 0)
       
         self._runProcess(
-          configuration=configuration,
           args=mtArgs,
           target=embeddedManifest,
           processExitCode=processExitCode,
@@ -912,14 +912,14 @@ class MsvcCompiler(Compiler):
       
       # Create an empty embeddable manifest if one doesn't already exist
       if not cake.filesys.isFile(absEmbeddedManifest):
-        configuration.engine.logger.outputInfo(
+        self.engine.logger.outputInfo(
           "Creating dummy manifest: %s\n" % embeddedManifest
           )
         cake.filesys.makeDirs(absTargetDir)
         open(absEmbeddedManifest, 'wb').close()
       
       # Generate .embed.manifest.rc
-      configuration.engine.logger.outputInfo("Creating %s\n" % embeddedRc)
+      self.engine.logger.outputInfo("Creating %s\n" % embeddedRc)
       f = open(absEmbeddedRc, 'w')
       try:
         # Use numbers so we don't have to include any headers
@@ -952,7 +952,7 @@ class MsvcCompiler(Compiler):
       # output, in which case we can skip embedding it.
       
       if not cake.filesys.isFile(absEmbeddedManifest):
-        configuration.engine.logger.outputInfo(
+        self.engine.logger.outputInfo(
           "Skipping embedding manifest: no manifest to embed\n"
           )
         return
@@ -964,11 +964,11 @@ class MsvcCompiler(Compiler):
         "/outputresource:%s;%i" % (target, manifestResourceId),
         ]
       
-      self._runProcess(configuration, mtArgs, embeddedManifest)
+      self._runProcess(mtArgs, embeddedManifest)
         
     @makeCommand("link-scan")
     def scan():
-      return [self.__linkExe] + sources + objects + self._scanForLibraries(configuration, libraries)
+      return [self.__linkExe] + sources + objects + self._scanForLibraries(libraries)
     
     if self.embedManifest:
       if self.useIncrementalLinking is None or self.useIncrementalLinking:
@@ -987,7 +987,7 @@ class MsvcCompiler(Compiler):
     
     return args
 
-  def getResourceCommand(self, target, source, configuration):
+  def getResourceCommand(self, target, source):
     
     args = list(self._getCommonResourceArgs())
     args.append('/fo' + target)
@@ -995,7 +995,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def compile():
-      self._runProcess(configuration, args, target, allowResponseFile=False)
+      self._runProcess(args, target, allowResponseFile=False)
 
     @makeCommand("rc-scan")
     def scan():

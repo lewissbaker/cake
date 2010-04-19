@@ -273,8 +273,8 @@ class ProjectTool(Tool):
     VS2010 : '11.00',
     }
         
-  def __init__(self):
-    super(ProjectTool, self).__init__()
+  def __init__(self, configuration):
+    Tool.__init__(self, configuration)
     
   def project(
     self,
@@ -493,7 +493,7 @@ class ProjectTool(Tool):
 
     return SolutionTarget(path=target, task=None, tool=self)
   
-  def build(self, configuration):
+  def build(self):
     """Build project and solution files.
     
     This function will actually write the project and solution files,
@@ -513,17 +513,17 @@ class ProjectTool(Tool):
     # the time).
     for solution in self._solutions.solutions.values():
       generator = MsvsSolutionGenerator(solution, self._projects)
-      generator.build(configuration)
+      generator.build(self.configuration)
 
     for project in self._projects.projects.values():
       if project.version == '4.0':
         generator = MsBuildProjectGenerator(project)
-        generator.build(configuration)
+        generator.build(self.configuration)
         generator = MsBuildFiltersGenerator(project)
-        generator.build(configuration)
+        generator.build(self.configuration)
       else:
         generator = MsvsProjectGenerator(project)
-        generator.build(configuration)
+        generator.build(self.configuration)
 
 def escapeAttr(value):
   """Utility function for escaping xml attribute values.
@@ -767,28 +767,20 @@ class MsvsProjectGenerator(object):
     self.file.close()
     self.file = None
     
-    shouldBuild = configuration.engine.forceBuild
+    shouldBuild = engine.forceBuild
+    absProjectFilePath = configuration.abspath(self.projectFilePath) 
     if not shouldBuild:
       # Compare new file contents against existing file
       existingFileContents = None
       try:
-        f = open(configuration.abspath(self.projectFilePath), "rb")
-        try:
-          existingFileContents = f.read()
-          shouldBuild = newFileContents != existingFileContents
-        finally:
-          f.close()
+        existingFileContents = cake.filesys.readFile(absProjectFilePath)
+        shouldBuild = newFileContents != existingFileContents
       except EnvironmentError:
         shouldBuild = True
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Project %s\n" % self.projectFilePath)
-      cake.filesys.makeDirs(configuration.abspath(self.projectDir))
-      f = open(configuration.abspath(self.projectFilePath), "wb")
-      try:
-        f.write(newFileContents)
-      finally:
-        f.close()
+      cake.filesys.writeFile(absProjectFilePath, newFileContents)
     else:
       engine.logger.outputDebug(
         "project",
@@ -1113,28 +1105,20 @@ class MsBuildProjectGenerator(object):
     self.file.close()
     self.file = None
     
+    absProjectFilePath = configuration.abspath(self.projectFilePath)
+
     shouldBuild = engine.forceBuild
     if not shouldBuild:
       # Compare new file contents against existing file
-      existingFileContents = None
       try:
-        f = open(configuration.abspath(self.projectFilePath), "rb")
-        try:
-          existingFileContents = f.read()
-          shouldBuild = newFileContents != existingFileContents
-        finally:
-          f.close()
+        existingFileContents = cake.filesys.readFile(absProjectFilePath)
+        shouldBuild = newFileContents != existingFileContents
       except EnvironmentError:
         shouldBuild = True
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Project %s\n" % self.projectFilePath)
-      cake.filesys.makeDirs(configuration.abspath(self.projectDir))
-      f = open(configuration.abspath(self.projectFilePath), "wb")
-      try:
-        f.write(newFileContents)
-      finally:
-        f.close()
+      cake.filesys.writeFile(absProjectFilePath, newFileContents)
     else:
       engine.logger.outputDebug(
         "project",
@@ -1436,28 +1420,19 @@ class MsBuildFiltersGenerator(object):
     self.file.close()
     self.file = None
     
+    absProjectFiltersPath = configuration.abspath(self.projectFiltersPath)
     shouldBuild = engine.forceBuild
     if not shouldBuild:
       # Compare new file contents against existing file
-      existingFileContents = None
       try:
-        f = open(configuration.abspath(self.projectFiltersPath), "rb")
-        try:
-          existingFileContents = f.read()
-          shouldBuild = newFileContents != existingFileContents
-        finally:
-          f.close()
+        existingFileContents = cake.filesys.readFile(absProjectFiltersPath)
+        shouldBuild = newFileContents != existingFileContents
       except EnvironmentError:
         shouldBuild = True
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Filters %s\n" % self.projectFiltersPath)
-      cake.filesys.makeDirs(configuration.abspath(self.projectDir))
-      f = open(configuration.abspath(self.projectFiltersPath), "wb")
-      try:
-        f.write(newFileContents)
-      finally:
-        f.close()
+      cake.filesys.writeFile(absProjectFiltersPath, newFileContents)
     else:
       engine.logger.outputDebug(
         "project",
@@ -1676,27 +1651,18 @@ class MsvsSolutionGenerator(object):
     self.file.close()
     self.file = None
       
+    absSolutionFilePath = configuration.abspath(self.solutionFilePath)
     shouldBuild = engine.forceBuild
     if not shouldBuild:
-      existingFileContents = None
       try:
-        f = open(configuration.abspath(self.solutionFilePath), "rb")
-        try:
-          existingFileContents = f.read()
-          shouldBuild = newFileContents != existingFileContents
-        finally:
-          f.close()
+        existingFileContents = cake.filesys.readFile(absSolutionFilePath)
+        shouldBuild = newFileContents != existingFileContents
       except EnvironmentError:
         shouldBuild = True
     
     if shouldBuild:
       engine.logger.outputInfo("Generating Solution %s\n" % self.solutionFilePath)
-      cake.filesys.makeDirs(configuration.abspath(self.solutionDir))
-      f = open(configuration.abspath(self.solutionFilePath), "wb")
-      try:
-        f.write(newFileContents)
-      finally:
-        f.close()
+      cake.filesys.writeFile(absSolutionFilePath, newFileContents)
     else:
       engine.logger.outputDebug(
         "project",

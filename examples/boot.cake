@@ -27,19 +27,19 @@ hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
 
 base = Variant()
-base.tools["script"] = ScriptTool()
-base.tools["filesys"] = FileSystemTool()
-base.tools["variant"] = VariantTool()
-shell = base.tools["shell"] = ShellTool()
+base.tools["script"] = ScriptTool(configuration=configuration)
+base.tools["filesys"] = FileSystemTool(configuration=configuration)
+base.tools["variant"] = VariantTool(configuration=configuration)
+shell = base.tools["shell"] = ShellTool(configuration=configuration)
 shell.update(os.environ)
-base.tools["zipping"] = ZipTool()
-base.tools["logging"] = LoggingTool()
-env = base.tools["env"] = Environment()
+base.tools["zipping"] = ZipTool(configuration=configuration)
+base.tools["logging"] = LoggingTool(configuration=configuration)
+env = base.tools["env"] = Environment(configuration=configuration)
 env["EXAMPLES"] = "."
-projectTool = base.tools["project"] = ProjectTool()
+projectTool = base.tools["project"] = ProjectTool(configuration=configuration)
 projectTool.product = projectTool.VS2008
 projectTool.enabled = engine.createProjects
-engine.addBuildSuccessCallback(lambda c=configuration: projectTool.build(c))
+engine.addBuildSuccessCallback(projectTool.build)
 
 def createVariants(parent):
   for release in ["debug", "release"]:
@@ -104,7 +104,7 @@ def createVariants(parent):
 # Dummy
 from cake.library.compilers.dummy import DummyCompiler
 dummy = base.clone(platform=hostPlatform, compiler="dummy", architecture=hostArchitecture)
-dummy.tools["compiler"] = DummyCompiler()
+dummy.tools["compiler"] = DummyCompiler(configuration=configuration)
 createVariants(dummy)
 
 if cake.system.platform() == 'Windows':
@@ -113,7 +113,7 @@ if cake.system.platform() == 'Windows':
   for a in ["x86", "x64", "ia64"]:
     try:
       msvc = base.clone(platform="windows", compiler="msvc", architecture=a)
-      compiler = msvc.tools["compiler"] = findMsvcCompiler(architecture=a)
+      compiler = msvc.tools["compiler"] = findMsvcCompiler(configuration=configuration, architecture=a)
       compiler.outputFullPath = True
       compiler.useBigObjects = True
       compiler.addDefine("WIN32")
@@ -128,7 +128,7 @@ if cake.system.platform() == 'Windows':
     # MinGW
     from cake.library.compilers.gcc import findMinGWCompiler
     mingw = base.clone(platform="windows", compiler="mingw", architecture=hostArchitecture)
-    mingw.tools["compiler"] = findMinGWCompiler()
+    mingw.tools["compiler"] = findMinGWCompiler(configuration=configuration)
     createVariants(mingw)
   except CompilerNotFoundError:
     pass
@@ -137,7 +137,7 @@ try:
   # GCC
   from cake.library.compilers.gcc import findGccCompiler
   gcc = base.clone(platform=hostPlatform, compiler="gcc", architecture=hostArchitecture)
-  compiler = gcc.tools["compiler"] = findGccCompiler()
+  compiler = gcc.tools["compiler"] = findGccCompiler(configuration=configuration)
   compiler.addLibrary("stdc++")
   createVariants(gcc)
 except CompilerNotFoundError:

@@ -25,18 +25,6 @@ class ScriptTool(Tool):
     return Script.getCurrent().dir
   
   @property
-  def engine(self):
-    """The Engine the currently executing script belongs to.
-    """
-    return Script.getCurrent().engine
-  
-  @property
-  def configuration(self):
-    """The Configuration the currently executing script belongs to.
-    """
-    return Script.getCurrent().configuration
-  
-  @property
   def variant(self):
     """The Variant the currently executing script is being built with.
     """
@@ -170,9 +158,8 @@ class ScriptTool(Tool):
     @note: I couldn't think of a better class to put this function in so
     for now it's here although it doesn't really belong.
     """
-    script = Script.getCurrent()
-    engine = script.engine
-    configuration = script.configuration
+    engine = self.engine
+    configuration = self.configuration
 
     sourcePaths, sourceTasks = getPathsAndTasks(sources)
 

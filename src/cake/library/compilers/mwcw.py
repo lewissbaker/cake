@@ -22,11 +22,12 @@ class MwcwCompiler(Compiler):
 
   def __init__(
     self,
+    configuration,
     ccExe=None,
     ldExe=None,
     binPaths=None,
     ):
-    Compiler.__init__(self, binPaths)
+    Compiler.__init__(self, configuration=configuration, binPaths=binPaths)
     self.__ccExe = ccExe
     self.__ldExe = ldExe
 
@@ -198,17 +199,17 @@ class MwcwCompiler(Compiler):
         }.get(cake.path.extension(path).lower(), 'c++')
     return language
 
-  def getPchCommands(self, target, source, header, object, configuration):
+  def getPchCommands(self, target, source, header, object):
     language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))
     args.extend([source, '-precompile', target])
     
     def compile():
-      self._runProcess(configuration, args, target)
+      self._runProcess(args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      configuration.engine.logger.outputDebug(
+      self.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -216,7 +217,7 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        configuration.abspath(dependencyFile),
+        self.configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       return dependencies
@@ -224,7 +225,7 @@ class MwcwCompiler(Compiler):
     canBeCached = True
     return compile, args, canBeCached   
           
-  def getObjectCommands(self, target, source, pch, configuration):
+  def getObjectCommands(self, target, source, pch):
     language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))
@@ -235,10 +236,10 @@ class MwcwCompiler(Compiler):
     args.extend([source, '-o', target])
     
     def compile():
-      self._runProcess(configuration, args, target)
+      self._runProcess(args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
-      configuration.engine.logger.outputDebug(
+      self.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
         )
@@ -246,7 +247,7 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        configuration.abspath(dependencyFile),
+        self.configuration.abspath(dependencyFile),
         cake.path.extension(target),
         ))
       if pch is not None:
@@ -262,15 +263,15 @@ class MwcwCompiler(Compiler):
     args.extend(self._getCommonArgs())
     return args
   
-  def getLibraryCommand(self, target, sources, configuration):
+  def getLibraryCommand(self, target, sources):
     args = list(self._getCommonLibraryArgs())
     args.extend(['-o', target])
     args.extend(sources)
     
     @makeCommand(args)
     def archive():
-      cake.filesys.remove(configuration.abspath(target))
-      self._runProcess(configuration, args, target)
+      cake.filesys.remove(self.configuration.abspath(target))
+      self._runProcess(args, target)
 
     @makeCommand("lib-scan")
     def scan():
@@ -295,15 +296,15 @@ class MwcwCompiler(Compiler):
     args.extend('-L' + p for p in self.getLibraryPaths())
     return args
   
-  def getProgramCommands(self, target, sources, configuration):
-    return self._getLinkCommands(target, sources, configuration, dll=False)
+  def getProgramCommands(self, target, sources):
+    return self._getLinkCommands(target, sources, dll=False)
   
-  def getModuleCommands(self, target, sources, configuration):
-    return self._getLinkCommands(target, sources, configuration, dll=True)
+  def getModuleCommands(self, target, sources):
+    return self._getLinkCommands(target, sources, dll=True)
 
-  def _getLinkCommands(self, target, sources, configuration, dll):
+  def _getLinkCommands(self, target, sources, dll):
     
-    objects, libraries = self._resolveObjects(configuration)
+    objects, libraries = self._resolveObjects()
     
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
@@ -316,14 +317,14 @@ class MwcwCompiler(Compiler):
       
     @makeCommand(args)
     def link():
-      self._runProcess(configuration, args, target)      
+      self._runProcess(args, target)      
     
     @makeCommand("link-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + objects + self._scanForLibraries(configuration, libraries)
+      return [args[0]] + sources + objects + self._scanForLibraries(libraries)
     
     return link, scan
 

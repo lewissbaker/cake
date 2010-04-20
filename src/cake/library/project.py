@@ -272,10 +272,40 @@ class ProjectTool(Tool):
     VS2008 : '10.00',
     VS2010 : '11.00',
     }
-        
+  
   def __init__(self, configuration):
     Tool.__init__(self, configuration)
+  
+  def _getProjectConfigName(self):
     
+    configName = self.projectConfigName
+    if configName is None:
+      keywords = Script.getCurrent().variant.keywords
+      configName = " ".join(v.capitalize() for v in keywords.values())
+    return configName
+      
+  def _getProjectPlatformName(self):
+    
+    platformName = self.projectPlatformName
+    if platformName is None:
+      platformName = "Win32"
+    return platformName
+  
+  def _getSolutionConfigName(self):
+    
+    configName = self.solutionConfigName
+    if configName is None:
+      keywords = Script.getCurrent().variant.keywords
+      configName = " ".join(v.capitalize() for v in keywords.values())
+    return configName
+  
+  def _getSolutionPlatformName(self):
+    
+    platformName = self.solutionPlatformName
+    if platformName is None:
+      platformName = "Win32"
+    return platformName
+  
   def project(
     self,
     target,
@@ -340,7 +370,7 @@ class ProjectTool(Tool):
       name,
       intermediateDir,
       )
-      
+    
   def _project(
     self,
     target,
@@ -381,8 +411,8 @@ class ProjectTool(Tool):
     
     script = Script.getCurrent()
     configuration = script.configuration
-    configName = self.projectConfigName
-    platformName = self.projectPlatformName
+    configName = self._getProjectConfigName()
+    platformName = self._getProjectPlatformName()
 
     # Construct the build args
     targetDir = cake.path.dirName(configuration.abspath(target))
@@ -467,10 +497,10 @@ class ProjectTool(Tool):
         for p in projects
         ]
     
-    configName = self.solutionConfigName
-    platformName = self.solutionPlatformName
-    projectConfigName = self.projectConfigName
-    projectPlatformName = self.projectPlatformName
+    configName = self._getSolutionConfigName()
+    platformName = self._getSolutionPlatformName()
+    projectConfigName = self._getProjectConfigName()
+    projectPlatformName = self._getProjectPlatformName()
     
     try:
       version = self._toSolutionVersion[self.product]

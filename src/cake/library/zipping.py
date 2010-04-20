@@ -294,7 +294,7 @@ class ZipTool(Tool):
           zipFile.close()
         finally:
           f.close()
-        cake.filesys.rename(absTargetTmpPath, absTargetPath, removeExisting=True)
+        cake.filesys.renameFile(absTargetTmpPath, absTargetPath, removeExisting=True)
       else:
         f = None
         zipFile = None
@@ -302,7 +302,7 @@ class ZipTool(Tool):
           for casedPath, originalPath in toZip.iteritems():
             if casedPath not in fromZip:
               if zipFile is None:
-                cake.filesys.rename(absTargetPath, absTargetTmpPath, removeExisting=True)
+                cake.filesys.renameFile(absTargetPath, absTargetTmpPath, removeExisting=True)
                 f = open(absTargetTmpPath, "r+b")
                 zipFile = zipfile.ZipFile(f, "a")
               _writeFile(engine, zipFile, sourcePath, absSourcePath, target, originalPath)
@@ -312,7 +312,7 @@ class ZipTool(Tool):
           if f is not None:
             f.close()
         if f is not None:
-          cake.filesys.rename(absTargetTmpPath, absTargetPath, removeExisting=True)
+          cake.filesys.renameFile(absTargetTmpPath, absTargetPath, removeExisting=True)
 
     task = engine.createTask(doIt)
     task.startAfter(sourceTask)

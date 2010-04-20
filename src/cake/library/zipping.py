@@ -11,10 +11,6 @@ import zipfile
 import os
 import os.path
 import time
-try:
-  import cStringIO as StringIO
-except ImportError:
-  import StringIO
 
 def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onlyNewer):
   """Extract the ZipInfo object to a physical file at targetDir.
@@ -287,43 +283,36 @@ class ZipTool(Tool):
               recreate = True
               break
       
-      buffer = None
-      fileData = None
-      file = None
-      try:
-        if recreate:
-          buffer = StringIO.StringIO()
-          file = zipfile.ZipFile(buffer, "w")
+      absTargetTmpPath = absTargetPath + ".tmp"
+      if recreate:
+        cake.filesys.makeDirs(os.path.dirname(absTargetTmpPath))
+        f = open(absTargetTmpPath, "wb")
+        try:
+          zipFile = zipfile.ZipFile(f, "w")
           for originalPath in toZip.itervalues():
-            _writeFile(engine, file, sourcePath, absSourcePath, target, originalPath)
-        else:
+            _writeFile(engine, zipFile, sourcePath, absSourcePath, target, originalPath)
+          zipFile.close()
+        finally:
+          f.close()
+        cake.filesys.rename(absTargetTmpPath, absTargetPath, removeExisting=True)
+      else:
+        f = None
+        zipFile = None
+        try:
           for casedPath, originalPath in toZip.iteritems():
             if casedPath not in fromZip:
-              if file is None:
-                oldData = cake.filesys.readFile(absTargetPath)
-                buffer = StringIO.StringIO(oldData)
-                file = zipfile.ZipFile(buffer, "a")
-                # Create a new buffer that can be written to
-                newBuffer = StringIO.StringIO()
-                try:
-                  # Write up to start_dir (where zipfile expects to be)
-                  newBuffer.write(oldData[:file.start_dir])
-                  # Poke into ZipFile to set the new buffer
-                  file.fp = newBuffer
-                  newBuffer = buffer # Swap old buffer ptr, it will close() below
-                  buffer = file.fp 
-                finally:
-                  newBuffer.close()
-              _writeFile(engine, file, sourcePath, absSourcePath, target, originalPath)
-      finally:
-        if file is not None:
-          file.close()
-        if buffer is not None:
-          fileData = buffer.getvalue()
-          buffer.close()
-      
-      if fileData is not None:
-        cake.filesys.writeFile(absTargetPath, fileData)
+              if zipFile is None:
+                cake.filesys.rename(absTargetPath, absTargetTmpPath, removeExisting=True)
+                f = open(absTargetTmpPath, "r+b")
+                zipFile = zipfile.ZipFile(f, "a")
+              _writeFile(engine, zipFile, sourcePath, absSourcePath, target, originalPath)
+          if zipFile is not None:
+            zipFile.close()
+        finally:
+          if f is not None:
+            f.close()
+        if f is not None:
+          cake.filesys.rename(absTargetTmpPath, absTargetPath, removeExisting=True)
 
     task = engine.createTask(doIt)
     task.startAfter(sourceTask)

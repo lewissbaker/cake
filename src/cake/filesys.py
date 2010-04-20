@@ -92,16 +92,45 @@ def copyFile(source, target):
   makeDirs(os.path.dirname(target)) 
   shutil.copyfile(source, target)
 
-def rename(source, target):
+def rename(source, target, removeExisting=False):
   """Rename a file or directory.
 
   @param source: The path of the source file/directory.
   @type source: string
   @param target: The path of the target file/directory.
   @type target: string
+  @param removeExisting: Remove the target file if it exists.
+  Otherwise this function may raise an EnvironmentError if the
+  target file exists (depending on OS).
   """
-  os.rename(source, target)
+  try:
+    os.rename(source, target)
+    return # Success
+  except EnvironmentError:
+    if removeExisting:
+      # Remove any existing file/dir with the same name
+      if isFile(target): 
+        remove(target)
+      elif isDir(target): 
+        removeTree(target)
+      else:
+        raise
+    else:
+      raise
   
+  # Note: When compiling small progams it is common to get a 'Permission denied'
+  # exception here. Presumably it's because the OS has a handle to the destination
+  # file open after we have called os.remove(). For this reason we sit in a loop
+  # attempting to rename until we reach a timeout of 1 second.
+  timeout = time.clock() + 1.0
+  while True:
+    try:
+      os.rename(source, target)
+      break
+    except EnvironmentError:
+      if time.clock() >= timeout:
+        raise
+          
 def makeDirs(path):
   """Recursively create directories.
   
@@ -150,11 +179,6 @@ def writeFile(path, data):
   @param data: The data to write to the file.
   @type data: string 
   """
-  # Remove existing file first to give the OS time to release
-  # all handles. We must remove the original file otherwise renaming
-  # will fail below.
-  remove(path)
-  
   makeDirs(os.path.dirname(path))
 
   tmpPath = path + ".tmp"
@@ -165,15 +189,4 @@ def writeFile(path, data):
   finally:
     f.close()
 
-  # Note: When compiling small progams it is commond to get a 'Permission denied'
-  # exception here. Presumably it's because the OS has a handle to the destination
-  # file open after we have called os.remove(). For this reason we sit in a loop
-  # attempting to rename until we reach a timeout of 1 second.
-  timeout = time.clock() + 1.0
-  while True:
-    try:
-      rename(tmpPath, path)
-      break
-    except EnvironmentError:
-      if time.clock() >= timeout:
-        raise
+  rename(tmpPath, path, removeExisting=True)

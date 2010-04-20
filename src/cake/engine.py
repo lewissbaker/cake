@@ -915,7 +915,7 @@ class Configuration(object):
       path = paths[i]
       try:
         if getTimestamp(abspath(path)) != timestamps[i]:
-          return dependencyInfo, "'" + path + "' has changed since last build"
+          return dependencyInfo, "'" + path + "' has been changed"
       except EnvironmentError:
         return dependencyInfo, "'" + path + "' no longer exists" 
     

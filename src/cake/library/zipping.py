@@ -12,13 +12,36 @@ import os
 import os.path
 import time
 
+def _isZipDirectory(zipInfo):
+  
+  return (zipInfo.external_attr & 0x00000010L) != 0L # FILE_ATTRIBUTE_DIRECTORY
+
+def _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer):
+  
+  if engine.forceBuild:
+    return "rebuild has been forced"
+  
+  if not onlyNewer:
+    return "onlyNewer is set to False" # Always rebuild
+
+  try:
+    mtime = os.stat(absTargetFile).st_mtime
+  except EnvironmentError:
+    return "it doesn't exist" 
+
+  if zipTime != mtime:
+    # Assume the zip and the extract are the same file.
+    return "it has been changed"
+    
+  return None
+
 def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onlyNewer):
   """Extract the ZipInfo object to a physical file at targetDir.
   """
   targetFile = os.path.join(targetDir, zipInfo.filename)
   absTargetFile = os.path.join(absTargetDir, zipInfo.filename)
   
-  if zipInfo.filename[-1] == '/':
+  if _isZipDirectory(zipInfo):
     # The zip info corresponds to a directory.
     cake.filesys.makeDirs(absTargetFile)
   else:
@@ -26,11 +49,14 @@ def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onl
     year, month, day, hour, minute, second = zipInfo.date_time
     zipTime = time.mktime(time.struct_time((year, month, day, hour, minute, second, 0, 0, 0)))
     
-    if onlyNewer and os.path.isfile(absTargetFile):
-      mtime = os.stat(absTargetFile).st_mtime
-      if zipTime == mtime:
-        # Assume the zip and the extract are the same file.
-        return
+    reasonToBuild = _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer)
+    if reasonToBuild is None:
+      return # Target is up to date
+
+    engine.logger.outputDebug(
+      "reason",
+      "Extracting '" + targetFile + "' because " + reasonToBuild + ".\n",
+      )
     
     engine.logger.outputInfo("Extracting %s\n" % targetFile)
     
@@ -48,13 +74,14 @@ def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onl
     # Set the file modification time to match the zip time
     os.utime(absTargetFile, (zipTime, zipTime))
 
-def _writeFile(engine, file, sourcePath, absSourcePath, targetZipPath, targetFilePath):
+def _writeFile(configuration, file, sourcePath, targetZipPath, targetFilePath):
+  absSourcePath = configuration.abspath(sourcePath)
   sourceFilePath = os.path.join(sourcePath, targetFilePath)
   absSourceFilePath = os.path.join(absSourcePath, targetFilePath)
   targetFilePath = targetFilePath.replace("\\", "/") # Zips use forward slashes
   utcTime = time.gmtime(os.stat(absSourceFilePath).st_mtime)
   
-  engine.logger.outputInfo("Adding %s to %s\n" % (sourceFilePath, targetZipPath))
+  configuration.engine.logger.outputInfo("Adding %s to %s\n" % (sourceFilePath, targetZipPath))
   
   if os.path.isdir(absSourceFilePath):
     if not targetFilePath.endswith("/"):
@@ -86,6 +113,94 @@ def _walkTree(path):
     for name in fileNames:
       yield os.path.join(dirPath, name)
 
+def _shouldCompress(
+  configuration,
+  sourcePath,
+  targetPath,
+  toZip,
+  onlyNewer,
+  removeStale,
+  ):
+  
+  if configuration.engine.forceBuild:
+    return None, "rebuild has been forced"
+  
+  if not onlyNewer:
+    return None, "onlyNewer is set to False" # Always rebuild
+  
+  absSourcePath = configuration.abspath(sourcePath)
+  absTargetPath = configuration.abspath(targetPath)
+
+  # Try to open an existing zip file
+  try:
+    file = zipfile.ZipFile(absTargetPath, "r")
+    try:
+      zipInfos = file.infolist()
+    finally:
+      file.close()
+    
+    # Build a list of files/dirs in the current zip
+    fromZip = {}
+    for zipInfo in zipInfos:
+      path = os.path.normpath(os.path.normcase(zipInfo.filename))
+      fromZip[path] = zipInfo
+  except EnvironmentError:
+    # File doesn't exist or is invalid
+    return None, "'" + targetPath + "' doesn't exist" 
+
+  if onlyNewer:
+    for casedPath, originalPath in toZip.iteritems():
+      zipInfo = fromZip.get(casedPath, None)
+
+      # Not interested in modified directories
+      if zipInfo is not None and not _isZipDirectory(zipInfo):
+        absSourceFilePath = os.path.join(absSourcePath, originalPath)
+        utcTime = time.gmtime(os.stat(absSourceFilePath).st_mtime)
+        zipTime = utcTime[0:5] + (
+          utcTime[5] & 0xFE, # Zip only saves 2 second resolution
+          )              
+        if zipTime != zipInfo.date_time:
+          sourceFilePath = os.path.join(sourcePath, originalPath)
+          # We must recreate the zip to update files
+          return None, "'" + sourceFilePath + "' has been changed"
+      
+  if removeStale:
+    for path, zipInfo in fromZip.iteritems():
+      if path not in toZip:
+        # We must recreate the zip to remove files
+        sourceFilePath = os.path.join(sourcePath, zipInfo.filename)
+        return None, "'" + sourceFilePath + "' has been removed"
+  
+  toAppend = []
+  reasonToBuild = None
+  for casedPath, originalPath in toZip.iteritems():
+    if casedPath not in fromZip:
+      toAppend.append(originalPath)
+      if reasonToBuild is None:
+        sourceFilePath = os.path.join(sourcePath, originalPath)
+        reasonToBuild = "'" + sourceFilePath + "' is not in zip"
+      
+  return toAppend, reasonToBuild
+
+def _getFilesToCompress(configuration, sourcePath, includeMatch, excludeMatch):
+  
+  absSourcePath = configuration.abspath(sourcePath)
+
+  toZip = {}
+  if os.path.isdir(absSourcePath):
+    firstChar = len(absSourcePath)+1
+    for path in _walkTree(absSourcePath):
+      path = path[firstChar:] # Strip the search dir name
+      if includeMatch is not None and not includeMatch(path):
+        continue
+      if excludeMatch is not None and excludeMatch(path):
+        continue
+      toZip[os.path.normcase(path)] = path
+  else:
+    toZip[os.path.normcase(path)] = path
+    
+  return toZip
+    
 class ZipTool(Tool):
   
   def extract(
@@ -215,104 +330,58 @@ class ZipTool(Tool):
     if not isinstance(target, basestring):
       raise TypeError("target must be a string")
 
-    sourcePath, sourceTask = getPathAndTask(source)
-
     engine = self.engine
     configuration = self.configuration
+
+    sourcePath, sourceTask = getPathAndTask(source)
     
     def doIt():
-      absSourcePath = configuration.abspath(sourcePath)
-      absTargetPath = configuration.abspath(target)
 
       # Build a list of files/dirs to zip
-      toZip = {}
-      if os.path.isdir(absSourcePath):
-        firstChar = len(absSourcePath)+1
-        for path in _walkTree(absSourcePath):
-          path = path[firstChar:] # Strip the search dir name
-          if includeMatch is not None and not includeMatch(path):
-            continue
-          if excludeMatch is not None and excludeMatch(path):
-            continue
-          toZip[os.path.normcase(path)] = path
-      else:
-        toZip[os.path.normcase(path)] = ""
-      
-      if onlyNewer:
-        recreate = False
-      else:
-        recreate = True # Always rebuild
-      
-      if not recreate:
-        # Try to open an existing zip file
-        try:
-          file = zipfile.ZipFile(absTargetPath, "r")
-          try:
-            zipInfos = file.infolist()
-          finally:
-            file.close()
-          
-          # Build a list of files/dirs in the current zip
-          fromZip = {}
-          for zipInfo in zipInfos:
-            path = os.path.normpath(os.path.normcase(zipInfo.filename))
-            fromZip[path] = zipInfo
-        except EnvironmentError:
-          recreate = True # File doesn't exist or is invalid
+      toZip = _getFilesToCompress(sourcePath, includeMatch, excludeMatch)
 
-      if not recreate and onlyNewer:
-        for casedPath in toZip.iterkeys():
-          zipInfo = fromZip.get(casedPath, None)
+      # Figure out if we need to rebuild/append 
+      toAppend, reasonToBuild = _shouldCompress(
+        sourcePath,
+        target,
+        toZip,
+        onlyNewer,
+        removeStale,
+        )
+      if reasonToBuild is None:
+        return # Target is up to date
 
-          # Not interested in modified directories
-          if zipInfo is not None and not zipInfo.filename.endswith("/"):
-            absSourceFilePath = os.path.join(absSourcePath, casedPath)
-            utcTime = time.gmtime(os.stat(absSourceFilePath).st_mtime)
-            zipTime = utcTime[0:5] + (
-              utcTime[5] & 0xFE, # Zip only saves 2 second resolution
-              )              
-            if zipTime != zipInfo.date_time:
-              # We must recreate the zip to update files
-              recreate = True
-              break
-          
-        if not recreate and removeStale:
-          for path in fromZip.iterkeys():
-            if path not in toZip:
-              # We must recreate the zip to remove files
-              recreate = True
-              break
+      engine.logger.outputDebug(
+        "reason",
+        "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
+        )
       
+      absTargetPath = configuration.abspath(target)
       absTargetTmpPath = absTargetPath + ".tmp"
-      if recreate:
+      if toAppend is None:
+        # Recreate zip
         cake.filesys.makeDirs(os.path.dirname(absTargetTmpPath))
         f = open(absTargetTmpPath, "wb")
         try:
           zipFile = zipfile.ZipFile(f, "w")
           for originalPath in toZip.itervalues():
-            _writeFile(engine, zipFile, sourcePath, absSourcePath, target, originalPath)
+            _writeFile(configuration, zipFile, sourcePath, target, originalPath)
           zipFile.close()
         finally:
           f.close()
         cake.filesys.renameFile(absTargetTmpPath, absTargetPath, removeExisting=True)
       else:
-        f = None
-        zipFile = None
+        # Append to existing zip
+        cake.filesys.renameFile(absTargetPath, absTargetTmpPath, removeExisting=True)
+        f = open(absTargetTmpPath, "r+b")
         try:
-          for casedPath, originalPath in toZip.iteritems():
-            if casedPath not in fromZip:
-              if zipFile is None:
-                cake.filesys.renameFile(absTargetPath, absTargetTmpPath, removeExisting=True)
-                f = open(absTargetTmpPath, "r+b")
-                zipFile = zipfile.ZipFile(f, "a")
-              _writeFile(engine, zipFile, sourcePath, absSourcePath, target, originalPath)
-          if zipFile is not None:
-            zipFile.close()
+          zipFile = zipfile.ZipFile(f, "a")
+          for originalPath in toAppend:
+            _writeFile(configuration, zipFile, sourcePath, target, originalPath)
+          zipFile.close()
         finally:
-          if f is not None:
-            f.close()
-        if f is not None:
-          cake.filesys.renameFile(absTargetTmpPath, absTargetPath, removeExisting=True)
+          f.close()
+        cake.filesys.renameFile(absTargetTmpPath, absTargetPath, removeExisting=True)
 
     task = engine.createTask(doIt)
     task.startAfter(sourceTask)

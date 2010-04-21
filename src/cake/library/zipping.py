@@ -370,10 +370,10 @@ class ZipTool(Tool):
           zipFile.close()
         finally:
           f.close()
-        cake.filesys.renameFile(absTargetTmpPath, absTargetPath, removeExisting=True)
+        cake.filesys.renameFile(absTargetTmpPath, absTargetPath)
       else:
         # Append to existing zip
-        cake.filesys.renameFile(absTargetPath, absTargetTmpPath, removeExisting=True)
+        cake.filesys.renameFile(absTargetPath, absTargetTmpPath)
         f = open(absTargetTmpPath, "r+b")
         try:
           zipFile = zipfile.ZipFile(f, "a")
@@ -382,7 +382,7 @@ class ZipTool(Tool):
           zipFile.close()
         finally:
           f.close()
-        cake.filesys.renameFile(absTargetTmpPath, absTargetPath, removeExisting=True)
+        cake.filesys.renameFile(absTargetTmpPath, absTargetPath)
 
     task = engine.createTask(doIt)
     task.startAfter(sourceTask)

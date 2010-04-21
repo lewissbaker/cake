@@ -92,36 +92,22 @@ def copyFile(source, target):
   makeDirs(os.path.dirname(target)) 
   shutil.copyfile(source, target)
 
-def rename(source, target):
-  """Rename a file or directory.
-
-  @param source: The path of the source file/directory.
-  @type source: string
-  @param target: The path of the target file/directory.
-  @type target: string
-  """
-  os.rename(source, target)
-
-def renameFile(source, target, removeExisting=False):
+def renameFile(source, target):
   """Rename a file.
+  
+  Unlike os.rename() if the file exists it is replaced.
 
   @param source: The path of the source file.
   @type source: string
   @param target: The path of the target file.
   @type target: string
-  @param removeExisting: Remove the target file if it exists.
-  Otherwise this function may raise an EnvironmentError if the
-  target file exists (depending on OS).
   """
   try:
     os.rename(source, target)
     return # Success
   except EnvironmentError:
-    if removeExisting:
-      # Remove any existing file with the same name
-      remove(target)
-    else:
-      raise
+    # Remove any existing file with the same name
+    remove(target)
   
   # Note: When compiling small programs it is common to get a 'Permission denied'
   # exception here. Presumably it's because the OS has a handle to the destination
@@ -135,6 +121,7 @@ def renameFile(source, target, removeExisting=False):
     except EnvironmentError:
       if time.clock() >= timeout:
         raise
+      time.sleep(0.05)
 
 def makeDirs(path):
   """Recursively create directories.
@@ -194,4 +181,4 @@ def writeFile(path, data):
   finally:
     f.close()
 
-  renameFile(tmpPath, path, removeExisting=True)
+  renameFile(tmpPath, path)

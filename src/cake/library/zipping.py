@@ -188,8 +188,10 @@ def _getFilesToCompress(configuration, sourcePath, includeMatch, excludeMatch):
 
   toZip = {}
   if os.path.isdir(absSourcePath):
-    firstChar = len(absSourcePath)+1
-    for path in _walkTree(absSourcePath):
+    # Remove any trailing slash
+    searchDir = os.path.normpath(absSourcePath)
+    firstChar = len(searchDir) + 1
+    for path in _walkTree(searchDir):
       path = path[firstChar:] # Strip the search dir name
       if includeMatch is not None and not includeMatch(path):
         continue
@@ -271,8 +273,9 @@ class ZipTool(Tool):
           for zipInfo in zipInfos:
             zipFiles.add(os.path.normcase(os.path.normpath(zipInfo.filename)))
           
-          firstChar = len(absTargetDir) + 1
-          for absPath in _walkTree(absTargetDir):
+          searchDir = os.path.normpath(absTargetDir)
+          firstChar = len(searchDir) + 1
+          for absPath in _walkTree(searchDir):
             path = absPath[firstChar:] # Strip the search dir name
             if os.path.normcase(path) not in zipFiles:
               engine.logger.outputInfo(

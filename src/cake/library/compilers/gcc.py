@@ -5,16 +5,16 @@
 @license: Licensed under the MIT license.
 """
 
-import os
-import os.path
-import re
-
+from cake.gnu import parseDependencyFile
+from cake.library import memoise, getPathsAndTasks
+from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 import cake.filesys
 import cake.path
 import cake.system
-from cake.library import memoise, getPathsAndTasks
-from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
-from cake.gnu import parseDependencyFile
+import os
+import os.path
+import re
+import subprocess
 
 if cake.system.isCygwin():
   def _findExecutable(name, paths):
@@ -82,6 +82,32 @@ def _getMinGWInstallDir():
   finally:
     _winreg.CloseKey(key)
 
+def _getGccVersion(gccExe):
+  """Returns the Gcc version number given an executable.
+  """
+  args = [gccExe, '-dumpversion']
+  try:
+    p = subprocess.Popen(
+      args=args,
+      stdout=subprocess.PIPE,
+      )
+  except EnvironmentError, e:
+    raise EnvironmentError(
+      "cake: failed to launch %s: %s\n" % (args[0], str(e))
+      )
+  stdoutText = p.stdout.read()
+  p.stdout.close()
+  exitCode = p.wait()
+  
+  if exitCode != 0:
+    raise EnvironmentError(
+      "%s: failed with exit code %i\n" % (args[0], exitCode)
+      )
+  
+  return [
+    int(n) for n in stdoutText.strip().split(".")
+    ]
+  
 def findMinGWCompiler(configuration):
   """Returns a MinGW compiler if found.
   
@@ -101,13 +127,19 @@ def findMinGWCompiler(configuration):
     checkFile(arExe)
     checkFile(gccExe)
     checkFile(rcExe)
+    
+    try:
+      version = _getGccVersion(gccExe)
+    except EnvironmentError:
+      raise CompilerNotFoundError("Could not find MinGW version.")
 
     return WindowsGccCompiler(
+      configuration=configuration,
       arExe=arExe,
       gccExe=gccExe,
       rcExe=rcExe,
       binPaths=[binDir],
-      configuration=configuration,
+      version=version,
       )
   except WindowsError:
     raise CompilerNotFoundError("Could not find MinGW install directory.")
@@ -123,42 +155,72 @@ def findGccCompiler(configuration, platform=None):
   if platform is None:
     platform = cake.system.platform()
   platform = platform.lower()
+  
+  isDarwin = platform.startswith("darwin")
     
   paths = os.environ.get('PATH', '').split(os.path.pathsep)
 
   try:
-    arExe = _findExecutable("ar", paths)
-    gccExe = _findExecutable("gcc", paths)
+    binPaths = []
 
     def checkFile(path):
       if not cake.filesys.isFile(path):
         raise EnvironmentError(path + " is not a file.")
 
-    checkFile(arExe)
-    checkFile(gccExe)
-
-    if platform.startswith("windows") or platform.startswith("cygwin"):
-      constructor = WindowsGccCompiler
-    elif platform.startswith("darwin"):
-      constructor = MacGccCompiler
-    elif platform.startswith("ps3"):
-      constructor = Ps3GccCompiler
+    if isDarwin:
+      libtoolExe = _findExecutable("libtool", paths)
+      checkFile(libtoolExe)
+      binPaths.append(cake.path.dirName(libtoolExe))
     else:
-      constructor = GccCompiler 
+      arExe = _findExecutable("ar", paths)
+      checkFile(arExe)
+      binPaths.append(cake.path.dirName(arExe))
+
+    gccExe = _findExecutable("gcc", paths)
+    checkFile(gccExe)
+    binPaths.append(cake.path.dirName(gccExe))
+
+    binPaths = list(set(binPaths)) # Only want unique paths
     
-    binPaths = list(set([
-      cake.path.dirName(arExe),
-      cake.path.dirName(gccExe),
-      ]))
+    try:
+      version = _getGccVersion(gccExe)
+    except EnvironmentError:
+      raise CompilerNotFoundError("Could not find GCC version.")
     
-    return constructor(
-      configuration=configuration,
-      arExe=arExe,
-      gccExe=gccExe,
-      binPaths=binPaths,
-      )
+    if platform.startswith("windows") or platform.startswith("cygwin"):
+      return WindowsGccCompiler(
+        configuration=configuration,
+        arExe=arExe,
+        gccExe=gccExe,
+        binPaths=binPaths,
+        version=version,
+        )
+    elif isDarwin:
+      return MacGccCompiler(
+        configuration=configuration,
+        gccExe=gccExe,
+        libtoolExe=libtoolExe,
+        binPaths=binPaths,
+        version=version,
+        )
+    elif platform.startswith("ps3"):
+      return Ps3GccCompiler(
+        configuration=configuration,
+        arExe=arExe,
+        gccExe=gccExe,
+        binPaths=binPaths,
+        version=version,
+        )
+    else:
+      return GccCompiler(
+        configuration=configuration,
+        arExe=arExe,
+        gccExe=gccExe,
+        binPaths=binPaths,
+        version=version,
+        )
   except EnvironmentError:
-    raise CompilerNotFoundError("Could not find GCC compiler and AR archiver.")
+    raise CompilerNotFoundError("Could not find GCC compiler, AR archiver or libtool.")
 
 class GccCompiler(Compiler):
 
@@ -167,12 +229,20 @@ class GccCompiler(Compiler):
     configuration,
     arExe=None,
     gccExe=None,
+    libtoolExe=None,
     binPaths=None,
+    version=None,
     ):
     Compiler.__init__(self, configuration=configuration, binPaths=binPaths)
-    self.__arExe = arExe
-    self.__gccExe = gccExe
+    self._arExe = arExe
+    self._gccExe = gccExe
+    self._libtoolExe = libtoolExe
+    self.__version = version
 
+  @property
+  def version(self):
+    return self.__version
+  
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
@@ -187,7 +257,7 @@ class GccCompiler(Compiler):
       if m:
         linenum, _colnum = m.groups()
         sourceFile = line[:m.start('linenum')]
-        sourceFile = os.path.abspath(os.path.normpath(sourceFile))
+        sourceFile = self.configuration.abspath(os.path.normpath(sourceFile))
         lineNumber = linenum[1:]
         message = line[m.end()+2:]
         outputLines.append('%s(%s): %s' % (sourceFile, lineNumber, message))
@@ -199,8 +269,8 @@ class GccCompiler(Compiler):
       return ''
 
   @memoise
-  def _getCompileArgs(self, language):
-    args = [self.__gccExe, '-c', '-MD']
+  def _getCompileArgs(self, language, shared):
+    args = [self._gccExe, '-c', '-MD']
 
     args.extend(['-x', language])
     
@@ -250,7 +320,10 @@ class GccCompiler(Compiler):
       
     if self.useSse:
       args.append('-msse')
-  
+ 
+    if shared and self.__version[0] >= 4:
+      args.append('-fvisibility=hidden')
+
     for p in self.getIncludePaths():
       args.extend(['-I', p])
 
@@ -277,7 +350,7 @@ class GccCompiler(Compiler):
     if not language.endswith('-header'):
       language += '-header'
 
-    args = list(self._getCompileArgs(language))
+    args = list(self._getCompileArgs(language, shared=False))
     args.extend([source, '-o', target])
 
     def compile():
@@ -300,9 +373,9 @@ class GccCompiler(Compiler):
     canBeCached = True
     return compile, args, canBeCached
   
-  def getObjectCommands(self, target, source, pch):
+  def getObjectCommands(self, target, source, pch, shared):
     language = self.getLanguage(source)
-    args = list(self._getCompileArgs(language))
+    args = list(self._getCompileArgs(language, shared))
   
     if pch is not None:
       args.extend([
@@ -339,7 +412,7 @@ class GccCompiler(Compiler):
     # q - Quick append file to the end of the archive
     # c - Don't warn if we had to create a new file
     # s - Build an index
-    return [self.__arExe, '-qcs']
+    return [self._arExe, '-qcs']
 
   def getLibraryCommand(self, target, sources):
     args = list(self._getCommonLibraryArgs())
@@ -360,7 +433,7 @@ class GccCompiler(Compiler):
 
   @memoise
   def _getCommonLinkArgs(self, dll):
-    args = [self.__gccExe]
+    args = [self._gccExe]
     if dll:
       args.extend(self.moduleFlags)
     else:
@@ -411,7 +484,7 @@ class WindowsGccCompiler(GccCompiler):
   
   objectSuffix = '.obj'
   libraryPrefixSuffixes = [('', '.lib'), ('lib', '.a')]
-  moduleSuffix = '.dll'
+  modulePrefixSuffixes = [('', '.dll'), ('lib', '.so')]
   programSuffix = '.exe'
   resourceSuffix = '.obj'
 
@@ -422,8 +495,16 @@ class WindowsGccCompiler(GccCompiler):
     gccExe=None,
     rcExe=None,
     binPaths=None,
+    version=None,
     ):
-    GccCompiler.__init__(self, configuration, arExe, gccExe, binPaths)
+    GccCompiler.__init__(
+      self,
+      configuration=configuration,
+      arExe=arExe,
+      gccExe=gccExe,
+      binPaths=binPaths,
+      version=version,
+      )
     self.__rcExe = rcExe
     
   @memoise
@@ -468,18 +549,88 @@ class WindowsGccCompiler(GccCompiler):
   
 class MacGccCompiler(GccCompiler):
 
+  modulePrefixSuffixes = [('lib', '.dylib')]
+
+  @memoise
+  def _getCommonLibraryArgs(self):
+    return [self._libtoolExe]
+  
+  def getLibraryCommand(self, target, sources):
+    args = list(self._getCommonLibraryArgs())
+    args.append('-static')
+    args.extend(['-o', target])
+    args.extend(sources)
+    
+    @makeCommand(args)
+    def archive():
+      cake.filesys.remove(target)
+      self._runProcess(args, target)
+
+    @makeCommand("lib-scan")
+    def scan():
+      # TODO: Add dependencies on DLLs used by ar.exe
+      return [args[0]] + sources
+
+    return archive, scan
+    
   @memoise
   def _getCommonLinkArgs(self, dll):
-    args = GccCompiler._getCommonLinkArgs(self, dll)
-
+    args = [self._gccExe]
+    if dll:
+      args.extend(self.moduleFlags)
+    else:
+      args.extend(self.programFlags)
+    
+    args.extend('-L' + p for p in reversed(self.libraryPaths))
+ 
     if dll:
       args.append('-shared')
-
+      args.append('-dynamiclib')
+      args.extend(["-current_version", "1.0"])
+      args.extend(["-compatibility_version", "1.0"])
+ 
     return args
   
+  def _getLinkCommands(self, target, sources, dll):
+    
+    objects, libraries = self._resolveObjects()
+    
+    args = list(self._getCommonLinkArgs(dll))
+    
+    # Should only need this if we're linking with any shared
+    # libs, but I don't know how to detect that
+    args.extend(["-Wl,-rpath,@loader_path/."])
+      
+    args.extend(sources)
+    args.extend(objects)
+    args.extend('-l' + l for l in libraries)    
+    args.extend(['-o', target])
+    
+    if dll and self.installName is not None:
+      args.extend(["-install_name", self.installName])
+
+    if self.outputMapFile:
+      args.append('-map=' + cake.path.stripExtension(target) + '.map')
+
+    @makeCommand(args)
+    def link():
+      if self.importLibrary:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
+      self._runProcess(args, target)      
+
+    @makeCommand("link-scan")
+    def scan():
+      # TODO: Add dependencies on DLLs used by gcc.exe
+      # Also add dependencies on system libraries, perhaps
+      #  by parsing the output of ',Wl,--trace'
+      return [args[0]] + sources
+
+    return link, scan
+
 class Ps3GccCompiler(GccCompiler):
 
-  moduleSuffix = '.sprx'
+  modulePrefixSuffixes = [('', '.sprx')]
   programSuffix = '.self'
 
   @memoise

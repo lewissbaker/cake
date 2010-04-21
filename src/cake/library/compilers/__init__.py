@@ -515,6 +515,11 @@ class Compiler(Tool):
     MSVC: /IMPLIB
   @type: string or None
   """
+  installName = None
+  """Set the dyld install_name for a shared library.
+  
+  @type: string or None
+  """
   embedManifest = None
   """Embed the manifest in the executable.
   
@@ -551,7 +556,7 @@ class Compiler(Tool):
   default prefix/suffix.
   @type: list of tuple(string, string)
   """
-  moduleSuffix = '.so'
+  modulePrefixSuffixes = [('lib', '.so')]
   """The suffix to use for module files.
 
   @type: string
@@ -897,8 +902,9 @@ class Compiler(Tool):
       
       # HACK: We should really be passing in the correct file name here
       if not cake.filesys.isFile(absSource):
-        source = cake.path.forceExtension(source, self.moduleSuffix)
-        absSource = cake.path.forceExtension(absSource, self.moduleSuffix)
+        prefix, suffix = self.modulePrefixSuffixes[0]
+        source = cake.path.forcePrefixSuffix(source, prefix, suffix)
+        absSource = configuration.abspath(source)
         
       target = cake.path.join(targetDir, cake.path.baseName(absSource))
       absTarget = configuration.abspath(target)
@@ -1024,7 +1030,7 @@ class Compiler(Tool):
       
     return compiler._object(target, source, pch, forceExtension)
     
-  def _object(self, target, source, pch=None, forceExtension=True):
+  def _object(self, target, source, pch=None, forceExtension=True, shared=False):
     
     if forceExtension:
       target = cake.path.forceExtension(target, self.objectSuffix)
@@ -1042,8 +1048,8 @@ class Compiler(Tool):
         prerequisiteTasks.append(pchTask)
       
       objectTask = self.engine.createTask(
-        lambda t=target, s=source, p=pch, c=self:
-          c.buildObject(t, s, p)
+        lambda t=target, s=source, p=pch, h=shared, c=self:
+          c.buildObject(t, s, p, h)
         )
       objectTask.startAfter(prerequisiteTasks, threadPool=self.engine.scriptThreadPool)
     else:
@@ -1092,6 +1098,40 @@ class Compiler(Tool):
         targetPath,
         source,
         pch=pch,
+        ))
+    return results
+
+  def sharedObjects(self, targetDir, sources, pch=None, **kwargs):
+    """Build a collection of objects used by a shared library/module to a target directory.
+
+    @param targetDir: Path to the target directory where the built objects
+    will be placed.
+    @type targetDir: string
+
+    @param sources: A list of source files to compile to object files.
+    @type sources: sequence of string or FileTarget objects
+
+    @param pch: A precompiled header file to use. This file can be built
+    with the pch() function.
+    @type pch: L{PchTarget}
+
+    @return: A list of FileTarget objects, one for each object being
+    built.
+    """
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+
+    results = []
+    for source in sources:
+      sourcePath, _ = getPathAndTask(source)
+      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
+      targetPath = cake.path.join(targetDir, sourceName)
+      results.append(compiler._object(
+        targetPath,
+        source,
+        pch=pch,
+        shared=True
         ))
     return results
     
@@ -1163,11 +1203,19 @@ class Compiler(Tool):
   def _module(self, target, sources, forceExtension=True):
     
     if forceExtension:
-      target = cake.path.forceExtension(target, self.moduleSuffix)
+      prefix, suffix = self.modulePrefixSuffixes[0]
+      target = cake.path.forcePrefixSuffix(target, prefix, suffix)
       if self.importLibrary:
         prefix, suffix = self.libraryPrefixSuffixes[0]
         self.importLibrary = cake.path.forcePrefixSuffix(
           self.importLibrary,
+          prefix,
+          suffix,
+          )
+      if self.installName:
+        prefix, suffix = self.modulePrefixSuffixes[0]
+        self.installName = cake.path.forcePrefixSuffix(
+          self.installName,
           prefix,
           suffix,
           )
@@ -1327,7 +1375,7 @@ class Compiler(Tool):
       env['PATH'] = os.path.pathsep.join(
         [env['PATH']] + self.__binPaths
         )
-      
+    
     if env['SYSTEMROOT']:
       env['PATH'] = os.path.pathsep.join([
         env['PATH'],
@@ -1547,7 +1595,7 @@ class Compiler(Tool):
     storeDependencyTask = self.engine.createTask(storeDependencyInfo)
     storeDependencyTask.startAfter(compileTask, immediate=True)
 
-  def buildObject(self, target, source, pch):
+  def buildObject(self, target, source, pch, shared):
     """Perform the actual build of an object.
     
     @param target: Path of the target object file.
@@ -1560,6 +1608,7 @@ class Compiler(Tool):
       target,
       source,
       pch,
+      shared
       )
 
     configuration = self.configuration
@@ -1778,7 +1827,7 @@ class Compiler(Tool):
     """
     self.engine.raiseError("Don't know how to compile %s\n" % source)
 
-  def getObjectCommands(self, target, source, pch):
+  def getObjectCommands(self, target, source, pch, shared):
     """Get the command-lines for compiling a source to a target.
     
     @return: A (compile, args, canCache) tuple where 'compile' is a function that

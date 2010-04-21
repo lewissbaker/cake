@@ -11,7 +11,7 @@ sources = script.cwd("source", [
   "integer.cpp",
   ])
 
-objects = compiler.objects(
+objects = compiler.sharedObjects(
   targetDir=env.expand("${BUILD}/usemodule/integer/obj"),
   sources=sources,
   )
@@ -19,5 +19,6 @@ objects = compiler.objects(
 module = compiler.module(
   target=env.expand("${BUILD}/usemodule/integer/lib/integer"),
   importLibrary=env.expand("${BUILD}/usemodule/integer/lib/integer"),
+  installName=env.expand("@rpath/integer"),
   sources=objects,
   )

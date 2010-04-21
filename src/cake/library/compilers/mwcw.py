@@ -225,7 +225,7 @@ class MwcwCompiler(Compiler):
     canBeCached = True
     return compile, args, canBeCached   
           
-  def getObjectCommands(self, target, source, pch):
+  def getObjectCommands(self, target, source, pch, shared):
     language = self.getLanguage(source)
    
     args = list(self._getCompileArgs(language))

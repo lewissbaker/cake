@@ -16,7 +16,7 @@ class DummyCompiler(Compiler):
   
   objectSuffix = '.obj'
   libraryPrefixSuffixes = [('', '.lib')]
-  moduleSuffix = '.dll'
+  modulePrefixSuffixes = [('', '.dll')]
   programSuffix = '.exe'
   pchSuffix = '.pch'
   
@@ -63,7 +63,7 @@ class DummyCompiler(Compiler):
     canBeCached = True
     return compile, compilerArgs, canBeCached
 
-  def getObjectCommands(self, target, source, pch):
+  def getObjectCommands(self, target, source, pch, shared):
 
     language = self.language
     if not language:

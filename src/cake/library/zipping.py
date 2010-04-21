@@ -338,10 +338,11 @@ class ZipTool(Tool):
     def doIt():
 
       # Build a list of files/dirs to zip
-      toZip = _getFilesToCompress(sourcePath, includeMatch, excludeMatch)
+      toZip = _getFilesToCompress(configuration, sourcePath, includeMatch, excludeMatch)
 
       # Figure out if we need to rebuild/append 
       toAppend, reasonToBuild = _shouldCompress(
+        configuration,
         sourcePath,
         target,
         toZip,

@@ -342,7 +342,7 @@ class MsvcCompiler(Compiler):
   
   objectSuffix = '.obj'
   libraryPrefixSuffixes = [('', '.lib')]
-  moduleSuffix = '.dll'
+  modulePrefixSuffixes = [('', '.dll')]
   programSuffix = '.exe'
   pchSuffix = '.pch'
   pchObjectSuffix = '.obj'
@@ -547,7 +547,7 @@ class MsvcCompiler(Compiler):
 
     return self._getObjectCommands(target, source, args, None)
     
-  def getObjectCommands(self, target, source, pch):
+  def getObjectCommands(self, target, source, pch, shared):
     language = self.getLanguage(source)
 
     args = list(self._getCompileCommonArgs(language))

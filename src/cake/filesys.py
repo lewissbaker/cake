@@ -82,14 +82,12 @@ def copyFile(source, target):
   """Copy a file from source path to target path.
   
   Overwrites the target path if it exists and is writeable.
-  Create's the target directory if it doesn't exist.
   
   @param source: The path of the source file.
   @type source: string
   @param target: The path of the target file.
   @type target: string
   """
-  makeDirs(os.path.dirname(target)) 
   shutil.copyfile(source, target)
 
 def renameFile(source, target):

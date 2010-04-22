@@ -24,6 +24,7 @@ import cake.tools
 import cake.task
 import cake.path
 import cake.hash
+import cake.filesys
 import cake.threadpool
 
 class BuildError(Exception):

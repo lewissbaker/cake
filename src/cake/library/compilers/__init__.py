@@ -643,15 +643,6 @@ class Compiler(Tool):
     self.cFlags.append(flag)
     self._clearCache()
     
-  def addCFlags(self, flags):
-    """Add a list of flags to be used during .c compilation.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.cFlags.extend(flags)
-    self._clearCache()
-
   def addCppFlag(self, flag):
     """Add a flag to be used during .cpp compilation.
     
@@ -659,15 +650,6 @@ class Compiler(Tool):
     @type flag: string
     """
     self.cppFlags.append(flag)
-    self._clearCache()
-    
-  def addCppFlags(self, flags):
-    """Add a list of flags to be used during .cpp compilation.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.cppFlags.extend(flags)
     self._clearCache()
 
   def addMFlag(self, flag):
@@ -677,15 +659,6 @@ class Compiler(Tool):
     @type flag: string
     """
     self.mFlags.append(flag)
-    self._clearCache()
-    
-  def addMFlags(self, flags):
-    """Add a list of flags to be used during Objective C compilation.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.mFlags.extend(flags)
     self._clearCache()
 
   def addModuleFlag(self, flag):
@@ -697,15 +670,6 @@ class Compiler(Tool):
     self.moduleFlags.append(flag)
     self._clearCache()
     
-  def addModuleFlags(self, flags):
-    """Add a list of flags to be used during linking of modules.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.moduleFlags.extend(flags)
-    self._clearCache()
-
   def addProgramFlag(self, flag):
     """Add a flag to be used during linking of programs.
 
@@ -715,15 +679,6 @@ class Compiler(Tool):
     self.programFlags.append(flag)
     self._clearCache()
     
-  def addProgramFlags(self, flags):
-    """Add a list of flags to be used during linking of programs.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.programFlags.extend(flags)
-    self._clearCache()
-
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
     
@@ -809,7 +764,7 @@ class Compiler(Tool):
     The iterator will return libraries in the order they
     should be searched.
     """
-    return reversed(self.libraries)
+    return self.libraries
   
   def addLibraryPath(self, path):
     """Add a path to the list of library search paths.
@@ -822,14 +777,14 @@ class Compiler(Tool):
     """
     self.libraryPaths.append(path)
     self._clearCache()
-    
+  
   def getLibraryPaths(self):
     """Get an iterator for library paths.
     
     The iterator will return library paths in the order they
     should be searched.
     """
-    return reversed(self.libraryPaths)
+    return self.libraryPaths
 
   def addLibraryScript(self, path):
     """Add a script to be executed before performing a link.

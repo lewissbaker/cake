@@ -42,9 +42,9 @@ class FileSystemTool(Tool):
       if engine.forceBuild:
         reasonToBuild = "rebuild has been forced"
       elif not cake.filesys.isFile(targetAbsPath):
-        reasonToBuild = "'%s' does not exist" % target
+        reasonToBuild = "it doesn't exist"
       elif engine.getTimestamp(sourceAbsPath) > engine.getTimestamp(targetAbsPath):
-        reasonToBuild = "'%s' is newer than '%s'" % (sourcePath, target)
+        reasonToBuild = "'%s' has been changed" % sourcePath
       else:
         # up-to-date
         return
@@ -89,13 +89,6 @@ class FileSystemTool(Tool):
       target = cake.path.join(targetDir, cake.path.baseName(sourcePath))
       results.append(self.copyFile(source=s, target=target))
     return results
-  
-  def copyDirectory(self, source, target, pattern=None):
-    """Copy the directory's contents to the target directory,
-    creating the target directory if needed.
 
-    Not yet Implemented!
-    """
-    raise NotImplementedError()
   
   

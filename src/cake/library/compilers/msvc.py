@@ -971,7 +971,7 @@ class MsvcCompiler(Compiler):
       return [self.__linkExe] + sources + objects + self._scanForLibraries(libraries)
     
     if self.embedManifest:
-      if self.useIncrementalLinking is None or self.useIncrementalLinking:
+      if self.useIncrementalLinking:
         return linkWithManifestIncremental, scan
       else:
         return linkWithManifestNonIncremental, scan

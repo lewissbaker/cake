@@ -609,33 +609,6 @@ class Compiler(Tool):
     self.modules = []
     self.__binPaths = binPaths
 
-  def _getObjectsInLibrary(self, path):
-    """Get a list of the paths of object files in the specified library.
-    
-    @param path: Path of the library previously built by a call to library().
-    
-    @return: A tuple of the paths of objects in the library.
-    """
-    path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = self.__libraryObjects.get(self.configuration, None)
-    if libraryObjects:
-      return libraryObjects.get(path, None)
-    else:
-      return None
-
-  def _setObjectsInLibrary(self, path, objectPaths):
-    """Set the list of paths of object files in the specified library.
-    
-    @param path: Path of the library previously built by a call to library().
-    @type path: string
-    
-    @param objectPaths: A list of the objects built by a call to library().
-    @type objectPaths: list of strings
-    """
-    path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = self.__libraryObjects.setdefault(self.configuration, {})
-    libraryObjects[path] = tuple(objectPaths)
-
   def addCFlag(self, flag):
     """Add a flag to be used during .c compilation.
     
@@ -1439,13 +1412,13 @@ class Compiler(Tool):
       if processStdout is not None:
         processStdout(stdoutText)
       else:
-        self.outputStdout(stdoutText)
+        self._outputStdout(stdoutText)
     
     if stderrText:
       if processStderr is not None:
         processStderr(stderrText)
       else:
-        self.outputStderr(stderrText)
+        self._outputStderr(stderrText)
       
     if processExitCode is not None:
       processExitCode(exitCode)
@@ -1454,7 +1427,7 @@ class Compiler(Tool):
         "%s: failed with exit code %i\n" % (args[0], exitCode)
         )
   
-  def outputStdout(self, text):
+  def _outputStdout(self, text):
     # Output stdout to stderr as well. Some compilers will output errors
     # to stderr, and all unexpected output should be treated as an error,
     # or handled/output by client code.
@@ -1464,11 +1437,38 @@ class Compiler(Tool):
     sys.stderr.write(text.encode("latin1"))
     sys.stderr.flush()
 
-  def outputStderr(self, text):
+  def _outputStderr(self, text):
     text = text.replace("\r\n", "\n")
     sys.stderr.write(text.encode("latin1"))
     sys.stderr.flush()
-  
+
+  def _getObjectsInLibrary(self, path):
+    """Get a list of the paths of object files in the specified library.
+    
+    @param path: Path of the library previously built by a call to library().
+    
+    @return: A tuple of the paths of objects in the library.
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = self.__libraryObjects.get(self.configuration, None)
+    if libraryObjects:
+      return libraryObjects.get(path, None)
+    else:
+      return None
+
+  def _setObjectsInLibrary(self, path, objectPaths):
+    """Set the list of paths of object files in the specified library.
+    
+    @param path: Path of the library previously built by a call to library().
+    @type path: string
+    
+    @param objectPaths: A list of the objects built by a call to library().
+    @type objectPaths: list of strings
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = self.__libraryObjects.setdefault(self.configuration, {})
+    libraryObjects[path] = tuple(objectPaths)
+      
   def _resolveObjects(self):
     """Resolve the list of library names to object file paths.
     

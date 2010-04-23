@@ -267,7 +267,13 @@ class GccCompiler(Compiler):
       return '\n'.join(outputLines) + '\n'
     else:
       return ''
+  
+  def _outputStdout(self, text):
+    Compiler._outputStdout(self, self._formatMessage(text))
 
+  def _outputStderr(self, text):
+    Compiler._outputStderr(self, self._formatMessage(text))
+    
   @memoise
   def _getCompileArgs(self, language, shared):
     args = [self._gccExe, '-c', '-MD']
@@ -334,7 +340,7 @@ class GccCompiler(Compiler):
     
     return args
 
-  def getLanguage(self, path):
+  def _getLanguage(self, path):
     language = self.language
     if not language:
       language = {
@@ -344,7 +350,7 @@ class GccCompiler(Compiler):
     return language
   
   def getPchCommands(self, target, source, header, object):
-    language = self.getLanguage(source)
+    language = self._getLanguage(source)
     
     # Pch must be compiled as a header, eg: 'c++-header'
     if not language.endswith('-header'):
@@ -374,7 +380,7 @@ class GccCompiler(Compiler):
     return compile, args, canBeCached
   
   def getObjectCommands(self, target, source, pch, shared):
-    language = self.getLanguage(source)
+    language = self._getLanguage(source)
     args = list(self._getCompileArgs(language, shared))
   
     if pch is not None:

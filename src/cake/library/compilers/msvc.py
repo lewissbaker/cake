@@ -518,7 +518,7 @@ class MsvcCompiler(Compiler):
     else:
       return False
     
-  def getLanguage(self, path):
+  def _getLanguage(self, path):
     language = self.language
     if language is None:
       if path[-2:].lower() == '.c':
@@ -528,7 +528,7 @@ class MsvcCompiler(Compiler):
     return language
 
   def getPchCommands(self, target, source, header, object):
-    language = self.getLanguage(source)
+    language = self._getLanguage(source)
     
     args = list(self._getCompileCommonArgs(language))
     
@@ -548,7 +548,7 @@ class MsvcCompiler(Compiler):
     return self._getObjectCommands(target, source, args, None)
     
   def getObjectCommands(self, target, source, pch, shared):
-    language = self.getLanguage(source)
+    language = self._getLanguage(source)
 
     args = list(self._getCompileCommonArgs(language))
     
@@ -609,7 +609,7 @@ class MsvcCompiler(Compiler):
             outputLines.append(line)
         
         if outputLines:
-          self.outputStdout("\n".join(outputLines) + "\n")
+          self._outputStdout("\n".join(outputLines) + "\n")
 
       self._runProcess(
         args=args,
@@ -868,7 +868,7 @@ class MsvcCompiler(Compiler):
             outputLines = outputLines[2:]
             
           if outputLines:
-            self.outputStdout("\n".join(outputLines) + "\n")
+            self._outputStdout("\n".join(outputLines) + "\n")
         
         self._runProcess(
           args=rcArgs,

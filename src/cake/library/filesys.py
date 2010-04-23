@@ -29,8 +29,6 @@ class FileSystemTool(Tool):
     if not isinstance(target, basestring):
       raise TypeError("target must be a string")
     
-    sourcePath, sourceTask = getPathAndTask(source)
-   
     def doCopy():
       
       abspath = self.configuration.abspath
@@ -62,9 +60,14 @@ class FileSystemTool(Tool):
         engine.raiseError("%s: %s\n" % (target, str(e)))
 
       engine.notifyFileChanged(targetAbsPath)
-      
-    copyTask = self.engine.createTask(doCopy)
-    copyTask.startAfter(sourceTask)
+    
+    if self.enabled:  
+      sourcePath, sourceTask = getPathAndTask(source)
+
+      copyTask = self.engine.createTask(doCopy)
+      copyTask.startAfter(sourceTask)
+    else:
+      copyTask = None
 
     return FileTarget(path=target, task=copyTask)
 

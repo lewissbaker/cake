@@ -243,8 +243,6 @@ class ZipTool(Tool):
     if not isinstance(targetDir, basestring):
       raise TypeError("targetDir must be a string")
 
-    sourcePath, sourceTask = getPathAndTask(source)
-
     engine = self.engine
     configuration = self.configuration
     
@@ -291,8 +289,14 @@ class ZipTool(Tool):
       finally:
         file.close()
 
-    task = engine.createTask(doIt)
-    task.startAfter(sourceTask)
+    if self.enabled:
+      sourcePath, sourceTask = getPathAndTask(source)
+
+      task = engine.createTask(doIt)
+      task.startAfter(sourceTask)
+    else:
+      task = None
+
     return task
 
   def compress(
@@ -336,8 +340,6 @@ class ZipTool(Tool):
     engine = self.engine
     configuration = self.configuration
 
-    sourcePath, sourceTask = getPathAndTask(source)
-    
     def doIt():
 
       # Build a list of files/dirs to zip
@@ -387,7 +389,13 @@ class ZipTool(Tool):
           f.close()
         cake.filesys.renameFile(absTargetTmpPath, absTargetPath)
 
-    task = engine.createTask(doIt)
-    task.startAfter(sourceTask)
+    if self.enabled:
+      sourcePath, sourceTask = getPathAndTask(source)
+
+      task = engine.createTask(doIt)
+      task.startAfter(sourceTask)
+    else:
+      task = None
+    
     return task
     

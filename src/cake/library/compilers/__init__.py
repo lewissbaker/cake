@@ -595,8 +595,10 @@ class Compiler(Tool):
     self.cFlags = []
     self.cppFlags = []
     self.mFlags = []
+    self.libraryFlags = []
     self.moduleFlags = []
     self.programFlags = []
+    self.resourceFlags = []
     self.includePaths = []
     self.defines = []
     self.forcedIncludes = []
@@ -661,6 +663,15 @@ class Compiler(Tool):
     self.mFlags.append(flag)
     self._clearCache()
 
+  def addLibraryFlag(self, flag):
+    """Add a flag to be used during library compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.libraryFlags.append(flag)
+    self._clearCache()
+    
   def addModuleFlag(self, flag):
     """Add a flag to be used during linking of modules.
     
@@ -677,6 +688,15 @@ class Compiler(Tool):
     @type flag: string
     """
     self.programFlags.append(flag)
+    self._clearCache()
+
+  def addResourceFlag(self, flag):
+    """Add a flag to be used during resource compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.resourceFlags.append(flag)
     self._clearCache()
     
   def addIncludePath(self, path):

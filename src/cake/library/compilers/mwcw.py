@@ -261,6 +261,7 @@ class MwcwCompiler(Compiler):
   def _getCommonLibraryArgs(self):
     args = [self.__ldExe, '-library']
     args.extend(self._getCommonArgs())
+    args.extend(self.libraryFlags)
     return args
   
   def getLibraryCommand(self, target, sources):

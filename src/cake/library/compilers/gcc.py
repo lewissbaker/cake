@@ -412,7 +412,9 @@ class GccCompiler(Compiler):
     # q - Quick append file to the end of the archive
     # c - Don't warn if we had to create a new file
     # s - Build an index
-    return [self._arExe, '-qcs']
+    args = [self._arExe, '-qcs']
+    args.extend(self.libraryFlags)
+    return args
 
   def getLibraryCommand(self, target, sources):
     args = list(self._getCommonLibraryArgs())
@@ -522,10 +524,9 @@ class WindowsGccCompiler(GccCompiler):
   @memoise
   def _getCommonResourceArgs(self):
     args = [self.__rcExe]
-    
+    args.extend(self.resourceFlags)
     args.extend("-D" + define for define in self.getDefines())
     args.extend("-I" + path for path in self.getIncludePaths())
-    
     return args
 
   def getResourceCommand(self, target, source):
@@ -553,7 +554,9 @@ class MacGccCompiler(GccCompiler):
 
   @memoise
   def _getCommonLibraryArgs(self):
-    return [self._libtoolExe]
+    args = [self._libtoolExe]
+    args.extend(self.libraryFlags)
+    return args
   
   def getLibraryCommand(self, target, sources):
     args = list(self._getCommonLibraryArgs())

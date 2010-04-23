@@ -662,6 +662,8 @@ class MsvcCompiler(Compiler):
     if self.warningsAsErrors:
       args.append('/WX')
 
+    args.extend(self.libraryFlags)
+
     return args
       
   def getLibraryCommand(self, target, sources):
@@ -981,10 +983,9 @@ class MsvcCompiler(Compiler):
   @memoise
   def _getCommonResourceArgs(self):
     args = [self.__rcExe, '/nologo']
-    
+    args.extend(self.resourceFlags)
     args.extend("/d" + define for define in self.getDefines())
     args.extend("/i" + path for path in self.getIncludePaths())
-    
     return args
 
   def getResourceCommand(self, target, source):

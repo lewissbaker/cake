@@ -889,7 +889,7 @@ class Compiler(Tool):
 
     tasks = []
     for moduleScript in self.moduleScripts:
-      tasks.append(configuration.execute(moduleScript, script.variant))
+      tasks.append(configuration.execute(moduleScript, script.variant).task)
 
     def doCopy(source, targetDir):
       # Try without and with the extension
@@ -1184,7 +1184,7 @@ class Compiler(Tool):
   
       execute = self.configuration.execute
       for libraryScript in self.libraryScripts:
-        tasks.append(execute(libraryScript, variant))
+        tasks.append(execute(libraryScript, variant).task)
       
       moduleTask = self.engine.createTask(
         lambda t=target, s=paths, c=self:
@@ -1243,7 +1243,7 @@ class Compiler(Tool):
       
       execute = self.configuration.execute
       for libraryScript in self.libraryScripts:
-        tasks.append(execute(libraryScript, variant))
+        tasks.append(execute(libraryScript, variant).task)
       
       programTask = self.engine.createTask(
         lambda t=target, s=paths, c=self:

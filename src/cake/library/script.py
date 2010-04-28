@@ -30,6 +30,80 @@ class ScriptTool(Tool):
     """
     return Script.getCurrent().variant
 
+  def setResult(self, **kwargs):
+    """Export a result from this script that other scripts can import.
+    
+    Other scripts can use getResult(script, name) to get the result
+    exported by the other script calling setResult(name=result).
+    """
+    Script.getCurrent().setResult(**kwargs)
+  
+  def getResult(self, script, name):
+    """Get a placeholder value that will yield the result of another
+    script once that other script has finished executing.
+    """
+    return self.get(script).getResult(name)
+  
+  def get(self, script, keywords={}, useContext=None, bootScript=None, bootScriptName=None):
+    """Get another script to use in referencing targets.
+    
+    @param script: Path of the script to load.
+    @type script: string
+    
+    @param keywords: A set of keywords used to find the variant the script
+    will be executed with. The variant is looked up in the script's configuration.
+    @type keywords: dictionary of string -> string
+    
+    @param useContext: If False or if None and either bootScript or bootScriptName
+    are not None then lookup the corresponding boot script starting from the
+    script's path, if True then use the current configuration/variant.
+    @type useContext: bool or None
+    
+    @param bootScript: The path of the boot script to use to execute the script.
+    Ignored if useContext is True.
+    @type bootScript: string or None
+    
+    @param bootScriptName: If not None and bootScript is None then find the
+    boot script with this name starting the search at the script's path.
+    Ignored if useContext is True.
+    @type bootScriptName: string or None
+    """
+  
+    if not isinstance(script, basestring):
+      raise ValueError("'script' must be a string")
+  
+    if useContext is None:
+      useContext = bootScript is None and bootScriptName is None
+  
+    if useContext:
+      # Use the current configuration and lookup the variant relative
+      # to the current variant.
+      baseVariant = Script.getCurrent().variant 
+      def execute():
+        variant = self.configuration.findVariant(keywords, baseVariant=baseVariant)
+        return self.configuration.execute(path=script, variant=variant)
+    else:
+      # Re-evaluate the configuration to execute the script with.
+      # Uses the keywords specified to find the variant in the variants
+      # defined in that configuration.
+      def execute():
+        path = self.configuration.abspath(script)
+        if bootScript is None:
+          configuration = self.engine.findConfiguration(
+            path=path,
+            bootScriptName=bootScriptName,
+            )
+        else:
+          configuration = self.engine.getConfiguration(
+            path=self.configuration.abspath(bootScript),
+            )
+        variant = configuration.findVariant(keywords)
+        return configuration.execute(path=path, variant=variant)
+      
+    return ScriptProxy(execute)
+  
+
+
   def cwd(self, *args):
     """Return the path prefixed with the this script's directory.
     
@@ -74,9 +148,10 @@ class ScriptTool(Tool):
     @param scripts: A path or sequence of paths of scripts to execute.
     @type scripts: string or sequence of string
 
-    @return: A task or sequence of tasks that can be used to determine
-      when all tasks created by the script have finished executing.
-    @rtype: L{Task} or C{list} of L{Task}
+    @return: A Script object or sequence of Script objects that can be used
+    to determine what scripts will be executed. The script's task will
+    complete when the script has finished executing.
+    @rtype: L{Script} or C{list} of L{Script}
     """
     script = Script.getCurrent()
     configuration = script.configuration
@@ -86,67 +161,6 @@ class ScriptTool(Tool):
       return execute(scripts, variant)
     else:
       return [execute(path, variant) for path in scripts]
-
-  def executeNoContext(self, scripts, bootScript=None, bootScriptName=None, **keywords):
-    """Execute another script as a background task.
-    
-    Does not use any context from the current script's variant or
-    configuration.
-    
-    @param scripts: Paths of scripts to execute.
-    @type scripts: string or list of string
-    
-    @param bootScript: Path of the boot script to execute these scripts
-    with or None to find the boot script for each script.
-    @type bootScript: string or None
-    
-    @param bootScriptName: If bootScript is None then this specifies
-    the name of the boot script to search for. If None then use the
-    default boot script name specified by the Engine.
-    @type bootScriptName: string or None
-    
-    @param keywords: Collection of keywords that specify the variant
-    to execute the script with.
-    """
-    
-    script = Script.getCurrent()
-    engine = script.engine
-    if bootScript is None:
-      # Calculate the boot script for each script path
-      if isinstance(scripts, basestring):
-        path = self.abspath(scripts)
-        configuration = engine.findConfiguration(
-          path=path,
-          bootScriptName=bootScriptName,
-          )
-        variant = configuration.findVariant(keywords)
-        result = configuration.execute(scripts, variant)
-      else:
-        result = []
-        abspath = self.abspath
-        for path in scripts:
-          path = abspath(path)
-          configuration = engine.findConfiguration(
-            path=path,
-            bootScriptName=bootScriptName,
-            )
-          variant = configuration.findVariant(keywords)
-          result.append(configuration.execute(path, variant))
-    else:
-      # Calculate boot script once and reuse for each script path
-      abspath = self.abspath
-      bootScript = abspath(bootScript)
-      configuration = engine.getConfiguration(bootScript)
-      variant = configuration.findVariant(keywords)
-      execute = configuration.execute
-      if isinstance(scripts, basestring):
-        result = execute(abspath(scripts), variant)
-      else:
-        result = []
-        for path in scripts:
-          result.append(execute(abspath(path), variant))
-          
-    return result
 
   def run(self, func, args=None, targets=None, sources=[]):
     """Execute the specified python function as a task.
@@ -201,3 +215,63 @@ class ScriptTool(Tool):
       return [FileTarget(path=t, task=task) for t in targets]
     else:
       return task
+
+class ScriptProxy(object):
+  """A proxy that can be used to perform actions on a particular
+  script.
+  """
+ 
+  def __init__(self, execute):
+    self.__execute = execute
+
+  def execute(self):
+    """Start the execution of the script if it hasn't already been started.
+    
+    The script will complete execution at some point in the future.
+    
+    @return: The Script object that will be executed.
+    """
+    return self.__execute()
+  
+  def getResult(self, name):
+    """Get a placeholder for the result defined by this script when it is
+    executed.
+    
+    The script will be executed if the result is ever required.
+    """
+    return ScriptResult(self.__execute, name)
+
+class ScriptResult(object):
+  """A placeholder that can be used to reference a result of another
+  script that may not be available yet.
+  
+  The result will be available when the task has completed successfully.
+  """
+  
+  __slots__ = ['__execute', '__script', '__name']
+  
+  def __init__(self, execute, name):
+    self.__execute = execute
+    self.__script = None
+    self.__name = name
+    
+  @property
+  def script(self):
+    """The Script that will be executed.
+    """
+    script = self.__script
+    if script is None:
+      script = self.__script = self.__execute()
+      assert isinstance(script, Script)
+    return script
+    
+  @property
+  def task(self):
+    """The script's task.
+    """
+    return self.script.task
+
+  @property
+  def result(self):
+    assert self.task.completed
+    return self.__script.getResult(self.__name)

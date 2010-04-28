@@ -405,7 +405,7 @@ class MsvcCompiler(Compiler):
         variant = Script.getCurrent().variant
         execute = self.configuration.execute
         for path in self.forcedUsingScripts:
-          tasks.append(execute(path, variant))
+          tasks.append(execute(path, variant).task)
           
       tasks.extend(getPathsAndTasks(self.forcedUsings)[1])
     

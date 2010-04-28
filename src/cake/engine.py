@@ -266,7 +266,7 @@ class Engine(object):
 
     tasks = []
     for variant in configuration.findDefaultVariants(keywords):
-      task = configuration.execute(path, variant)
+      task = configuration.execute(path, variant).task
       tasks.append(task)
       
     if not tasks:
@@ -555,6 +555,7 @@ class Script(object):
     self.variant = variant
     self.engine = engine
     self.task = task
+    self._results = {}
     if parent is None:
       self.root = self
       self._included = {self.path : self}
@@ -584,6 +585,18 @@ class Script(object):
       return current.root
     else:
       return None
+
+  def setResult(self, **kwargs):
+    """Return a set of named values from the script execution.
+    """
+    self._results.update(kwargs)
+
+  def getResult(self, name):
+    """Get the named result from the script.
+    
+    @raise KeyError: If the value has not been returned or is not available yet.
+    """
+    return self._results[name]
 
   def cwd(self, *args):
     """Return the path prefixed with the current script's directory.
@@ -777,6 +790,10 @@ class Configuration(object):
     
     @param path: Path of the build script.
     @param variant: The variant to execute the script with.
+    
+    @return: The Script object representing the script that will
+    be executed. Use the returned script's .task to wait for the
+    script to finish executing.
     """
     absPath = self.abspath(path)
 
@@ -832,7 +849,7 @@ class Configuration(object):
     finally:
       self._executedLock.release()
 
-    return task
+    return script
 
   def createDependencyInfo(self, targets, args, dependencies, calculateDigests=False):
     """Construct a new DependencyInfo object.

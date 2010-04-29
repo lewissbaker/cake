@@ -29,8 +29,6 @@ class FileSystemTool(Tool):
     if not isinstance(target, basestring):
       raise TypeError("target must be a string")
     
-    sourcePath, sourceTask = getPathAndTask(source)
-   
     def doCopy():
       
       abspath = self.configuration.abspath
@@ -42,9 +40,9 @@ class FileSystemTool(Tool):
       if engine.forceBuild:
         reasonToBuild = "rebuild has been forced"
       elif not cake.filesys.isFile(targetAbsPath):
-        reasonToBuild = "'%s' does not exist" % target
+        reasonToBuild = "it doesn't exist"
       elif engine.getTimestamp(sourceAbsPath) > engine.getTimestamp(targetAbsPath):
-        reasonToBuild = "'%s' is newer than '%s'" % (sourcePath, target)
+        reasonToBuild = "'%s' has been changed" % sourcePath
       else:
         # up-to-date
         return
@@ -56,14 +54,20 @@ class FileSystemTool(Tool):
       engine.logger.outputInfo("Copying %s to %s\n" % (sourcePath, target))
       
       try:
+        cake.filesys.makeDirs(cake.path.dirName(targetAbsPath))
         cake.filesys.copyFile(sourceAbsPath, targetAbsPath)
       except EnvironmentError, e:
         engine.raiseError("%s: %s\n" % (target, str(e)))
 
       engine.notifyFileChanged(targetAbsPath)
-      
-    copyTask = self.engine.createTask(doCopy)
-    copyTask.startAfter(sourceTask)
+    
+    if self.enabled:  
+      sourcePath, sourceTask = getPathAndTask(source)
+
+      copyTask = self.engine.createTask(doCopy)
+      copyTask.startAfter(sourceTask)
+    else:
+      copyTask = None
 
     return FileTarget(path=target, task=copyTask)
 
@@ -88,13 +92,6 @@ class FileSystemTool(Tool):
       target = cake.path.join(targetDir, cake.path.baseName(sourcePath))
       results.append(self.copyFile(source=s, target=target))
     return results
-  
-  def copyDirectory(self, source, target, pattern=None):
-    """Copy the directory's contents to the target directory,
-    creating the target directory if needed.
 
-    Not yet Implemented!
-    """
-    raise NotImplementedError()
   
   

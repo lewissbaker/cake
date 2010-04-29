@@ -342,7 +342,7 @@ class MsvcCompiler(Compiler):
   
   objectSuffix = '.obj'
   libraryPrefixSuffixes = [('', '.lib')]
-  moduleSuffix = '.dll'
+  modulePrefixSuffixes = [('', '.dll')]
   programSuffix = '.exe'
   pchSuffix = '.pch'
   pchObjectSuffix = '.obj'
@@ -518,7 +518,7 @@ class MsvcCompiler(Compiler):
     else:
       return False
     
-  def getLanguage(self, path):
+  def _getLanguage(self, path):
     language = self.language
     if language is None:
       if path[-2:].lower() == '.c':
@@ -528,7 +528,7 @@ class MsvcCompiler(Compiler):
     return language
 
   def getPchCommands(self, target, source, header, object):
-    language = self.getLanguage(source)
+    language = self._getLanguage(source)
     
     args = list(self._getCompileCommonArgs(language))
     
@@ -547,8 +547,8 @@ class MsvcCompiler(Compiler):
 
     return self._getObjectCommands(target, source, args, None)
     
-  def getObjectCommands(self, target, source, pch):
-    language = self.getLanguage(source)
+  def getObjectCommands(self, target, source, pch, shared):
+    language = self._getLanguage(source)
 
     args = list(self._getCompileCommonArgs(language))
     
@@ -609,7 +609,7 @@ class MsvcCompiler(Compiler):
             outputLines.append(line)
         
         if outputLines:
-          self.outputStdout("\n".join(outputLines) + "\n")
+          self._outputStdout("\n".join(outputLines) + "\n")
 
       self._runProcess(
         args=args,
@@ -661,6 +661,8 @@ class MsvcCompiler(Compiler):
 
     if self.warningsAsErrors:
       args.append('/WX')
+
+    args.extend(self.libraryFlags)
 
     return args
       
@@ -866,7 +868,7 @@ class MsvcCompiler(Compiler):
             outputLines = outputLines[2:]
             
           if outputLines:
-            self.outputStdout("\n".join(outputLines) + "\n")
+            self._outputStdout("\n".join(outputLines) + "\n")
         
         self._runProcess(
           args=rcArgs,
@@ -971,7 +973,7 @@ class MsvcCompiler(Compiler):
       return [self.__linkExe] + sources + objects + self._scanForLibraries(libraries)
     
     if self.embedManifest:
-      if self.useIncrementalLinking is None or self.useIncrementalLinking:
+      if self.useIncrementalLinking:
         return linkWithManifestIncremental, scan
       else:
         return linkWithManifestNonIncremental, scan
@@ -981,10 +983,9 @@ class MsvcCompiler(Compiler):
   @memoise
   def _getCommonResourceArgs(self):
     args = [self.__rcExe, '/nologo']
-    
+    args.extend(self.resourceFlags)
     args.extend("/d" + define for define in self.getDefines())
     args.extend("/i" + path for path in self.getIncludePaths())
-    
     return args
 
   def getResourceCommand(self, target, source):

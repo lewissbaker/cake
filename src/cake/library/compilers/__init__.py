@@ -515,6 +515,11 @@ class Compiler(Tool):
     MSVC: /IMPLIB
   @type: string or None
   """
+  installName = None
+  """Set the dyld install_name for a shared library.
+  
+  @type: string or None
+  """
   embedManifest = None
   """Embed the manifest in the executable.
   
@@ -551,7 +556,7 @@ class Compiler(Tool):
   default prefix/suffix.
   @type: list of tuple(string, string)
   """
-  moduleSuffix = '.so'
+  modulePrefixSuffixes = [('lib', '.so')]
   """The suffix to use for module files.
 
   @type: string
@@ -590,8 +595,10 @@ class Compiler(Tool):
     self.cFlags = []
     self.cppFlags = []
     self.mFlags = []
+    self.libraryFlags = []
     self.moduleFlags = []
     self.programFlags = []
+    self.resourceFlags = []
     self.includePaths = []
     self.defines = []
     self.forcedIncludes = []
@@ -602,33 +609,6 @@ class Compiler(Tool):
     self.modules = []
     self.__binPaths = binPaths
 
-  def _getObjectsInLibrary(self, path):
-    """Get a list of the paths of object files in the specified library.
-    
-    @param path: Path of the library previously built by a call to library().
-    
-    @return: A tuple of the paths of objects in the library.
-    """
-    path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = self.__libraryObjects.get(self.configuration, None)
-    if libraryObjects:
-      return libraryObjects.get(path, None)
-    else:
-      return None
-
-  def _setObjectsInLibrary(self, path, objectPaths):
-    """Set the list of paths of object files in the specified library.
-    
-    @param path: Path of the library previously built by a call to library().
-    @type path: string
-    
-    @param objectPaths: A list of the objects built by a call to library().
-    @type objectPaths: list of strings
-    """
-    path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = self.__libraryObjects.setdefault(self.configuration, {})
-    libraryObjects[path] = tuple(objectPaths)
-
   def addCFlag(self, flag):
     """Add a flag to be used during .c compilation.
     
@@ -638,15 +618,6 @@ class Compiler(Tool):
     self.cFlags.append(flag)
     self._clearCache()
     
-  def addCFlags(self, flags):
-    """Add a list of flags to be used during .c compilation.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.cFlags.extend(flags)
-    self._clearCache()
-
   def addCppFlag(self, flag):
     """Add a flag to be used during .cpp compilation.
     
@@ -654,15 +625,6 @@ class Compiler(Tool):
     @type flag: string
     """
     self.cppFlags.append(flag)
-    self._clearCache()
-    
-  def addCppFlags(self, flags):
-    """Add a list of flags to be used during .cpp compilation.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.cppFlags.extend(flags)
     self._clearCache()
 
   def addMFlag(self, flag):
@@ -673,16 +635,16 @@ class Compiler(Tool):
     """
     self.mFlags.append(flag)
     self._clearCache()
+
+  def addLibraryFlag(self, flag):
+    """Add a flag to be used during library compilation.
     
-  def addMFlags(self, flags):
-    """Add a list of flags to be used during Objective C compilation.
-
-    @param flags: The flags to add.
-    @type flags: list of string
+    @param flag: The flag to add.
+    @type flag: string
     """
-    self.mFlags.extend(flags)
+    self.libraryFlags.append(flag)
     self._clearCache()
-
+    
   def addModuleFlag(self, flag):
     """Add a flag to be used during linking of modules.
     
@@ -692,15 +654,6 @@ class Compiler(Tool):
     self.moduleFlags.append(flag)
     self._clearCache()
     
-  def addModuleFlags(self, flags):
-    """Add a list of flags to be used during linking of modules.
-
-    @param flags: The flags to add.
-    @type flags: list of string
-    """
-    self.moduleFlags.extend(flags)
-    self._clearCache()
-
   def addProgramFlag(self, flag):
     """Add a flag to be used during linking of programs.
 
@@ -709,16 +662,16 @@ class Compiler(Tool):
     """
     self.programFlags.append(flag)
     self._clearCache()
+
+  def addResourceFlag(self, flag):
+    """Add a flag to be used during resource compilation.
     
-  def addProgramFlags(self, flags):
-    """Add a list of flags to be used during linking of programs.
-
-    @param flags: The flags to add.
-    @type flags: list of string
+    @param flag: The flag to add.
+    @type flag: string
     """
-    self.programFlags.extend(flags)
+    self.resourceFlags.append(flag)
     self._clearCache()
-
+    
   def addIncludePath(self, path):
     """Add an include path to the preprocessor search path.
     
@@ -817,7 +770,7 @@ class Compiler(Tool):
     """
     self.libraryPaths.append(path)
     self._clearCache()
-    
+  
   def getLibraryPaths(self):
     """Get an iterator for library paths.
     
@@ -897,8 +850,9 @@ class Compiler(Tool):
       
       # HACK: We should really be passing in the correct file name here
       if not cake.filesys.isFile(absSource):
-        source = cake.path.forceExtension(source, self.moduleSuffix)
-        absSource = cake.path.forceExtension(absSource, self.moduleSuffix)
+        prefix, suffix = self.modulePrefixSuffixes[0]
+        source = cake.path.forcePrefixSuffix(source, prefix, suffix)
+        absSource = configuration.abspath(source)
         
       target = cake.path.join(targetDir, cake.path.baseName(absSource))
       absTarget = configuration.abspath(target)
@@ -1024,7 +978,7 @@ class Compiler(Tool):
       
     return compiler._object(target, source, pch, forceExtension)
     
-  def _object(self, target, source, pch=None, forceExtension=True):
+  def _object(self, target, source, pch=None, forceExtension=True, shared=False):
     
     if forceExtension:
       target = cake.path.forceExtension(target, self.objectSuffix)
@@ -1042,8 +996,8 @@ class Compiler(Tool):
         prerequisiteTasks.append(pchTask)
       
       objectTask = self.engine.createTask(
-        lambda t=target, s=source, p=pch, c=self:
-          c.buildObject(t, s, p)
+        lambda t=target, s=source, p=pch, h=shared, c=self:
+          c.buildObject(t, s, p, h)
         )
       objectTask.startAfter(prerequisiteTasks, threadPool=self.engine.scriptThreadPool)
     else:
@@ -1092,6 +1046,40 @@ class Compiler(Tool):
         targetPath,
         source,
         pch=pch,
+        ))
+    return results
+
+  def sharedObjects(self, targetDir, sources, pch=None, **kwargs):
+    """Build a collection of objects used by a shared library/module to a target directory.
+
+    @param targetDir: Path to the target directory where the built objects
+    will be placed.
+    @type targetDir: string
+
+    @param sources: A list of source files to compile to object files.
+    @type sources: sequence of string or FileTarget objects
+
+    @param pch: A precompiled header file to use. This file can be built
+    with the pch() function.
+    @type pch: L{PchTarget}
+
+    @return: A list of FileTarget objects, one for each object being
+    built.
+    """
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+
+    results = []
+    for source in sources:
+      sourcePath, _ = getPathAndTask(source)
+      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
+      targetPath = cake.path.join(targetDir, sourceName)
+      results.append(compiler._object(
+        targetPath,
+        source,
+        pch=pch,
+        shared=True
         ))
     return results
     
@@ -1163,11 +1151,19 @@ class Compiler(Tool):
   def _module(self, target, sources, forceExtension=True):
     
     if forceExtension:
-      target = cake.path.forceExtension(target, self.moduleSuffix)
+      prefix, suffix = self.modulePrefixSuffixes[0]
+      target = cake.path.forcePrefixSuffix(target, prefix, suffix)
       if self.importLibrary:
         prefix, suffix = self.libraryPrefixSuffixes[0]
         self.importLibrary = cake.path.forcePrefixSuffix(
           self.importLibrary,
+          prefix,
+          suffix,
+          )
+      if self.installName:
+        prefix, suffix = self.modulePrefixSuffixes[0]
+        self.installName = cake.path.forcePrefixSuffix(
+          self.installName,
           prefix,
           suffix,
           )
@@ -1327,7 +1323,7 @@ class Compiler(Tool):
       env['PATH'] = os.path.pathsep.join(
         [env['PATH']] + self.__binPaths
         )
-      
+    
     if env['SYSTEMROOT']:
       env['PATH'] = os.path.pathsep.join([
         env['PATH'],
@@ -1416,13 +1412,13 @@ class Compiler(Tool):
       if processStdout is not None:
         processStdout(stdoutText)
       else:
-        self.outputStdout(stdoutText)
+        self._outputStdout(stdoutText)
     
     if stderrText:
       if processStderr is not None:
         processStderr(stderrText)
       else:
-        self.outputStderr(stderrText)
+        self._outputStderr(stderrText)
       
     if processExitCode is not None:
       processExitCode(exitCode)
@@ -1431,7 +1427,7 @@ class Compiler(Tool):
         "%s: failed with exit code %i\n" % (args[0], exitCode)
         )
   
-  def outputStdout(self, text):
+  def _outputStdout(self, text):
     # Output stdout to stderr as well. Some compilers will output errors
     # to stderr, and all unexpected output should be treated as an error,
     # or handled/output by client code.
@@ -1441,11 +1437,38 @@ class Compiler(Tool):
     sys.stderr.write(text.encode("latin1"))
     sys.stderr.flush()
 
-  def outputStderr(self, text):
+  def _outputStderr(self, text):
     text = text.replace("\r\n", "\n")
     sys.stderr.write(text.encode("latin1"))
     sys.stderr.flush()
-  
+
+  def _getObjectsInLibrary(self, path):
+    """Get a list of the paths of object files in the specified library.
+    
+    @param path: Path of the library previously built by a call to library().
+    
+    @return: A tuple of the paths of objects in the library.
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = self.__libraryObjects.get(self.configuration, None)
+    if libraryObjects:
+      return libraryObjects.get(path, None)
+    else:
+      return None
+
+  def _setObjectsInLibrary(self, path, objectPaths):
+    """Set the list of paths of object files in the specified library.
+    
+    @param path: Path of the library previously built by a call to library().
+    @type path: string
+    
+    @param objectPaths: A list of the objects built by a call to library().
+    @type objectPaths: list of strings
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = self.__libraryObjects.setdefault(self.configuration, {})
+    libraryObjects[path] = tuple(objectPaths)
+      
   def _resolveObjects(self):
     """Resolve the list of library names to object file paths.
     
@@ -1547,7 +1570,7 @@ class Compiler(Tool):
     storeDependencyTask = self.engine.createTask(storeDependencyInfo)
     storeDependencyTask.startAfter(compileTask, immediate=True)
 
-  def buildObject(self, target, source, pch):
+  def buildObject(self, target, source, pch, shared):
     """Perform the actual build of an object.
     
     @param target: Path of the target object file.
@@ -1560,6 +1583,7 @@ class Compiler(Tool):
       target,
       source,
       pch,
+      shared
       )
 
     configuration = self.configuration
@@ -1778,7 +1802,7 @@ class Compiler(Tool):
     """
     self.engine.raiseError("Don't know how to compile %s\n" % source)
 
-  def getObjectCommands(self, target, source, pch):
+  def getObjectCommands(self, target, source, pch, shared):
     """Get the command-lines for compiling a source to a target.
     
     @return: A (compile, args, canCache) tuple where 'compile' is a function that

@@ -95,10 +95,13 @@ class ShellTool(Tool):
           )
         configuration.storeDependencyInfo(newDependencyInfo)
 
-    sourcePaths, tasks = getPathsAndTasks(sources)
+    if self.enabled:
+      sourcePaths, tasks = getPathsAndTasks(sources)
 
-    task = engine.createTask(spawnProcess)
-    task.startAfter(tasks)
+      task = engine.createTask(spawnProcess)
+      task.startAfter(tasks)
+    else:
+      task = None
 
     if targets is None:
       return task

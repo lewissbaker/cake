@@ -19,7 +19,6 @@ import cake.logging
 import cake.engine
 import cake.task
 import cake.path
-import cake.filesys
 import cake.threadpool
 
 # Make sure stat() returns floats so timestamps are consistent across
@@ -190,13 +189,6 @@ def run(args=None, cwd=None):
     default=cake.threadpool.getProcessorCount(),
     )
   parser.add_option(
-    "--profile",
-    metavar="FILE",
-    dest="profileOutput",
-    help="Path to output profiling information to.",
-    default=None,
-    )
-  parser.add_option(
     "-d", "--debug", metavar="KEYWORDS",
     action="extend",
     dest="debugComponents",
@@ -230,13 +222,7 @@ def run(args=None, cwd=None):
   if not scripts:
     scripts.append(cwd)
   
-  if options.profileOutput:
-    import cProfile
-    p = cProfile.Profile()
-    p.enable()
-    threadPool = cake.threadpool.DummyThreadPool()
-  else:
-    threadPool = cake.threadpool.ThreadPool(options.jobs)
+  threadPool = cake.threadpool.ThreadPool(options.jobs)
   cake.task.setThreadPool(threadPool)
 
   logger = cake.logging.Logger(debugComponents=options.debugComponents)
@@ -285,22 +271,13 @@ def run(args=None, cwd=None):
   mainTask.addCallback(onFinish)
   mainTask.start()
 
-  if options.profileOutput:
-    mainTask.addCallback(threadPool.quit)
-    threadPool.run()
-  else:
-    finished = threading.Event()
-    mainTask.addCallback(finished.set)
-    # We must wait in a loop in case a KeyboardInterrupt comes.
-    while not finished.isSet():
-      time.sleep(0.1)
+  finished = threading.Event()
+  mainTask.addCallback(finished.set)
+  # We must wait in a loop in case a KeyboardInterrupt comes.
+  while not finished.isSet():
+    time.sleep(0.1)
   
   endTime = datetime.datetime.utcnow()
-
-  if options.profileOutput:
-    p.disable()
-    p.dump_stats(options.profileOutput)
-  
   engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
   
   return engine.logger.errorCount

@@ -93,7 +93,13 @@ class MwcwCompiler(Compiler):
     outputText += inputText.replace("\r", "")
 
     return outputText
+  
+  def _outputStdout(self, text):
+    Compiler._outputStdout(self, self._formatMessage(text))
 
+  def _outputStderr(self, text):
+    Compiler._outputStderr(self, self._formatMessage(text))
+    
   @memoise
   def _getCommonArgs(self):
     args = [
@@ -190,7 +196,7 @@ class MwcwCompiler(Compiler):
     
     return args
 
-  def getLanguage(self, path): 
+  def _getLanguage(self, path): 
     language = self.language
     if not language:
       language = {
@@ -200,7 +206,7 @@ class MwcwCompiler(Compiler):
     return language
 
   def getPchCommands(self, target, source, header, object):
-    language = self.getLanguage(source)
+    language = self._getLanguage(source)
    
     args = list(self._getCompileArgs(language))
     args.extend([source, '-precompile', target])
@@ -224,9 +230,9 @@ class MwcwCompiler(Compiler):
 
     canBeCached = True
     return compile, args, canBeCached   
-          
-  def getObjectCommands(self, target, source, pch):
-    language = self.getLanguage(source)
+  
+  def getObjectCommands(self, target, source, pch, shared):
+    language = self._getLanguage(source)
    
     args = list(self._getCompileArgs(language))
 
@@ -261,6 +267,7 @@ class MwcwCompiler(Compiler):
   def _getCommonLibraryArgs(self):
     args = [self.__ldExe, '-library']
     args.extend(self._getCommonArgs())
+    args.extend(self.libraryFlags)
     return args
   
   def getLibraryCommand(self, target, sources):

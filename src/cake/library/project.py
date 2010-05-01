@@ -18,7 +18,7 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.library import Tool, FileTarget
+from cake.library import Tool, FileTarget, getPathsAndTasks
 from cake.engine import Script
   
 class _Project(object):
@@ -485,16 +485,18 @@ class ProjectTool(Tool):
 
     if not self.enabled:
       return FileTarget(path=target, task=None)
+    
+    projectPaths, _projectTasks = getPathsAndTasks(projects)
 
     if self.product == self.VS2010:
-      projects = [
+      projectPaths = [
         cake.path.forceExtension(p, self._msvsProjectSuffix2010)
-        for p in projects
+        for p in projectPaths
         ]
     else:
-      projects = [
+      projectPaths = [
         cake.path.forceExtension(p, self._msvsProjectSuffix)
-        for p in projects
+        for p in projectPaths
         ]
     
     configName = self._getSolutionConfigName()
@@ -514,7 +516,7 @@ class ProjectTool(Tool):
       )
     solution.addConfiguration(configuration)
     
-    for p in projects:
+    for p in projectPaths:
       configuration.addProjectConfiguration(_SolutionProjectConfiguration(
         projectConfigName,
         projectPlatformName,

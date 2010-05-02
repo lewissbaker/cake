@@ -896,8 +896,17 @@ class MsvsProjectGenerator(object):
     runfile = cake.path.relativePath(config.output, self.projectDir)
     buildlog = os.path.join(intdir, "buildlog.html")
 
-    includePaths = ';'.join(config.includePaths)
-    assemblyPaths = ';'.join(config.assemblyPaths)
+    includePaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.includePaths
+      ]    
+    assemblyPaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.assemblyPaths
+      ]    
+
+    includePaths = ';'.join(includePaths)
+    assemblyPaths = ';'.join(assemblyPaths)
     forcedIncludes = ';'.join(config.forcedIncludes)
     forcedUsings = ';'.join(config.forcedUsings)
     compileAsManaged = config.compileAsManaged
@@ -1261,8 +1270,17 @@ class MsBuildProjectGenerator(object):
     """
     output = cake.path.relativePath(config.output, self.projectDir)
 
-    includePaths = ';'.join(itertools.chain(config.includePaths, ['$(NMakeIncludeSearchPath)']))
-    assemblyPaths = ';'.join(itertools.chain(config.assemblyPaths, ['$(NMakeAssemblySearchPath)']))
+    includePaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.includePaths
+      ]    
+    assemblyPaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.assemblyPaths
+      ]    
+
+    includePaths = ';'.join(includePaths + ['$(NMakeIncludeSearchPath)'])
+    assemblyPaths = ';'.join(assemblyPaths + ['$(NMakeAssemblySearchPath)'])
     forcedIncludes = ';'.join(itertools.chain(config.forcedIncludes, ['$(NMakeForcedIncludes)']))
     forcedUsings = ';'.join(itertools.chain(config.forcedUsings, ['$(NMakeForcedUsingAssemblies)']))
     defines = ';'.join(itertools.chain(config.defines, ['$(NMakePreprocessorDefinitions)']))

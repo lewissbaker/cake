@@ -18,6 +18,15 @@ configuration = script.configuration
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
 
+# This is how you add your own command-line options
+#configuraton.options.add_option(
+#  "-p", "--projects",
+#  action="store_true",
+#  dest="createProjects",
+#  help="Create projects instead of building a variant.",
+#  default=False,
+#  )
+
 # This is how you override the keywords passed on the command-line
 keywords = configuration.keywords
 keywords.setdefault("platform", hostPlatform)
@@ -117,17 +126,14 @@ dummy = base.clone(platform=hostPlatform, compiler="dummy", architecture=hostArc
 dummy.tools["compiler"] = DummyCompiler(configuration=configuration)
 createVariants(dummy)
 
-if cake.system.platform() == 'Windows':
+if cake.system.isWindows():
   # MSVC
   from cake.library.compilers.msvc import findMsvcCompiler
   for a in ["x86", "x64", "ia64"]:
     try:
       msvc = base.clone(platform="windows", compiler="msvc", architecture=a)
       compiler = msvc.tools["compiler"] = findMsvcCompiler(configuration=configuration, architecture=a)
-      compiler.outputFullPath = True
-      compiler.useBigObjects = True
       compiler.addDefine("WIN32")
-      compiler.useResponseFile = True
       if a in ["x64", "ia64"]:
         compiler.addDefine("WIN64")
       createVariants(msvc)

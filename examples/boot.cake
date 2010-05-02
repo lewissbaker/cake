@@ -18,15 +18,6 @@ configuration = script.configuration
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
 
-# This is how you add your own command-line options
-#configuraton.options.add_option(
-#  "-p", "--projects",
-#  action="store_true",
-#  dest="createProjects",
-#  help="Create projects instead of building a variant.",
-#  default=False,
-#  )
-
 # This is how you override the keywords passed on the command-line
 keywords = configuration.keywords
 keywords.setdefault("platform", hostPlatform)

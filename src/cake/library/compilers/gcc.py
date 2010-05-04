@@ -238,6 +238,7 @@ class GccCompiler(Compiler):
     self._gccExe = gccExe
     self._libtoolExe = libtoolExe
     self.__version = version
+    self.__messageExpression = re.compile(r'^(.+?):(\d+)(:\d+)?', re.MULTILINE)
 
   @property
   def version(self):
@@ -248,25 +249,24 @@ class GccCompiler(Compiler):
     """
     if not cake.system.isWindows():
       return inputText
-    
+
     outputLines = []
-    lines = inputText.split('\n')
-    for line in lines:
-      line = line.rstrip('\r')
-      m = re.search('(?P<linenum>:\d+)(?P<colnum>:\d+)?', line)
+    pos = 0
+    while True:
+      m = self.__messageExpression.search(inputText, pos)
       if m:
-        linenum, _colnum = m.groups()
-        sourceFile = line[:m.start('linenum')]
-        sourceFile = self.configuration.abspath(os.path.normpath(sourceFile))
-        lineNumber = linenum[1:]
-        message = line[m.end()+2:]
-        outputLines.append('%s(%s): %s' % (sourceFile, lineNumber, message))
-      elif line.strip(): # Don't print blank lines
-        outputLines.append(line)
-    if outputLines:
-      return '\n'.join(outputLines) + '\n'
-    else:
-      return ''
+        path, line, _column = m.groups()
+        startPos = m.start()
+        endPos = m.end()
+        if startPos != pos: 
+          outputLines.append(inputText[pos:startPos])
+        path = self.configuration.abspath(os.path.normpath(path))
+        outputLines.append('%s(%s) ' % (path, line))
+        pos = endPos
+      else:
+        outputLines.append(inputText[pos:])
+        break
+    return ''.join(outputLines)
   
   def _outputStdout(self, text):
     Compiler._outputStdout(self, self._formatMessage(text))

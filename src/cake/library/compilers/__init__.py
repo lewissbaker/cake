@@ -1365,6 +1365,9 @@ class Compiler(Tool):
       executable = self.configuration.abspath(args[0])
       args = _escapeArgs(args)
       argsString = " ".join(args)
+      
+      # Use the arg string on Windows to prevent the subprocess module haxoring
+      # arguments that contain quotes.
       if cake.system.isWindows():
         args = argsString
 
@@ -1389,7 +1392,7 @@ class Compiler(Tool):
           )
       except EnvironmentError, e:
         self.engine.raiseError(
-          "cake: failed to launch %s: %s\n" % (args[0], str(e))
+          "cake: failed to launch %s: %s\n" % (executable, str(e))
           )
       p.stdin.close()
   
@@ -1424,7 +1427,7 @@ class Compiler(Tool):
       processExitCode(exitCode)
     elif exitCode != 0:
       self.engine.raiseError(
-        "%s: failed with exit code %i\n" % (args[0], exitCode)
+        "%s: failed with exit code %i\n" % (executable, exitCode)
         )
   
   def _outputStdout(self, text):

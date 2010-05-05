@@ -71,6 +71,7 @@ def createVariants(parent):
     compiler.enableRtti = True
     compiler.enableExceptions = True
     compiler.outputMapFile = True
+    compiler.messageStyle = compiler.MSVS_CLICKABLE
     
     if release == "debug":
       compiler.addDefine("_DEBUG")

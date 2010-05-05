@@ -233,6 +233,19 @@ class Compiler(Tool):
     MSVC: /GL
     MWCW: -opt level=4  
   """
+  MSVS_CLICKABLE = 0
+  """Messages are clickable in Microsoft Visual Studio.
+  
+  When this options is chosen compiler warnings and error messages
+  will be formatted to be clickable in Microsoft Visual Studio.
+  
+  The format of each message will be as follows::
+  sourceFile(lineNumber) : message
+  
+  Note that if 'MsvcCompiler.outputFullPath' is set to False this
+  option may need to be enabled so that relative source file paths
+  are converted to clickable absolute paths. 
+  """
   debugSymbols = None
   """Enable debug symbols.
 
@@ -252,6 +265,14 @@ class Compiler(Tool):
   L{FULL_OPTIMISATION}
 
   If the value is None the compiler default is used.
+  @type: enum or None
+  """
+  messageStyle = None
+  """Set the message style.
+  
+  Available enum values are: L{MSVS_CLICKABLE}
+
+  If the value is None the compiler default output is used.
   @type: enum or None
   """
   enableRtti = None

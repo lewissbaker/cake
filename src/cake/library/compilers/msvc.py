@@ -396,6 +396,9 @@ class MsvcCompiler(Compiler):
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
+    if self.messageStyle != self.MSVS_CLICKABLE:
+      return inputText
+    
     outputLines = []
     pos = 0
     while True:

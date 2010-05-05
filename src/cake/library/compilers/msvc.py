@@ -406,7 +406,8 @@ class MsvcCompiler(Compiler):
         endPos = startPos + len(path)
         if startPos != pos: 
           outputLines.append(inputText[pos:startPos])
-        outputLines.append(self.configuration.abspath(os.path.normpath(path)))
+        path = self.configuration.abspath(os.path.normpath(path))
+        outputLines.append(path)
         pos = endPos
       else:
         outputLines.append(inputText[pos:])

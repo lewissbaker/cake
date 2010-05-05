@@ -238,7 +238,7 @@ class GccCompiler(Compiler):
     self._gccExe = gccExe
     self._libtoolExe = libtoolExe
     self.__version = version
-    self.__messageExpression = re.compile(r'^(.+?):(\d+)(:\d+)?', re.MULTILINE)
+    self.__messageExpression = re.compile(r'^(.+?):(\d+)(:\d+)?:', re.MULTILINE)
 
   @property
   def version(self):
@@ -261,7 +261,7 @@ class GccCompiler(Compiler):
         if startPos != pos: 
           outputLines.append(inputText[pos:startPos])
         path = self.configuration.abspath(os.path.normpath(path))
-        outputLines.append('%s(%s) ' % (path, line))
+        outputLines.append('%s(%s) :' % (path, line))
         pos = endPos
       else:
         outputLines.append(inputText[pos:])

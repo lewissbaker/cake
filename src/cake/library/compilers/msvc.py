@@ -367,7 +367,7 @@ class MsvcCompiler(Compiler):
     self.__mtExe = mtExe
     self.__rcExe = rcExe
     self.__architecture = architecture
-    self.__messageExpression = re.compile(r'^(.+)\(\d+\) :', re.MULTILINE)
+    self.__messageExpression = re.compile(r'^(\s*)(.+)\(\d+\) :', re.MULTILINE)
     self.forcedUsings = []
     self.forcedUsingScripts = []
     
@@ -404,13 +404,13 @@ class MsvcCompiler(Compiler):
     while True:
       m = self.__messageExpression.search(inputText, pos)
       if m:
-        path, = m.groups()
+        spaces, path, = m.groups()
         startPos = m.start()
-        endPos = startPos + len(path)
+        endPos = startPos + len(spaces) + len(path)
         if startPos != pos: 
           outputLines.append(inputText[pos:startPos])
         path = self.configuration.abspath(os.path.normpath(path))
-        outputLines.append(path)
+        outputLines.append(spaces + path)
         pos = endPos
       else:
         outputLines.append(inputText[pos:])

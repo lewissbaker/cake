@@ -1135,8 +1135,7 @@ class Compiler(Tool):
       target = cake.path.forcePrefixSuffix(target, prefix, suffix)
 
     if self.enabled:
-  
-      paths, tasks = getPathsAndTasks(sources)
+      paths, tasks = getLinkPathsAndTasks(sources)
       
       self._setObjectsInLibrary(target, paths)
       

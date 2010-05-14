@@ -229,21 +229,12 @@ def relativePath(child, parent):
   path itself if the child was not relative to the parent.
   @rtype: string
   """
-  altsep = os.path.altsep
-  if altsep is not None:
-    childSep = child.replace(altsep, os.path.sep)
-    parentSep = parent.replace(altsep, os.path.sep)
-  else:
-    childSep = child
-    parentSep = parent
-
-  if childSep and childSep[-1] == os.path.sep:
-    childSep = childSep[:-1]
-  if parentSep and parentSep [-1] == os.path.sep:
-    parentSep = parentSep [:-1]
+  # Convert slashes, remove trailing slash, remove '..' etc.
+  child = os.path.normpath(child)
+  parent = os.path.normpath(parent)
   
-  childList = childSep.split(os.path.sep)
-  parentList = parentSep.split(os.path.sep)
+  childList = child.split(os.path.sep)
+  parentList = parent.split(os.path.sep)
   
   if platform.system() == "Windows":
     if _isUnc(child) or _isUnc(parent):

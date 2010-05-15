@@ -775,7 +775,7 @@ class Configuration(object):
     if not results:
       raise LookupError("No variants matched criteria.")
     elif len(results) > 1:
-      msg = "Found %i variants that matched criteria.\n"
+      msg = "Found %i variants that matched criteria.\n" % len(results)
       msg += "".join("- %r\n" % v for v in results)
       raise LookupError(msg)
 

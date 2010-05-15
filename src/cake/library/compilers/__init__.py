@@ -1322,7 +1322,35 @@ class Compiler(Tool):
       task=resourceTask,
       compiler=self,
       )
-          
+
+  def resources(self, targetDir, sources, **kwargs):
+    """Build a collection of resources to a target directory.
+    
+    @param targetDir: Path to the target directory where the built resources
+    will be placed.
+    @type targetDir: string
+    
+    @param sources: A list of source files to compile to resource files.
+    @type sources: sequence of string or FileTarget objects
+    
+    @return: A list of FileTarget objects, one for each resource being
+    built.
+    """
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+    
+    results = []
+    for source in sources:
+      sourcePath, _ = getPathAndTask(source)
+      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
+      targetPath = cake.path.join(targetDir, sourceName)
+      results.append(compiler._resource(
+        targetPath,
+        source,
+        ))
+    return results
+              
   ###########################
   # Internal methods not part of public API
   

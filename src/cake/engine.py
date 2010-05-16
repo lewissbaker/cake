@@ -932,6 +932,49 @@ class Configuration(object):
     
     return dependencyInfo, None
 
+  def checkReasonToBuild(self, targets, sources):
+    """Check for a reason to build given a list of targets and sources.
+    
+    @param targets: A list of target files.
+    @type targets: list of string
+    @param sources: A list of source files.
+    @type sources: list of string
+    
+    @return: A reason to build if a rebuild is required, otherwise None.
+    @rtype: string or None 
+    """
+  
+    abspath = self.abspath
+    
+    if self.engine.forceBuild:
+      return "rebuild has been forced"
+
+    getTimestamp = self.engine.getTimestamp
+
+    oldestTimestamp = None
+    for t in targets:
+      try:
+        timestamp = getTimestamp(abspath(t))
+      except EnvironmentError:
+        return "'" + t + "' doesn't exist"
+      if oldestTimestamp is None or timestamp < oldestTimestamp:
+        oldestTimestamp = timestamp
+    
+    newestTimestamp = None
+    for s in sources:
+      try:
+        timestamp = getTimestamp(abspath(s))
+      except EnvironmentError:
+        return "'" + s + "' doesn't exist"
+      if newestTimestamp is None or timestamp > newestTimestamp:
+        newestTimestamp = timestamp
+        newestSource = s
+
+    if newestTimestamp is not None and oldestTimestamp is not None and newestTimestamp > oldestTimestamp:  
+      return "'" + newestSource + "' has been changed"
+    
+    return None
+    
   def primeFileDigestCache(self, dependencyInfo):
     """Prime the engine's file-digest cache using any cached
     information stored in this dependency info.

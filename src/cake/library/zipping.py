@@ -7,14 +7,11 @@
 
 from cake.library import Tool, getPathAndTask
 import cake.filesys
+import cake.zipping
 import zipfile
 import os
 import os.path
 import time
-
-def _isZipDirectory(zipInfo):
-  
-  return (zipInfo.external_attr & 0x00000010L) != 0L # FILE_ATTRIBUTE_DIRECTORY
 
 def _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer):
   
@@ -41,7 +38,7 @@ def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onl
   targetFile = os.path.join(targetDir, zipInfo.filename)
   absTargetFile = os.path.join(absTargetDir, zipInfo.filename)
   
-  if _isZipDirectory(zipInfo):
+  if cake.zipping.isDirectoryInfo(zipInfo):
     # The zip info corresponds to a directory.
     cake.filesys.makeDirs(absTargetFile)
   else:
@@ -73,45 +70,6 @@ def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onl
 
     # Set the file modification time to match the zip time
     os.utime(absTargetFile, (zipTime, zipTime))
-
-def _writeFile(configuration, file, sourcePath, targetZipPath, targetFilePath):
-  absSourcePath = configuration.abspath(sourcePath)
-  sourceFilePath = os.path.join(sourcePath, targetFilePath)
-  absSourceFilePath = os.path.join(absSourcePath, targetFilePath)
-  targetFilePath = targetFilePath.replace("\\", "/") # Zips use forward slashes
-  utcTime = time.gmtime(os.stat(absSourceFilePath).st_mtime)
-  
-  configuration.engine.logger.outputInfo("Adding %s to %s\n" % (sourceFilePath, targetZipPath))
-  
-  if os.path.isdir(absSourceFilePath):
-    if not targetFilePath.endswith("/"):
-      targetFilePath += "/" # Trailing slash denotes directory for some zip packages
-
-    zi = zipfile.ZipInfo(targetFilePath, utcTime[0:6])
-    zi.compress_type = zipfile.ZIP_DEFLATED
-    zi.external_attr = 0x00000010L # FILE_ATTRIBUTE_DIRECTORY
-    file.writestr(zi, "")
-  else:  
-    f = open(absSourceFilePath, "rb")
-    try:
-      data = f.read()
-    finally:
-      f.close()
-    
-    zi = zipfile.ZipInfo(targetFilePath, utcTime[0:6])
-    zi.compress_type = zipfile.ZIP_DEFLATED
-    zi.external_attr = 0x00000020L # FILE_ATTRIBUTE_ARCHIVE
-    file.writestr(zi, data)
-
-def _walkTree(path):
-  """Recursively walk a directory tree.
-  """
-  for dirPath, dirNames, fileNames in os.walk(path):
-    for name in dirNames:
-      yield os.path.join(dirPath, name)
-      
-    for name in fileNames:
-      yield os.path.join(dirPath, name)
 
 def _shouldCompress(
   configuration,
@@ -153,7 +111,7 @@ def _shouldCompress(
       zipInfo = fromZip.get(casedPath, None)
 
       # Not interested in modified directories
-      if zipInfo is not None and not _isZipDirectory(zipInfo):
+      if zipInfo is not None and not cake.zipping.isDirectoryInfo(zipInfo):
         absSourceFilePath = os.path.join(absSourcePath, originalPath)
         utcTime = time.gmtime(os.stat(absSourceFilePath).st_mtime)
         zipTime = utcTime[0:5] + (
@@ -182,27 +140,6 @@ def _shouldCompress(
       
   return toAppend, reasonToBuild
 
-def _getFilesToCompress(configuration, sourcePath, includeMatch, excludeMatch):
-  
-  absSourcePath = configuration.abspath(sourcePath)
-
-  toZip = {}
-  if os.path.isdir(absSourcePath):
-    # Remove any trailing slash
-    searchDir = os.path.normpath(absSourcePath)
-    firstChar = len(searchDir) + 1
-    for path in _walkTree(searchDir):
-      path = path[firstChar:] # Strip the search dir name
-      if includeMatch is not None and not includeMatch(path):
-        continue
-      if excludeMatch is not None and excludeMatch(path):
-        continue
-      toZip[os.path.normcase(path)] = path
-  else:
-    toZip[os.path.normcase(path)] = path
-    
-  return toZip
-    
 class ZipTool(Tool):
   
   def extract(
@@ -273,7 +210,7 @@ class ZipTool(Tool):
           
           searchDir = os.path.normpath(absTargetDir)
           firstChar = len(searchDir) + 1
-          for absPath in _walkTree(searchDir):
+          for absPath in cake.filesys.walkTree(searchDir):
             path = absPath[firstChar:] # Strip the search dir name
             if os.path.normcase(path) not in zipFiles:
               engine.logger.outputInfo(
@@ -341,14 +278,15 @@ class ZipTool(Tool):
     configuration = self.configuration
 
     def doIt():
-
+      absSourceDir = configuration.abspath(sourceDir)
+      
       # Build a list of files/dirs to zip
-      toZip = _getFilesToCompress(configuration, sourcePath, includeMatch, excludeMatch)
+      toZip = cake.zipping.findFilesToCompress(absSourceDir, includeMatch, excludeMatch)
 
       # Figure out if we need to rebuild/append 
       toAppend, reasonToBuild = _shouldCompress(
         configuration,
-        sourcePath,
+        sourceDir,
         target,
         toZip,
         onlyNewer,
@@ -371,7 +309,10 @@ class ZipTool(Tool):
         try:
           zipFile = zipfile.ZipFile(f, "w")
           for originalPath in toZip.itervalues():
-            _writeFile(configuration, zipFile, sourcePath, target, originalPath)
+            sourcePath = os.path.join(sourceDir, originalPath)
+            absSourcePath = configuration.abspath(sourcePath)
+            configuration.engine.logger.outputInfo("Adding %s to %s\n" % (sourcePath, target))
+            cake.zipping.writeFileToZip(zipFile, absSourcePath, originalPath)
           zipFile.close()
         finally:
           f.close()
@@ -383,14 +324,17 @@ class ZipTool(Tool):
         try:
           zipFile = zipfile.ZipFile(f, "a")
           for originalPath in toAppend:
-            _writeFile(configuration, zipFile, sourcePath, target, originalPath)
+            sourcePath = os.path.join(sourceDir, originalPath)
+            absSourcePath = configuration.abspath(sourcePath)
+            configuration.engine.logger.outputInfo("Adding %s to %s\n" % (sourcePath, target))
+            cake.zipping.writeFileToZip(zipFile, absSourcePath, originalPath)
           zipFile.close()
         finally:
           f.close()
         cake.filesys.renameFile(absTargetTmpPath, absTargetPath)
 
     if self.enabled:
-      sourcePath, sourceTask = getPathAndTask(source)
+      sourceDir, sourceTask = getPathAndTask(source)
 
       task = engine.createTask(doIt)
       task.startAfter(sourceTask)

@@ -16,54 +16,6 @@ import os.path
 import re
 import subprocess
 
-if cake.system.isCygwin():
-  def _findExecutable(name, paths):
-    """Find an executable given its name and a list of paths.  
-    """
-    for p in paths:
-      executable = cake.path.join(p, name)
-      if cake.filesys.isFile(executable):
-        # On cygwin it can sometimes say a file exists at a path
-        # when its real filename includes a .exe on the end.
-        # We detect this by actually trying to open the path
-        # for read, if it fails we know it should have a .exe.
-        try:
-          f = open(executable, 'rb')
-          f.close()
-          return executable
-        except EnvironmentError:
-          return executable + '.exe'
-    else:
-      raise EnvironmentError("Could not find executable.")
-    
-elif cake.system.isWindows():
-  def _findExecutable(name, paths):
-    """Find an executable given its name and a list of paths.  
-    """
-    # Windows executables could have any of a number of extensions
-    # We just search through standard extensions so that we're not
-    # dependent on the user's environment.
-    pathExt = ['', '.bat', '.exe', '.com', '.cmd']
-    for p in paths:
-      basePath = cake.path.join(p, name)
-      for ext in pathExt:
-        executable = basePath + ext
-        if cake.filesys.isFile(executable):
-          return executable
-    else:
-      raise EnvironmentError("Could not find executable.")
-    
-else:
-  def _findExecutable(name, paths):
-    """Find an executable given its name and a list of paths.  
-    """
-    for p in paths:
-      executable = cake.path.join(p, name)
-      if cake.filesys.isFile(executable):
-        return executable
-    else:
-      raise EnvironmentError("Could not find executable.")
-
 def _getMinGWInstallDir():
   """Returns the MinGW install directory.
   
@@ -168,15 +120,15 @@ def findGccCompiler(configuration, platform=None):
         raise EnvironmentError(path + " is not a file.")
 
     if isDarwin:
-      libtoolExe = _findExecutable("libtool", paths)
+      libtoolExe = cake.system.findExecutable("libtool", paths)
       checkFile(libtoolExe)
       binPaths.append(cake.path.dirName(libtoolExe))
     else:
-      arExe = _findExecutable("ar", paths)
+      arExe = cake.system.findExecutable("ar", paths)
       checkFile(arExe)
       binPaths.append(cake.path.dirName(arExe))
 
-    gccExe = _findExecutable("gcc", paths)
+    gccExe = cake.system.findExecutable("gcc", paths)
     checkFile(gccExe)
     binPaths.append(cake.path.dirName(gccExe))
 

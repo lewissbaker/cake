@@ -6,6 +6,7 @@
 """
 
 import os
+import os.path
 import platform as platty
 
 _platform = platty.system()
@@ -48,3 +49,51 @@ def architecture():
   @rtype: string
   """
   return _architecture
+
+if isCygwin():
+  def findExecutable(name, paths):
+    """Find an executable given its name and a list of paths.  
+    """
+    for p in paths:
+      executable = os.path.join(p, name)
+      if os.path.isfile(executable):
+        # On cygwin it can sometimes say a file exists at a path
+        # when its real filename includes a .exe on the end.
+        # We detect this by actually trying to open the path
+        # for read, if it fails we know it should have a .exe.
+        try:
+          f = open(executable, 'rb')
+          f.close()
+          return executable
+        except EnvironmentError:
+          return executable + '.exe'
+    else:
+      raise EnvironmentError("Could not find executable.")
+    
+elif isWindows():
+  def findExecutable(name, paths):
+    """Find an executable given its name and a list of paths.  
+    """
+    # Windows executables could have any of a number of extensions
+    # We just search through standard extensions so that we're not
+    # dependent on the user's environment.
+    pathExt = ['', '.bat', '.exe', '.com', '.cmd']
+    for p in paths:
+      basePath = os.path.join(p, name)
+      for ext in pathExt:
+        executable = basePath + ext
+        if os.path.isfile(executable):
+          return executable
+    else:
+      raise EnvironmentError("Could not find executable.")
+    
+else:
+  def findExecutable(name, paths):
+    """Find an executable given its name and a list of paths.  
+    """
+    for p in paths:
+      executable = os.path.join(p, name)
+      if os.path.isfile(executable):
+        return executable
+    else:
+      raise EnvironmentError("Could not find executable.")

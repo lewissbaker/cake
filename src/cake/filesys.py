@@ -65,7 +65,13 @@ def remove(path):
       raise
 
 def removeTree(path):
-  """Recursively delete all files in the directory at specified path.
+  """Recursively delete all files and directories at the specified path.
+
+  Unlike os.removedirs() this function stops deleting entries when
+  the specified path and all it's children have been deleted.
+  
+  os.removedirs() will continue deleting parent directories if they are
+  empty.
 
   @param path: Path to the directory containing the tree to remove
   """
@@ -148,7 +154,17 @@ def makeDirs(path):
     # Ignore failure due to directory already existing.
     if not os.path.isdir(path):
       raise
-    
+
+def walkTree(path):
+  """Recursively walk a directory tree.
+  """
+  for dirPath, dirNames, fileNames in os.walk(path):
+    for name in dirNames:
+      yield os.path.join(dirPath, name)
+      
+    for name in fileNames:
+      yield os.path.join(dirPath, name)
+      
 def readFile(path):
   """Read data from a file as safely as possible.
 

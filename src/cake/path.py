@@ -251,7 +251,7 @@ def relativePath(child, parent):
 
   relList = [os.path.pardir] * (len(parentList)-i) + childList[i:]
   if not relList:
-    return os.path.curdir
+    return os.curdir
   return join(*relList)
   
 if platform.system() == "Windows":

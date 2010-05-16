@@ -415,7 +415,7 @@ class ProjectTool(Tool):
     platformName = self._getProjectPlatformName()
 
     # Construct the build args
-    targetDir = cake.path.dirName(configuration.abspath(target))
+    targetDir = configuration.abspath(cake.path.dirName(target))
     pythonExe = configuration.abspath(sys.executable)
     cakeScript = configuration.abspath(sys.argv[0])
     scriptPath = configuration.abspath(script.path)
@@ -544,18 +544,18 @@ class ProjectTool(Tool):
     # saves having to click reload on every project change (most of
     # the time).
     for solution in self._solutions.solutions.values():
-      generator = MsvsSolutionGenerator(solution, self._projects)
-      generator.build(self.configuration)
+      generator = MsvsSolutionGenerator(self.configuration, solution, self._projects)
+      generator.build()
 
     for project in self._projects.projects.values():
       if project.version == '4.0':
-        generator = MsBuildProjectGenerator(project)
-        generator.build(self.configuration)
-        generator = MsBuildFiltersGenerator(project)
-        generator.build(self.configuration)
+        generator = MsBuildProjectGenerator(self.configuration, project)
+        generator.build()
+        generator = MsBuildFiltersGenerator(self.configuration, project)
+        generator.build()
       else:
-        generator = MsvsProjectGenerator(project)
-        generator.build(self.configuration)
+        generator = MsvsProjectGenerator(self.configuration, project)
+        generator.build()
 
 def escapeAttr(value):
   """Utility function for escaping xml attribute values.
@@ -582,7 +582,7 @@ def generateGuid(filePath):
       )
     return guid
 
-def convertToProjectItems(srcfiles, projectDir):
+def convertToProjectItems(configuration, srcfiles, projectDir):
   """Convert the dictionary-based datastructure for defining project items
   and filters into ProjectItem objects.
 
@@ -615,9 +615,10 @@ def convertToProjectItems(srcfiles, projectDir):
   """
 
   results = []
+  abspath = configuration.abspath
   if isinstance(srcfiles, dict):
     for name in srcfiles:
-      subItems = convertToProjectItems(srcfiles[name], projectDir)
+      subItems = convertToProjectItems(configuration, srcfiles[name], projectDir)
       if name:
         filterNode = ProjectFilterItem(name)
         filterNode.addSubItems(subItems)
@@ -626,7 +627,7 @@ def convertToProjectItems(srcfiles, projectDir):
         results.extend(subItems)
   elif isinstance(srcfiles, list):
     for filePath in srcfiles:
-      relPath = cake.path.relativePath(filePath, projectDir)
+      relPath = cake.path.relativePath(abspath(filePath), abspath(projectDir))
       fileItem = ProjectFileItem(relPath)
       results.append(fileItem)
   else:
@@ -748,11 +749,12 @@ class MsvsProjectGenerator(object):
   file = None
   encoding = 'utf-8'
 
-  def __init__(self, project):
+  def __init__(self, configuration, project):
     """Construct a new project generator instance.
 
     @param project: A Project object containing all info required for the project.
     """
+    self.configuration = configuration
     self.project = project
     self.projectName = project.name
     self.projectDir = project.dir
@@ -780,11 +782,12 @@ class MsvsProjectGenerator(object):
     self.platforms = list(frozenset(c.platform for c in self.configs))
     self.platforms.sort()
 
-  def build(self, configuration):
+  def build(self):
     """Create and write the .vcproj file.
 
     Throws an exception if building the project file fails.
     """
+    configuration = self.configuration
     engine = configuration.engine
     
     stream = StringIO.StringIO()
@@ -818,7 +821,13 @@ class MsvsProjectGenerator(object):
         "project",
         "Skipping Identical Project %s\n" % self.projectFilePath,
         )
-    
+  
+  def getRelativePath(self, path):
+    """Return path relative to the project file.
+    """
+    abspath = self.configuration.abspath
+    return cake.path.relativePath(abspath(path), abspath(self.projectDir))
+      
   def _writeProject(self):
     """Write the project to the currently open file.
     """
@@ -888,22 +897,13 @@ class MsvsProjectGenerator(object):
   def _writeConfiguration(self, config):
     """Write a section that declares an individual build configuration.
     """
-    outdir = cake.path.relativePath(
-      os.path.dirname(config.output),
-      self.projectDir,
-      )
-    intdir = cake.path.relativePath(config.intermediateDir, self.projectDir)
-    runfile = cake.path.relativePath(config.output, self.projectDir)
+    outdir = self.getRelativePath(os.path.dirname(config.output))
+    intdir = self.getRelativePath(config.intermediateDir)
+    runfile = self.getRelativePath(config.output)
     buildlog = os.path.join(intdir, "buildlog.html")
 
-    includePaths = [
-      cake.path.relativePath(p, self.projectDir)
-      for p in config.includePaths
-      ]    
-    assemblyPaths = [
-      cake.path.relativePath(p, self.projectDir)
-      for p in config.assemblyPaths
-      ]    
+    includePaths = [self.getRelativePath(p) for p in config.includePaths]    
+    assemblyPaths = [self.getRelativePath(p) for p in config.assemblyPaths]    
 
     includePaths = ';'.join(includePaths)
     assemblyPaths = ';'.join(assemblyPaths)
@@ -959,7 +959,11 @@ class MsvsProjectGenerator(object):
 
     configItems = {}
     for config in self.configs:
-      configItems[config] = convertToProjectItems(config.items, self.projectDir)
+      configItems[config] = convertToProjectItems(
+        self.configuration,
+        config.items,
+        self.projectDir,
+        )
     
     self.file.write("\t<Files>\n")
     self._writeSubItems(configItems, indent='\t\t')
@@ -1116,11 +1120,12 @@ class MsBuildProjectGenerator(object):
   file = None
   encoding = 'utf-8'
 
-  def __init__(self, project):
+  def __init__(self, configuration, project):
     """Construct a new project generator instance.
 
     @param project: A Project object containing all info required for the project.
     """
+    self.configuration = configuration 
     self.project = project
     self.projectName = project.name
     self.projectDir = project.dir
@@ -1128,11 +1133,12 @@ class MsBuildProjectGenerator(object):
     self.version = project.version
     self.configs = project.configurations.values()
 
-  def build(self, configuration):
+  def build(self):
     """Create and write the .vcproj file.
 
     Throws an exception if building the project file fails.
     """
+    configuration = self.configuration
     engine = configuration.engine
     stream = StringIO.StringIO()
     self.file = codecs.getwriter(self.encoding)(stream)
@@ -1165,6 +1171,12 @@ class MsBuildProjectGenerator(object):
         "project",
         "Skipping Identical Project %s\n" % self.projectFilePath,
         )
+    
+  def getRelativePath(self, path):
+    """Return path relative to the project file.
+    """
+    abspath = self.configuration.abspath
+    return cake.path.relativePath(abspath(path), abspath(self.projectDir))
     
   def _writeProject(self):
     """Write the project to the currently open file.
@@ -1237,11 +1249,8 @@ class MsBuildProjectGenerator(object):
   def _writeConfigurationType(self, config):
     """Write a section that declares an individual build configuration.
     """
-    outdir = cake.path.relativePath(
-      os.path.dirname(config.output),
-      self.projectDir,
-      )
-    intdir = cake.path.relativePath(config.intermediateDir, self.projectDir)
+    outdir = self.getRelativePath(os.path.dirname(config.output))
+    intdir = self.getRelativePath(config.intermediateDir)
     
     self.file.write(_msbuildConfigurationType % {
       "name" : escapeAttr(config.name),
@@ -1268,16 +1277,10 @@ class MsBuildProjectGenerator(object):
   def _writeConfiguration(self, config):
     """Write a section that declares an individual build configuration.
     """
-    output = cake.path.relativePath(config.output, self.projectDir)
+    output = self.getRelativePath(config.output)
 
-    includePaths = [
-      cake.path.relativePath(p, self.projectDir)
-      for p in config.includePaths
-      ]    
-    assemblyPaths = [
-      cake.path.relativePath(p, self.projectDir)
-      for p in config.assemblyPaths
-      ]    
+    includePaths = [self.getRelativePath(p) for p in config.includePaths]    
+    assemblyPaths = [self.getRelativePath(p) for p in config.assemblyPaths]    
 
     includePaths = ';'.join(includePaths + ['$(NMakeIncludeSearchPath)'])
     assemblyPaths = ';'.join(assemblyPaths + ['$(NMakeAssemblySearchPath)'])
@@ -1325,7 +1328,7 @@ class MsBuildProjectGenerator(object):
   def _writeBuildLog(self, config):
     """Write a section that declares an individual build configuration.
     """
-    intdir = cake.path.relativePath(config.intermediateDir, self.projectDir)
+    intdir = self.getRelativePath(config.intermediateDir)
     buildLog = cake.path.join(intdir, "buildlog.log")
     
     self.file.write(_msbuildLog % {
@@ -1338,7 +1341,11 @@ class MsBuildProjectGenerator(object):
 
     configItems = {}
     for config in self.configs:
-      configItems[config] = convertToProjectItems(config.items, self.projectDir)
+      configItems[config] = convertToProjectItems(
+        self.configuration,
+        config.items,
+        self.projectDir,
+        )
 
     self.file.write('  <ItemGroup>\n')
     self._writeSubFiles(configItems)
@@ -1440,11 +1447,12 @@ class MsBuildFiltersGenerator(object):
   file = None
   encoding = 'utf-8'
 
-  def __init__(self, project):
+  def __init__(self, configuration, project):
     """Construct a new project generator instance.
 
     @param project: A Project object containing all info required for the project.
     """
+    self.configuration = configuration
     self.project = project
     self.projectName = project.name
     self.projectDir = project.dir
@@ -1452,11 +1460,12 @@ class MsBuildFiltersGenerator(object):
     self.version = project.version
     self.configs = project.configurations.values()
 
-  def build(self, configuration):
+  def build(self):
     """Create and write the .vcproj file.
 
     Throws an exception if building the project file fails.
     """
+    configuration = self.configuration
     engine = configuration.engine
     stream = StringIO.StringIO()
     self.file = codecs.getwriter(self.encoding)(stream)
@@ -1518,7 +1527,11 @@ class MsBuildFiltersGenerator(object):
 
     configItems = {}
     for config in self.configs:
-      configItems[config] = convertToProjectItems(config.items, self.projectDir)
+      configItems[config] = convertToProjectItems(
+        self.configuration,
+        config.items,
+        self.projectDir,
+        )
     
     self.file.write('  <ItemGroup>\n')
     self._writeSubFolders(configItems)
@@ -1620,7 +1633,7 @@ class MsvsSolutionGenerator(object):
   file = None
   encoding = 'utf-8'
   
-  def __init__(self, solution, registry):
+  def __init__(self, configuration, solution, registry):
     """Construct a new solution file writer.
 
     @param solution: The Solution object containing details of solution
@@ -1629,6 +1642,7 @@ class MsvsSolutionGenerator(object):
     @param registry: The ProjectRegistry to use to find details of referenced
     projects.
     """
+    self.configuration = configuration
     self.registry = registry
     self.solution = solution
     self.name = solution.name
@@ -1682,11 +1696,13 @@ class MsvsSolutionGenerator(object):
   def getRelativePath(self, path):
     """Return path relative to the solution file.
     """
-    return cake.path.relativePath(path, self.solutionDir)
+    abspath = self.configuration.abspath
+    return cake.path.relativePath(abspath(path), abspath(self.solutionDir))
 
-  def build(self, configuration):
+  def build(self):
     """Actually write the target file.
     """
+    configuration = self.configuration
     engine = configuration.engine
     stream = StringIO.StringIO()
     self.file = codecs.getwriter(self.encoding)(stream)

@@ -18,7 +18,7 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.library import Tool, FileTarget, getPathsAndTasks
+from cake.library import Tool, FileTarget, getPathAndTask
 from cake.engine import Script
   
 class _Project(object):
@@ -125,11 +125,12 @@ class _SolutionConfiguration(object):
 
 class _SolutionProjectConfiguration(object):
   
-  def __init__(self, name, platform, path):
+  def __init__(self, name, platform, path, build):
     
     self.name = name
     self.platform = platform
     self.path = path
+    self.build = build
 
 class _ProjectRegistry(object):
   
@@ -199,6 +200,8 @@ class SolutionTarget(ProjectToolTarget):
     self.solution = FileTarget(path, task)
     
 class ProjectTool(Tool):
+  """Tool that provides project/solution generation capabilities.
+  """
   
   projectConfigName = None
   """The project config name.
@@ -248,7 +251,33 @@ class ProjectTool(Tool):
   Can be one of L{VS2002}, L{VS2003}, L{VS2005}, L{VS2008} or L{VS2010}.
   @type: enum
   """
+
+  class SolutionProjectItem(object):
+    """A class used to further define solution project items.
     
+    This class can be used to wrap solution project items to
+    further define their attributes such as::
+      project.solution(
+        projects = [
+          project.SolutionProjectItem(
+            "MyProject",
+            build=False, # This project won't build when the solution is built.
+            ),
+          ],
+        target="MySolution",
+        )
+    """
+    
+    build = True
+    """Whether the project should be built as part of a solution build.
+    @type: bool
+    """
+    
+    def __init__(self, project, **kwargs):
+      self.project = project
+      for k, v in kwargs.iteritems():
+        setattr(self, k, v)
+
   _projects = _ProjectRegistry()
   _solutions = _SolutionRegistry()
   
@@ -486,19 +515,6 @@ class ProjectTool(Tool):
     if not self.enabled:
       return FileTarget(path=target, task=None)
     
-    projectPaths, _projectTasks = getPathsAndTasks(projects)
-
-    if self.product == self.VS2010:
-      projectPaths = [
-        cake.path.forceExtension(p, self._msvsProjectSuffix2010)
-        for p in projectPaths
-        ]
-    else:
-      projectPaths = [
-        cake.path.forceExtension(p, self._msvsProjectSuffix)
-        for p in projectPaths
-        ]
-    
     configName = self._getSolutionConfigName()
     platformName = self._getSolutionPlatformName()
     projectConfigName = self._getProjectConfigName()
@@ -516,11 +532,23 @@ class ProjectTool(Tool):
       )
     solution.addConfiguration(configuration)
     
-    for p in projectPaths:
+    if self.product == self.VS2010:
+      projectExtension = self._msvsProjectSuffix2010
+    else:
+      projectExtension = self._msvsProjectSuffix
+      
+    for p in projects:
+      if not isinstance(p, self.SolutionProjectItem):
+        p = self.SolutionProjectItem(p)
+
+      projectPath, _projectTask = getPathAndTask(p.project) 
+      projectPath = cake.path.forceExtension(projectPath, projectExtension)
+        
       configuration.addProjectConfiguration(_SolutionProjectConfiguration(
         projectConfigName,
         projectPlatformName,
-        p, 
+        projectPath,
+        p.build,
         ))
 
     return SolutionTarget(path=target, task=None, tool=self)
@@ -1658,41 +1686,45 @@ class MsvsSolutionGenerator(object):
 
     # Construct a sorted list all project files
     projectFilePathToProject = {}
-    for config in self.solutionConfigurations:
-      for config in config.projectConfigurations:
-        project = self.registry.getProjectByPath(config.path)
+    for solutionConfig in self.solutionConfigurations:
+      for projectConfig in solutionConfig.projectConfigurations:
+        project = self.registry.getProjectByPath(projectConfig.path)
         if project is not None:
-          key = (config.name, config.platform)
+          key = (projectConfig.name, projectConfig.platform)
           projectConfig = project.configurations.get(key, None)
           if projectConfig is None:
             continue
           path = project.path
           projectFilePathToProject[path] = project
         else:
-          print "Warning: skipping project %s (not built by cake)" % config.path
+          print "Warning: skipping project %s (not built by cake)" % projectConfig.path
     projectFilePaths = projectFilePathToProject.keys()
     projectFilePaths.sort()
     self.projects = [projectFilePathToProject[p] for p in projectFilePaths]
 
-    variants = []
+    variants = set()
     for solutionConfig in self.solutionConfigurations:
-      projectConfigName = solutionConfig.name
-      projectPlatformName = solutionConfig.platform
-      
-      for config in solutionConfig.projectConfigurations:
-        projectConfigName = config.name
-        projectPlatformName = config.platform
-
-      if self.isDotNet:
-        solutionVariant = projectConfigName
-      else:
-        solutionVariant = "%s|%s" % (solutionConfig.name, solutionConfig.platform)
-      projectVariant = "%s|%s" % (projectConfigName, projectPlatformName)
+      for projectConfig in solutionConfig.projectConfigurations:
+        solutionVariant = self.getSolutionVariant(solutionConfig)
+        projectVariant = self.getProjectVariant(projectConfig)
         
-      variants.append((solutionVariant, projectVariant))
-    variants.sort()
+        variants.add((solutionVariant, projectVariant))
     self.variants = variants
-      
+  
+  def getSolutionVariant(self, solutionConfig):
+    if self.isDotNet:
+      # .NET VS versions do not support user-defined solution platform names,
+      # so use a project config name in an attempt to find a unique config name.
+      if solutionConfig.projectConfigurations:
+        return solutionConfig.projectConfigurations[0].name
+      else:
+        return solutionConfig.name
+    else:
+      return "%s|%s" % (solutionConfig.name, solutionConfig.platform)
+    
+  def getProjectVariant(self, projectConfig):
+    return "%s|%s" % (projectConfig.name, projectConfig.platform)
+
   def getRelativePath(self, path):
     """Return path relative to the solution file.
     """
@@ -1897,28 +1929,34 @@ class MsvsSolutionGenerator(object):
       self.file.write("\tGlobalSection(ProjectConfiguration) = postSolution\r\n")
     else:
       self.file.write("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n")
-    
-    for project in self.projects:
-      guid = project.externalGuid
-      for solutionVariant, projectVariant in self.variants: 
-        # Map the solution config to the project config
-        self.file.write(
-          "\t\t%(guid)s.%(slnvariant)s.ActiveCfg = %(projvariant)s\r\n" %
-          {"guid" : guid,
-           "slnvariant" : solutionVariant,
-           "projvariant" : projectVariant,
-           })
 
-        # And optionally include in this solution config's build
-        includeInBuild = True
-        if includeInBuild:
+    # Note: Not bothering to sort these because VS seems to have a strange sort
+    # order ('0' comes after '9').     
+    for solutionConfig in self.solutionConfigurations:
+      for projectConfig in solutionConfig.projectConfigurations:
+        project = self.registry.getProjectByPath(projectConfig.path)
+        if project is None:
+          continue # Skip unknown projects
+        
+        guid = project.externalGuid
+        solutionVariant = self.getSolutionVariant(solutionConfig)
+        projectVariant = self.getProjectVariant(projectConfig)
+        
+        self.file.write(
+          "\t\t%(guid)s.%(slnvariant)s.ActiveCfg = %(projvariant)s\r\n" % {
+            "guid" : guid,
+            "slnvariant" : solutionVariant,
+            "projvariant" : projectVariant,
+            })
+        
+        if projectConfig.build:
           self.file.write(
-            "\t\t%(guid)s.%(slnvariant)s.Build.0 = %(projvariant)s\r\n" %
-          {"guid" : guid,
-           "slnvariant" : solutionVariant,
-           "projvariant" : projectVariant,
-           })
-      
+            "\t\t%(guid)s.%(slnvariant)s.Build.0 = %(projvariant)s\r\n" % {
+              "guid" : guid,
+              "slnvariant" : solutionVariant,
+              "projvariant" : projectVariant,
+              })
+    
     self.file.write("\tEndGlobalSection\r\n")
 
   def writeExtensibilityGlobalsSection(self):

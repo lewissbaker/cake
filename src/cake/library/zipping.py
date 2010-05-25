@@ -11,6 +11,7 @@ import cake.zipping
 import zipfile
 import os
 import os.path
+import calendar
 import time
 
 def _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer):
@@ -44,7 +45,7 @@ def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onl
   else:
     # The zip info corresponds to a file.
     year, month, day, hour, minute, second = zipInfo.date_time
-    zipTime = time.mktime(time.struct_time((year, month, day, hour, minute, second, 0, 0, 0)))
+    zipTime = calendar.timegm((year, month, day, hour, minute, second, 0, 0, 0))
     
     reasonToBuild = _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer)
     if reasonToBuild is None:

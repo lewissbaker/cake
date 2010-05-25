@@ -1,10 +1,7 @@
 from cake.tools import compiler, env, script
 
+buildScript = script.get(script.cwd("build.cake"))
+
 compiler.addIncludePath(script.cwd("include"))
-
-compiler.addLibraryScript(script.cwd("build.cake"))
-compiler.addLibraryPath(env.expand("${BUILD}/usemodule/integer/lib"))
-compiler.addLibrary("integer")
-
-compiler.addModuleScript(script.cwd("build.cake"))
-compiler.addModule(env.expand("${BUILD}/usemodule/integer/lib/integer"))
+compiler.addLibrary(buildScript.getResult("library"))
+compiler.addModule(buildScript.getResult("module"))

@@ -7,7 +7,7 @@
 
 import cake.path
 import cake.filesys
-from cake.library import Tool, FileTarget, getPathAndTask
+from cake.library import Tool, FileTarget, getPath, getTask
 
 class FileSystemTool(Tool):
   """Tool that provides file system related utilities. 
@@ -31,6 +31,7 @@ class FileSystemTool(Tool):
     
     def doCopy():
       
+      sourcePath = getPath(source)
       abspath = self.configuration.abspath
       engine = self.engine
       
@@ -62,7 +63,7 @@ class FileSystemTool(Tool):
       engine.notifyFileChanged(targetAbsPath)
     
     if self.enabled:  
-      sourcePath, sourceTask = getPathAndTask(source)
+      sourceTask = getTask(source)
 
       copyTask = self.engine.createTask(doCopy)
       copyTask.startAfter(sourceTask)
@@ -86,9 +87,14 @@ class FileSystemTool(Tool):
     if not isinstance(targetDir, basestring):
       raise TypeError("targetDir must be a string")
     
+    # TODO: Add support for ScriptResult objects as sources here.
+    # We'd need to get the source tasks and only call getPath()
+    # once the tasks are complete. This would require us returning
+    # a ScriptResult ourselves here.
+    
     results = []
     for s in sources:
-      sourcePath, _ = getPathAndTask(s)
+      sourcePath = getPath(s)
       target = cake.path.join(targetDir, cake.path.baseName(sourcePath))
       results.append(self.copyFile(source=s, target=target))
     return results

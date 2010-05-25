@@ -9,7 +9,7 @@ import os
 import subprocess
 import cake.filesys
 import cake.path
-from cake.library import Tool, FileTarget, deepCopyBuiltins, getPathsAndTasks
+from cake.library import Tool, FileTarget, deepCopyBuiltins, getPaths, getTasks
 
 _undefined = object()
 
@@ -26,6 +26,7 @@ class ShellTool(Tool):
 
     def spawnProcess(cwd=cwd):
 
+      sourcePaths = getPaths(sources)
       configuration = self.configuration
 
       if targets:
@@ -96,7 +97,7 @@ class ShellTool(Tool):
         configuration.storeDependencyInfo(newDependencyInfo)
 
     if self.enabled:
-      sourcePaths, tasks = getPathsAndTasks(sources)
+      tasks = getTasks(sources)
 
       task = engine.createTask(spawnProcess)
       task.startAfter(tasks)

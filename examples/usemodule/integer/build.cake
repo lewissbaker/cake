@@ -22,3 +22,8 @@ module = compiler.module(
   installName=env.expand("@rpath/integer"),
   sources=objects,
   )
+
+script.setResult(
+  module=module,
+  library=module.library,
+  )

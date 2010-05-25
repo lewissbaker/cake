@@ -5,6 +5,9 @@
 @license: Licensed under the MIT license.
 """
 
+from cake.engine import ScriptResult
+from cake.task import Task
+
 class ToolMetaclass(type):
   """This metaclass ensures that new instance variables can only be added to
   an instance during its __init__.
@@ -118,36 +121,69 @@ class FileTarget(object):
     self.path = path
     self.task = task
 
-def getPathAndTask(file):
-  """Returns a path and task given a file.
+def getTask(value):
+  """Get the task that builds this file.
   
-  @param file: The path or FileTarget to split.
-  @type file: string or L{FileTarget} 
-  @return: A file path and task (or None). 
-  @rtype: tuple of string, L{Task}
+  @param value: The ScriptResult, FileTarget, Task or string
+  representing the value.
+  
+  @return: 
   """
-  if isinstance(file, FileTarget):
-    return file.path, file.task
+  if isinstance(value, (FileTarget, ScriptResult)):
+    return value.task
+  elif isinstance(value, Task):
+    return value
   else:
-    return file, None
+    return None
 
-def getPathsAndTasks(files):
-  """Returns a list of paths and tasks for given files.
-
-  @param files: The paths or FileTarget's to split.
-  @type files: list of string's or L{FileTarget}'s 
-  @return: Lists of paths and tasks.
-  @rtype: tuple of (list of string), (list of L{Task}) 
+def getTasks(files):
+  """Get the set of all tasks that build these files.
+  
+  @param files: A list of ScriptResult, FileTarget, Task or string
+  representing the sources of some operation.
+  
+  @return: A list of the Task that build the
   """
-  paths = []
   tasks = []
   for f in files:
-    if isinstance(f, FileTarget):
-      paths.append(f.path)
-      tasks.append(f.task)
-    else:
-      paths.append(f)
-  return paths, tasks
+    task = getTask(f)
+    if task is not None:
+      tasks.append(task)
+  return tasks
+
+def getResult(value):
+  """Get the result of a value that may be a ScriptResult.
+  """
+  while isinstance(value, ScriptResult):
+    value = value.result
+  return value
+
+def getResults(values):
+  """Get the results of a list of values that may be ScriptResult
+  objects.
+  """
+  for value in values: 
+    yield getResult(value)
+
+def getPath(file):
+  """Get the set of paths from the build.
+  """
+  file = getResult(file)
+    
+  if isinstance(file, FileTarget):
+    return file.path
+  elif isinstance(file, Task):
+    return None
+  else:
+    return file
+  
+def getPaths(files):
+  paths = []
+  for f in files:
+    path = getPath(f)
+    if path is not None:
+      paths.append(path)
+  return paths
 
 def deepCopyBuiltins(obj):
   """Returns a deep copy of only builtin types.

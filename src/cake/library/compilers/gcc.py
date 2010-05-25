@@ -6,7 +6,7 @@
 """
 
 from cake.gnu import parseDependencyFile
-from cake.library import memoise, getPathsAndTasks
+from cake.library import memoise, getPaths
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 import cake.filesys
 import cake.path
@@ -335,7 +335,7 @@ class GccCompiler(Compiler):
 
     args.extend('-D' + d for d in self.getDefines())
     
-    for p in getPathsAndTasks(self.getForcedIncludes())[0]:
+    for p in getPaths(self.getForcedIncludes()):
       args.extend(['-include', p])
     
     return args
@@ -466,7 +466,11 @@ class GccCompiler(Compiler):
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
     args.extend(objects)
-    args.extend('-l' + l for l in libraries)    
+    for lib in libraries:
+      if os.path.sep in lib or os.path.altsep and os.path.altsep in lib:
+        args.append(lib)
+      else:
+        args.append('-l' + lib)
     args.extend(['-o', target])
 
     if self.outputMapFile:

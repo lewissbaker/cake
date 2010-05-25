@@ -12,7 +12,9 @@ objects = compiler.objects(
   language='c++/cli',
   )
 
-compiler.module(
+module = compiler.module(
   target=env.expand("${BUILD}/cppdotnet/assembly/point"),
   sources=objects,
   )
+
+script.setResult(module=module)

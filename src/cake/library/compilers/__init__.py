@@ -24,9 +24,10 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.engine import Script, DependencyInfo, BuildError
+from cake.engine import Script, ScriptResult, DependencyInfo, BuildError
 from cake.library import (
-  Tool, FileTarget, getPathsAndTasks, getPathAndTask, memoise
+  Tool, FileTarget, memoise,
+  getPaths, getPath, getResult, getTasks, getTask,
   )
 from cake.task import Task
 
@@ -136,20 +137,19 @@ class ResourceTarget(CompilerTarget):
     CompilerTarget.__init__(self, path, task, compiler)
     self.resource = FileTarget(path, task)
 
-def getLinkPathsAndTasks(files):
+def getLinkPaths(files):
   paths = []
-  tasks = []
   for f in files:
+    while isinstance(f, ScriptResult):
+      f = f.result
     if isinstance(f, PchTarget):
       if f.object is not None:
         paths.append(f.object.path)
-        tasks.append(f.object.task)
     elif isinstance(f, FileTarget):
       paths.append(f.path)
-      tasks.append(f.task)
     else:
       paths.append(f)
-  return paths, tasks
+  return paths
 
 class Command(object):
   
@@ -602,10 +602,8 @@ class Compiler(Tool):
     self.includePaths = []
     self.defines = []
     self.forcedIncludes = []
-    self.libraryScripts = []
     self.libraryPaths = []
     self.libraries = []
-    self.moduleScripts = []
     self.modules = []
     self.__binPaths = binPaths
 
@@ -779,18 +777,6 @@ class Compiler(Tool):
     """
     return reversed(self.libraryPaths)
 
-  def addLibraryScript(self, path):
-    """Add a script to be executed before performing a link.
-    
-    The script will be executed prior to any subsequent
-    program() or module() targets being built.
-    
-    @param path: Path of the script to execute.
-    @type path: string
-    """
-    self.libraryScripts.append(path)
-    self._clearCache()
-
   def addModule(self, name):
     """Add a module to the list of modules to copy.
     
@@ -798,18 +784,6 @@ class Compiler(Tool):
     @type name: string
     """
     self.modules.append(name)
-    self._clearCache()
-    
-  def addModuleScript(self, path):
-    """Add a script to be executed before copying modules.
-    
-    The script will be executed by the copyModulesTo()
-    function.
-    
-    @param path: Path of the script to execute.
-    @type path: string
-    """
-    self.moduleScripts.append(path)
     self._clearCache()
     
   def copyModulesTo(self, targetDir, **kwargs):
@@ -839,10 +813,6 @@ class Compiler(Tool):
     script = Script.getCurrent()
     engine = self.engine
     configuration = self.configuration
-
-    tasks = []
-    for moduleScript in self.moduleScripts:
-      tasks.append(configuration.execute(moduleScript, script.variant).task)
 
     def doCopy(source, targetDir):
       # Try without and with the extension
@@ -881,16 +851,18 @@ class Compiler(Tool):
 
       engine.notifyFileChanged(absTarget)
 
-    moduleTasks = []
-    for module in self.modules:
-      copyTask = engine.createTask(
-        lambda s=module,t=targetDir:
-          doCopy(s, t)
-        )
-      copyTask.startAfter(tasks)
-      moduleTasks.append(copyTask)
+    def copyModules():
+      modulePaths = getPaths(self.modules)
+      for modulePath in modulePaths:
+        copyTask = engine.createTask(
+          lambda s=modulePath, t=targetDir: doCopy(s, t)
+          )
+        copyTask.start(immediate=True)
     
-    return moduleTasks
+    moduleTasks = getTasks(self.modules)
+    copyModuleTask = engine.createTask(copyModules)
+    copyModuleTask.startAfter(moduleTasks)
+    return copyModuleTask
 
   def pch(self, target, source, header, forceExtension=True, **kwargs):
     """Compile an individual header to a pch file.
@@ -930,11 +902,10 @@ class Compiler(Tool):
       object = cake.path.stripExtension(target) + self.pchObjectSuffix
     
     if self.enabled:
-      source, sourceTask = getPathAndTask(source)
-      
+      sourceTask = getTask(source)
       pchTask = self.engine.createTask(
         lambda t=target, s=source, h=header, o=object, c=self:
-          c.buildPch(t, s, h, o)
+          c.buildPch(t, getPath(s), h, o)
         )
       pchTask.startAfter(sourceTask, threadPool=self.engine.scriptThreadPool)
     else:
@@ -987,17 +958,17 @@ class Compiler(Tool):
     
       prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
       
-      source, sourceTask = getPathAndTask(source)
+      sourceTask = getTask(source)
       if sourceTask is not None:
         prerequisiteTasks.append(sourceTask)
       
-      _, pchTask = getPathAndTask(pch)
+      pchTask = getTask(pch)
       if pchTask is not None:
         prerequisiteTasks.append(pchTask)
       
       objectTask = self.engine.createTask(
         lambda t=target, s=source, p=pch, h=shared, c=self:
-          c.buildObject(t, s, p, h)
+          c.buildObject(t, getPath(s), getResult(p), h)
         )
       objectTask.startAfter(prerequisiteTasks, threadPool=self.engine.scriptThreadPool)
     else:
@@ -1014,7 +985,7 @@ class Compiler(Tool):
     """Return a list of the tasks that are prerequisites for
     building an object file.
     """
-    return getPathsAndTasks(self.forcedIncludes)[1]
+    return getTasks(self.forcedIncludes)
     
   def objects(self, targetDir, sources, pch=None, **kwargs):
     """Build a collection of objects to a target directory.
@@ -1037,9 +1008,14 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
     
+    # TODO: Make this function support sources that are ScriptResult
+    # objects. Currently it will fail because it needs the path of the
+    # source file up front to calculate the path of the object file.
+    # We would have to return a ScriptResult ourselves here.
+    
     results = []
     for source in sources:
-      sourcePath, _ = getPathAndTask(source)
+      sourcePath = getPath(source)
       sourceName = cake.path.baseNameWithoutExtension(sourcePath)
       targetPath = cake.path.join(targetDir, sourceName)
       results.append(compiler._object(
@@ -1070,9 +1046,11 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
 
+    # TODO: See note in objects() above.
+
     results = []
     for source in sources:
-      sourcePath, _ = getPathAndTask(source)
+      sourcePath = getPath(source)
       sourceName = cake.path.baseNameWithoutExtension(sourcePath)
       targetPath = cake.path.join(targetDir, sourceName)
       results.append(compiler._object(
@@ -1115,14 +1093,14 @@ class Compiler(Tool):
 
     if self.enabled:
   
-      paths, tasks = getPathsAndTasks(sources)
+      tasks = getTasks(sources)
+
+      def build():
+        paths = getPaths(sources)
+        self._setObjectsInLibrary(target, paths)
+        self.buildLibrary(target, paths)
       
-      self._setObjectsInLibrary(target, paths)
-      
-      libraryTask = self.engine.createTask(
-        lambda t=target, s=paths, c=self:
-          c.buildLibrary(t, s)
-        )
+      libraryTask = self.engine.createTask(build)
       libraryTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
     else:
       libraryTask = None
@@ -1175,17 +1153,13 @@ class Compiler(Tool):
 
     if self.enabled:
       variant = Script.getCurrent().variant
+      tasks = getTasks(sources)
   
-      paths, tasks = getLinkPathsAndTasks(sources)
-  
-      execute = self.configuration.execute
-      for libraryScript in self.libraryScripts:
-        tasks.append(execute(libraryScript, variant).task)
+      def build():
+        paths = getLinkPaths(sources)
+        self.buildModule(target, paths)
       
-      moduleTask = self.engine.createTask(
-        lambda t=target, s=paths, c=self:
-          c.buildModule(t, s)
-        )
+      moduleTask = self.engine.createTask(build)
       moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
     else:
       moduleTask = None
@@ -1235,16 +1209,13 @@ class Compiler(Tool):
     if self.enabled:
       variant = Script.getCurrent().variant
   
-      paths, tasks = getLinkPathsAndTasks(sources)
-      
-      execute = self.configuration.execute
-      for libraryScript in self.libraryScripts:
-        tasks.append(execute(libraryScript, variant).task)
-      
-      programTask = self.engine.createTask(
-        lambda t=target, s=paths, c=self:
-          c.buildProgram(t, s)
-        )
+      def build():
+        paths = getLinkPaths(sources)
+        self.buildProgram(target, paths)
+
+      tasks = getTasks(sources)
+      tasks.extend(getTasks(self.getLibraries()))
+      programTask = self.engine.createTask(build)
       programTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
     else:
       programTask = None
@@ -1287,12 +1258,12 @@ class Compiler(Tool):
 
     if self.enabled:
  
-      path, task = getPathAndTask(source)
-      
-      resourceTask = self.engine.createTask(
-        lambda t=target, s=path, c=self:
-          c.buildResource(t, s)
-        )
+      def build():
+        path = getPath(source)
+        self.buildResource(target, path)
+
+      task = getTask(source)      
+      resourceTask = self.engine.createTask(build)
       resourceTask.startAfter(task, threadPool=self.engine.scriptThreadPool)
     else:
       resourceTask = None
@@ -1477,10 +1448,10 @@ class Compiler(Tool):
     @rtype: tuple of (list of string, list of string)
     """
     objects = []
-    libraries = list(self.getLibraries())
+    libraries = getPaths(self.getLibraries())
 
     if not self.linkObjectsInLibrary:
-      return objects, libraries 
+      return objects, libraries
 
     paths = self._scanForLibraries(libraries, True)
     newLibraries = []

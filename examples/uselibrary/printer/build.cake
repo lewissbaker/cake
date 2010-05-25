@@ -21,7 +21,8 @@ objects = compiler.objects(
   )
 
 # Build library
-compiler.library(
+lib = compiler.library(
   target=env.expand("${BUILD}/uselibrary/printer/lib/printer"),
   sources=objects,
   )
+script.setResult(library=lib)

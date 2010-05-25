@@ -5,8 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script
-from cake.library import Tool, FileTarget, getPathsAndTasks
+from cake.engine import Script, ScriptResult
+from cake.library import Tool, FileTarget, getPaths, getTasks
 
 class ScriptTool(Tool):
   """Tool that provides utilities for performing Script operations.
@@ -175,10 +175,10 @@ class ScriptTool(Tool):
     engine = self.engine
     configuration = self.configuration
 
-    sourcePaths, sourceTasks = getPathsAndTasks(sources)
+    sourceTasks = getTasks(sources)
 
     def _run():
-
+      sourcePaths = getPaths(sources)
       if targets:
         buildArgs = (args, sourcePaths)
         try:
@@ -241,37 +241,3 @@ class ScriptProxy(object):
     """
     return ScriptResult(self.__execute, name)
 
-class ScriptResult(object):
-  """A placeholder that can be used to reference a result of another
-  script that may not be available yet.
-  
-  The result will be available when the task has completed successfully.
-  """
-  
-  __slots__ = ['__execute', '__script', '__name']
-  
-  def __init__(self, execute, name):
-    self.__execute = execute
-    self.__script = None
-    self.__name = name
-    
-  @property
-  def script(self):
-    """The Script that will be executed.
-    """
-    script = self.__script
-    if script is None:
-      script = self.__script = self.__execute()
-      assert isinstance(script, Script)
-    return script
-    
-  @property
-  def task(self):
-    """The script's task.
-    """
-    return self.script.task
-
-  @property
-  def result(self):
-    assert self.task.completed
-    return self.__script.getResult(self.__name)

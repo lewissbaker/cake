@@ -5,7 +5,7 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.library import Tool, getPathAndTask
+from cake.library import Tool, getPath, getTask
 import cake.filesys
 import zipfile
 import os
@@ -247,6 +247,7 @@ class ZipTool(Tool):
     configuration = self.configuration
     
     def doIt():
+      sourcePath = getPath(source)
       absTargetDir = configuration.abspath(targetDir)
       file = zipfile.ZipFile(configuration.abspath(sourcePath), "r")
       try:
@@ -290,7 +291,7 @@ class ZipTool(Tool):
         file.close()
 
     if self.enabled:
-      sourcePath, sourceTask = getPathAndTask(source)
+      sourceTask = getTask(source)
 
       task = engine.createTask(doIt)
       task.startAfter(sourceTask)
@@ -342,6 +343,8 @@ class ZipTool(Tool):
 
     def doIt():
 
+      sourcePath = getPath(source)
+
       # Build a list of files/dirs to zip
       toZip = _getFilesToCompress(configuration, sourcePath, includeMatch, excludeMatch)
 
@@ -390,7 +393,7 @@ class ZipTool(Tool):
         cake.filesys.renameFile(absTargetTmpPath, absTargetPath)
 
     if self.enabled:
-      sourcePath, sourceTask = getPathAndTask(source)
+      sourceTask = getTask(source)
 
       task = engine.createTask(doIt)
       task.startAfter(sourceTask)

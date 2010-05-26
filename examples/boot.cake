@@ -15,24 +15,28 @@ script = Script.getCurrent()
 engine = script.engine
 configuration = script.configuration
 
-# This is how you set default keywords passed on the command-line
-configuration.defaultKeywords["compiler"] = "all"
-configuration.defaultKeywords["release"] = ["debug", "release"]
+hostPlatform = cake.system.platform().lower()
+hostArchitecture = cake.system.architecture().lower()
+
+# This is how you specify the default keyword values that will be used
+# if not specified on the command-line.
+keywords = configuration.defaultKeywords
+keywords["platform"] = hostPlatform
+keywords["architecture"] = hostArchitecture
+keywords["compiler"] = "dummy"
+keywords["release"] = "debug"
 
 # This is how you set an alternative base-directory
 # All relative paths will be relative to this absolute path.
 #configuration.baseDir = configuration.baseDir + '/..'
 
-hostPlatform = cake.system.platform().lower()
-hostArchitecture = cake.system.architecture().lower()
-
 base = Variant()
 base.tools["script"] = ScriptTool(configuration=configuration)
-base.tools["filesys"] = FileSystemTool(configuration=configuration)
+filesys = base.tools["filesys"] = FileSystemTool(configuration=configuration)
 base.tools["variant"] = VariantTool(configuration=configuration)
 shell = base.tools["shell"] = ShellTool(configuration=configuration)
 shell.update(os.environ)
-base.tools["zipping"] = ZipTool(configuration=configuration)
+zipping = base.tools["zipping"] = ZipTool(configuration=configuration)
 base.tools["logging"] = LoggingTool(configuration=configuration)
 env = base.tools["env"] = Environment(configuration=configuration)
 env["EXAMPLES"] = "."
@@ -41,6 +45,12 @@ projectTool.product = projectTool.VS2008
 projectTool.enabled = engine.createProjects
 engine.addBuildSuccessCallback(projectTool.build)
 
+# Disable tools during project generation
+if engine.createProjects:
+  filesys.enabled = False
+  shell.enabled = False
+  zipping.enabled = False
+  
 def createVariants(parent):
   for release in ["debug", "release"]:
     variant = parent.clone(release=release)
@@ -78,6 +88,7 @@ def createVariants(parent):
     if engine.createProjects:
       compiler.enabled = False
 
+    # Set project/solution configuration and platform names
     projectTool = variant.tools["project"]
     projectTool.projectConfigName = "%s (%s) %s (%s)" % (
       platform.capitalize(),

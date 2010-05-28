@@ -91,6 +91,10 @@ def zipFiles(sourcePath, targetZip):
   @type sourcePath: string
   @param targetZip: The path of the target zip.
   @type targetZip: string
+  
+  @return: A list of paths to the files and directories
+  compressed.
+  @rtype: list of string
   """
   toZip = findFilesToCompress(sourcePath)
   cake.filesys.makeDirs(os.path.dirname(targetZip))
@@ -103,4 +107,4 @@ def zipFiles(sourcePath, targetZip):
     zipFile.close()
   finally:
     f.close()
-  
+  return toZip.values()

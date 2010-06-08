@@ -703,6 +703,20 @@ class Compiler(Tool):
     self.includePaths.append(path)
     self._clearCache()
     
+  def insertIncludePath(self, index, path):
+    """Insert an include path into the preprocessor search paths.
+    
+    Include paths inserted at the back will have precedence over
+    those inserted at the front.
+    
+    @param index: The index to insert at.
+    @type index: int
+    @param path: The path to add.
+    @type path: string
+    """
+    self.includePaths.insert(index, path)
+    self._clearCache()
+        
   def getIncludePaths(self):
     """Get an iterator for include paths.
     
@@ -727,7 +741,26 @@ class Compiler(Tool):
     else:
       self.defines.append("{0}={1}".format(name, value))
     self._clearCache()
-  
+    
+  def insertDefine(self, index, name, value=None):
+    """Insert a define into the preprocessor command-line.
+    
+    Defines inserted at the back will have precedence over those
+    inserted at the front.
+    
+    @param index: The index to insert at.
+    @type index: int
+    @param name: The name of the define to set.
+    @type name: string
+    @param value: An optional value for the define.
+    @type value: string or None
+    """
+    if value is None:
+      self.defines.insert(index, name)
+    else:
+      self.defines.insert(index, "{0}={1}".format(name, value))
+    self._clearCache()
+      
   def getDefines(self):
     """Get an iterator for preprocessor defines.
     
@@ -749,7 +782,21 @@ class Compiler(Tool):
     """
     self.forcedIncludes.append(path)
     self._clearCache()
-
+  
+  def insertForcedInclude(self, index, path):
+    """Insert a forcibly included file into the command-line.
+    
+    Forced includes will be included in order. 
+    
+    @param index: The index to insert at.
+    @type index: int
+    @param path: The path to the forced include file. This may need
+    to be relative to a previously defined includePath. 
+    @type path: string
+    """
+    self.forcedIncludes.insert(index, path)
+    self._clearCache()
+    
   def getForcedIncludes(self):
     """Get an iterator for forced includes.
     
@@ -770,6 +817,20 @@ class Compiler(Tool):
     self.libraries.append(name)
     self._clearCache()
 
+  def insertLibrary(self, index, name):
+    """Insert a library into the list of libraries to link with.
+    
+    Libraries inserted at the back will have precedence over those
+    inserted at the front. 
+    
+    @param index: The index to insert at.
+    @type index: int
+    @param name: Name/path of the library to link with.
+    @type name: string
+    """
+    self.libraries.insert(index, name)
+    self._clearCache()
+    
   def getLibraries(self):
     """Get an iterator for libraries.
     
@@ -789,7 +850,21 @@ class Compiler(Tool):
     """
     self.libraryPaths.append(path)
     self._clearCache()
-  
+
+  def insertLibraryPath(self, index, path):
+    """Insert a path into the list of library search paths.
+    
+    Library paths inserted at the back will have precedence over
+    those inserted at the front.
+    
+    @param index: The index to insert at.
+    @type index: int
+    @param path: The path to add.
+    @type path: string
+    """
+    self.libraryPaths.insert(index, path)
+    self._clearCache()
+      
   def getLibraryPaths(self):
     """Get an iterator for library paths.
     

@@ -34,6 +34,9 @@ class MwcwCompiler(Compiler):
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
+    if self.messageStyle != self.MSVS_CLICKABLE:
+      return inputText
+    
     def readLine(text):
       res, _, text = text.partition("\r\n")
       return res, text

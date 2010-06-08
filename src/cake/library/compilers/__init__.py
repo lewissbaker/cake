@@ -233,6 +233,19 @@ class Compiler(Tool):
     MSVC: /GL
     MWCW: -opt level=4  
   """
+  MSVS_CLICKABLE = 0
+  """Messages are clickable in Microsoft Visual Studio.
+  
+  When this options is chosen compiler warnings and error messages
+  will be formatted to be clickable in Microsoft Visual Studio.
+  
+  The format of each message will be as follows::
+  sourceFile(lineNumber) : message
+  
+  Note that if 'MsvcCompiler.outputFullPath' is set to False this
+  option may need to be enabled so that relative source file paths
+  are converted to clickable absolute paths. 
+  """
   debugSymbols = None
   """Enable debug symbols.
 
@@ -252,6 +265,14 @@ class Compiler(Tool):
   L{FULL_OPTIMISATION}
 
   If the value is None the compiler default is used.
+  @type: enum or None
+  """
+  messageStyle = None
+  """Set the message style.
+  
+  Available enum values are: L{MSVS_CLICKABLE}
+
+  If the value is None the compiler default output is used.
   @type: enum or None
   """
   enableRtti = None
@@ -1096,7 +1117,7 @@ class Compiler(Tool):
       tasks = getTasks(sources)
 
       def build():
-        paths = getPaths(sources)
+        paths = getLinkPaths(sources)
         self._setObjectsInLibrary(target, paths)
         self.buildLibrary(target, paths)
       
@@ -1273,7 +1294,35 @@ class Compiler(Tool):
       task=resourceTask,
       compiler=self,
       )
-          
+
+  def resources(self, targetDir, sources, **kwargs):
+    """Build a collection of resources to a target directory.
+    
+    @param targetDir: Path to the target directory where the built resources
+    will be placed.
+    @type targetDir: string
+    
+    @param sources: A list of source files to compile to resource files.
+    @type sources: sequence of string or FileTarget objects
+    
+    @return: A list of FileTarget objects, one for each resource being
+    built.
+    """
+    compiler = self.clone()
+    for k, v in kwargs.iteritems():
+      setattr(compiler, k, v)
+    
+    results = []
+    for source in sources:
+      sourcePath = getPath(source)
+      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
+      targetPath = cake.path.join(targetDir, sourceName)
+      results.append(compiler._resource(
+        targetPath,
+        source,
+        ))
+    return results
+              
   ###########################
   # Internal methods not part of public API
   

@@ -247,7 +247,7 @@ class GccCompiler(Compiler):
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
-    if not cake.system.isWindows():
+    if self.messageStyle != self.MSVS_CLICKABLE:
       return inputText
 
     outputLines = []

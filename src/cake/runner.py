@@ -202,7 +202,6 @@ def run(args=None, cwd=None):
     cwd = os.path.abspath(cwd)
   else:
     cwd = os.getcwd()
-  cwd = cake.path.fileSystemPath(cwd)
 
   keywords = {}
   scripts = []
@@ -237,6 +236,7 @@ def run(args=None, cwd=None):
     bootScript = os.path.abspath(bootScript)
   
   for script in scripts:
+    script = cake.path.fileSystemPath(script)
     try:
       task = engine.execute(
         path=script,

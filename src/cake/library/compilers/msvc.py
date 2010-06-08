@@ -365,6 +365,7 @@ class MsvcCompiler(Compiler):
     self.__mtExe = mtExe
     self.__rcExe = rcExe
     self.__architecture = architecture
+    self.__messageExpression = re.compile(r'^(.+)\(\d+\) :', re.MULTILINE)
     self.forcedUsings = []
     
   @property
@@ -379,6 +380,33 @@ class MsvcCompiler(Compiler):
     """
     self.forcedUsings.append(assembly)
     self._clearCache()
+    
+  def _formatMessage(self, inputText):
+    """Format errors to be clickable in MS Visual Studio.
+    """
+    outputLines = []
+    pos = 0
+    while True:
+      m = self.__messageExpression.search(inputText, pos)
+      if m:
+        path, = m.groups()
+        startPos = m.start()
+        endPos = startPos + len(path)
+        if startPos != pos: 
+          outputLines.append(inputText[pos:startPos])
+        path = self.configuration.abspath(os.path.normpath(path))
+        outputLines.append(path)
+        pos = endPos
+      else:
+        outputLines.append(inputText[pos:])
+        break
+    return ''.join(outputLines)
+  
+  def _outputStdout(self, text):
+    Compiler._outputStdout(self, self._formatMessage(text))
+
+  def _outputStderr(self, text):
+    Compiler._outputStderr(self, self._formatMessage(text))
     
   @memoise
   def _getObjectPrerequisiteTasks(self):

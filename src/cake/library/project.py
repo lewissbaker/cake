@@ -18,7 +18,7 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.library import Tool, FileTarget
+from cake.library import Tool, FileTarget, getPaths, getTasks
 from cake.engine import Script
   
 class _Project(object):
@@ -399,7 +399,7 @@ class ProjectTool(Tool):
 # TODO: Fill these out when the compiler has them.
     compileAsManaged = ""
     assemblyPaths = []
-    forcedUsings = getattr(compiler, "forcedUsings", [])
+    forcedUsings = getPaths(getattr(compiler, "forcedUsings", []))
 
     # Project name defaults the base filename without extension
     if name is None:
@@ -485,16 +485,18 @@ class ProjectTool(Tool):
 
     if not self.enabled:
       return FileTarget(path=target, task=None)
+    
+    projectPaths = getPaths(projects)
 
     if self.product == self.VS2010:
-      projects = [
+      projectPaths = [
         cake.path.forceExtension(p, self._msvsProjectSuffix2010)
-        for p in projects
+        for p in projectPaths
         ]
     else:
-      projects = [
+      projectPaths = [
         cake.path.forceExtension(p, self._msvsProjectSuffix)
-        for p in projects
+        for p in projectPaths
         ]
     
     configName = self._getSolutionConfigName()
@@ -514,7 +516,7 @@ class ProjectTool(Tool):
       )
     solution.addConfiguration(configuration)
     
-    for p in projects:
+    for p in projectPaths:
       configuration.addProjectConfiguration(_SolutionProjectConfiguration(
         projectConfigName,
         projectPlatformName,
@@ -894,8 +896,17 @@ class MsvsProjectGenerator(object):
     runfile = cake.path.relativePath(config.output, self.projectDir)
     buildlog = os.path.join(intdir, "buildlog.html")
 
-    includePaths = ';'.join(config.includePaths)
-    assemblyPaths = ';'.join(config.assemblyPaths)
+    includePaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.includePaths
+      ]    
+    assemblyPaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.assemblyPaths
+      ]    
+
+    includePaths = ';'.join(includePaths)
+    assemblyPaths = ';'.join(assemblyPaths)
     forcedIncludes = ';'.join(config.forcedIncludes)
     forcedUsings = ';'.join(config.forcedUsings)
     compileAsManaged = config.compileAsManaged
@@ -1259,8 +1270,17 @@ class MsBuildProjectGenerator(object):
     """
     output = cake.path.relativePath(config.output, self.projectDir)
 
-    includePaths = ';'.join(itertools.chain(config.includePaths, ['$(NMakeIncludeSearchPath)']))
-    assemblyPaths = ';'.join(itertools.chain(config.assemblyPaths, ['$(NMakeAssemblySearchPath)']))
+    includePaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.includePaths
+      ]    
+    assemblyPaths = [
+      cake.path.relativePath(p, self.projectDir)
+      for p in config.assemblyPaths
+      ]    
+
+    includePaths = ';'.join(includePaths + ['$(NMakeIncludeSearchPath)'])
+    assemblyPaths = ';'.join(assemblyPaths + ['$(NMakeAssemblySearchPath)'])
     forcedIncludes = ';'.join(itertools.chain(config.forcedIncludes, ['$(NMakeForcedIncludes)']))
     forcedUsings = ';'.join(itertools.chain(config.forcedUsings, ['$(NMakeForcedUsingAssemblies)']))
     defines = ';'.join(itertools.chain(config.defines, ['$(NMakePreprocessorDefinitions)']))

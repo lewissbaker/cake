@@ -164,7 +164,7 @@ def run(args=None, cwd=None):
     metavar="FILE",
     dest="boot",
     help="Path to the boot.cake configuration file to use.",
-    default=None
+    default=None,
     )
   parser.add_option(
     "-f", "--force",

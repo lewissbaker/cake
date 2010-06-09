@@ -100,7 +100,7 @@ class Engine(object):
   """
   
   forceBuild = False
-  defaultBootScriptName = "boot.cake"
+  defaultConfigScriptName = "config.cake"
   
   def __init__(self, logger):
     """Default Constructor.
@@ -165,36 +165,36 @@ class Engine(object):
 
     return configPath
   
-  def findBootScriptPath(self, path, bootScriptName=None):
-    """Attempt to find the path of the boot script to use for building
+  def findConfigScriptPath(self, path, configScriptName=None):
+    """Attempt to find the path of the config script to use for building
     a particular path.
     
-    @param path: Absolute path to start searching for the boot script file.
+    @param path: Absolute path to start searching for the config script file.
     @type path: string
     
-    @param bootScriptName: Name of the boot script file to search for
-    or None to use the default bootScriptName.
-    @type bootScriptName: string or None
+    @param configScriptName: Name of the config script file to search for
+    or None to use the default configScriptName.
+    @type configScriptName: string or None
     
-    @return: Path to the boot script file if found otherwise None.
+    @return: Path to the config script file if found otherwise None.
     @rtype: string or None
     """
-    if bootScriptName is None:
-      bootScriptName = self.defaultBootScriptName
+    if configScriptName is None:
+      configScriptName = self.defaultConfigScriptName
 
-    return self.searchUpForFile(path, bootScriptName)
+    return self.searchUpForFile(path, configScriptName)
   
   def getConfiguration(self, path):
-    """Get the configuration for a specified boot script path.
+    """Get the configuration for a specified config script path.
     
-    Executes the boot script if not already executed.
+    Executes the config script if not already executed.
     
-    @param path: Absolute path of the boot script used to
+    @param path: Absolute path of the config script used to
     populate the configuration.
     @type path: string
     
     @return: The Configuration that has been configured with the
-    specified boot script.
+    specified config script.
     @rtype: L{Configuration}
     """
     configuration = self._configurations.get(path, None)
@@ -212,42 +212,42 @@ class Engine(object):
       configuration = self._configurations.setdefault(path, configuration)
     return configuration
   
-  def findConfiguration(self, path, bootScriptName=None):
+  def findConfiguration(self, path, configScriptName=None):
     """Find the configuration for a particular path.
     
-    @param path: Absolute path to start searching for a boot script.
+    @param path: Absolute path to start searching for a config script.
     @type path: string
     
-    @param bootScriptName: Name of the boot script to search for.
-    If not supplied then self.defaultBootScriptName is used.
-    @type bootScriptName: string or None
+    @param configScriptName: Name of the config script to search for.
+    If not supplied then self.defaultConfigScriptName is used.
+    @type configScriptName: string or None
 
     @return: The initialised Configuration object corresponding
-    to the found boot script.
+    to the found config script.
     @rtype: L{Configuration}
     """
-    # TODO: Handle boot script not found error
-    bootScript = self.findBootScriptPath(path, bootScriptName)
-    return self.getConfiguration(bootScript)
+    # TODO: Handle config script not found error
+    configScript = self.findConfigScriptPath(path, configScriptName)
+    return self.getConfiguration(configScript)
   
-  def execute(self, path, bootScript=None, bootScriptName=None, keywords={}):
+  def execute(self, path, configScript=None, configScriptName=None, keywords={}):
     """Execute a script at specified path with all matching variants.
     
     The variants the script is executed with are determined by the
-    defaultKeywords set by the boot script and the keywords specified
+    defaultKeywords set by the config script and the keywords specified
     here.
     
     @param path: Absolute path of the script to execute.
     @type path: string.
     
-    @param bootScript: Absolute path of the boot script to execute the
-    script with, pass None to search for the boot script.
-    @type bootScript: string or None
+    @param configScript: Absolute path of the config script to execute the
+    script with, pass None to search for the config script.
+    @type configScript: string or None
     
-    @param bootScriptName: Name of the boot script file to search for
-    if bootScript was passed as None. If None then use the engine's
-    default boot script name.
-    @type bootScriptName: string or None
+    @param configScriptName: Name of the config script file to search for
+    if configScript was passed as None. If None then use the engine's
+    default config script name.
+    @type configScriptName: string or None
     
     @param keywords: Keywords used to filter the set of variants the
     script will be executed with.
@@ -257,10 +257,10 @@ class Engine(object):
     it spawns finishes executing.
     @rtype: L{Task}
     """
-    if bootScript is None:
-      configuration = self.findConfiguration(path, bootScriptName)
+    if configScript is None:
+      configuration = self.findConfiguration(path, configScriptName)
     else:
-      configuration = self.getConfiguration(bootScript)
+      configuration = self.getConfiguration(configScript)
 
     path = cake.path.relativePath(path, configuration.baseDir)
 
@@ -630,22 +630,22 @@ class Script(object):
 class Configuration(object):
   """A configuration is a collection of related Variants.
   
-  It is typically populated by a boot.cake script.
+  It is typically populated by a config.cake script.
   
   @ivar engine: The Engine this configuration object belongs to.
   @type engine: L{Engine}
   
-  @ivar path: The absolute path of the boot script that was used to
+  @ivar path: The absolute path of the config script that was used to
   initialise this configuration.
   @type path: string
   
-  @ivar dir: The absolute path of the directory containing the boot
+  @ivar dir: The absolute path of the directory containing the config
   script.
   @type dir: string
   
   @ivar baseDir: The absolute path of the directory that all relative
   paths will be assumed to be relative to. Defaults to the directory
-  of the boot script but may be overridden by the boot script.
+  of the config script but may be overridden by the config script.
   @type baseDir: string
   """
   
@@ -657,7 +657,7 @@ class Configuration(object):
   def __init__(self, path, engine):
     """Construct a new Configuration.
     
-    @param path: Absolute path of the boot script that will be 
+    @param path: Absolute path of the config script that will be 
     used to initialise this configuration.
     @type path: string
     

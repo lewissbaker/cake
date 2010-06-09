@@ -87,7 +87,7 @@ class ScriptTool(Tool):
     else:
       return [execute(path, variant) for path in scripts]
 
-  def executeNoContext(self, scripts, bootScript=None, bootScriptName=None, **keywords):
+  def executeNoContext(self, scripts, configScript=None, configScriptName=None, **keywords):
     """Execute another script as a background task.
     
     Does not use any context from the current script's variant or
@@ -96,14 +96,14 @@ class ScriptTool(Tool):
     @param scripts: Paths of scripts to execute.
     @type scripts: string or list of string
     
-    @param bootScript: Path of the boot script to execute these scripts
-    with or None to find the boot script for each script.
-    @type bootScript: string or None
+    @param configScript: Path of the config script to execute these scripts
+    with or None to find the config script for each script.
+    @type configScript: string or None
     
-    @param bootScriptName: If bootScript is None then this specifies
-    the name of the boot script to search for. If None then use the
-    default boot script name specified by the Engine.
-    @type bootScriptName: string or None
+    @param configScriptName: If configScript is None then this specifies
+    the name of the config script to search for. If None then use the
+    default config script name specified by the Engine.
+    @type configScriptName: string or None
     
     @param keywords: Collection of keywords that specify the variant
     to execute the script with.
@@ -111,13 +111,13 @@ class ScriptTool(Tool):
     
     script = Script.getCurrent()
     engine = script.engine
-    if bootScript is None:
-      # Calculate the boot script for each script path
+    if configScript is None:
+      # Calculate the config script for each script path
       if isinstance(scripts, basestring):
         path = self.abspath(scripts)
         configuration = engine.findConfiguration(
           path=path,
-          bootScriptName=bootScriptName,
+          configScriptName=configScriptName,
           )
         variant = configuration.findVariant(keywords)
         result = configuration.execute(scripts, variant)
@@ -128,15 +128,15 @@ class ScriptTool(Tool):
           path = abspath(path)
           configuration = engine.findConfiguration(
             path=path,
-            bootScriptName=bootScriptName,
+            configScriptName=configScriptName,
             )
           variant = configuration.findVariant(keywords)
           result.append(configuration.execute(path, variant))
     else:
-      # Calculate boot script once and reuse for each script path
+      # Calculate config script once and reuse for each script path
       abspath = self.abspath
-      bootScript = abspath(bootScript)
-      configuration = engine.getConfiguration(bootScript)
+      configScript = abspath(configScript)
+      configuration = engine.getConfiguration(configScript)
       variant = configuration.findVariant(keywords)
       execute = configuration.execute
       if isinstance(scripts, basestring):

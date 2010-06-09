@@ -160,10 +160,10 @@ def run(args=None, cwd=None):
   
   parser = optparse.OptionParser(usage=usage,option_class=MyOption)
   parser.add_option(
-    "-b", "--boot",
+    "-c", "--config",
     metavar="FILE",
-    dest="boot",
-    help="Path to the boot.cake configuration file to use.",
+    dest="config",
+    help="Path to the config.cake configuration file to use.",
     default=None,
     )
   parser.add_option(
@@ -231,16 +231,16 @@ def run(args=None, cwd=None):
   
   tasks = []
   
-  bootScript = options.boot
-  if bootScript is not None and not os.path.isabs(bootScript):
-    bootScript = os.path.abspath(bootScript)
+  configScript = options.config
+  if configScript is not None and not os.path.isabs(configScript):
+    configScript = os.path.abspath(configScript)
   
   for script in scripts:
     script = cake.path.fileSystemPath(script)
     try:
       task = engine.execute(
         path=script,
-        bootScript=bootScript,
+        configScript=configScript,
         keywords=keywords,
         )
       tasks.append(task)

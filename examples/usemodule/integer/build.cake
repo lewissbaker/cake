@@ -1,7 +1,7 @@
 from cake.tools import compiler, env, script
 
 compiler.addIncludePath(script.cwd("include"))
-compiler.addDefine("EXPORT")
+compiler.addDefine("EXPORT_MODULE", "1")
 
 includes = script.cwd("include", [
   "integer.h",

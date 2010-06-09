@@ -18,13 +18,6 @@ configuration = script.configuration
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
 
-# This is how you override the keywords passed on the command-line
-keywords = configuration.keywords
-keywords.setdefault("platform", hostPlatform)
-keywords.setdefault("architecture", hostArchitecture)
-keywords.setdefault("compiler", "dummy")
-keywords.setdefault("release", "debug")
-
 # This is how you set an alternative base-directory
 # All relative paths will be relative to this absolute path.
 #configuration.baseDir = configuration.baseDir + '/..'

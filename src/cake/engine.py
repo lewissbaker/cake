@@ -184,7 +184,7 @@ class Engine(object):
 
     return self.searchUpForFile(path, bootScriptName)
   
-  def getConfiguration(self, path, keywords):
+  def getConfiguration(self, path):
     """Get the configuration for a specified boot script path.
     
     Executes the boot script if not already executed.
@@ -193,17 +193,13 @@ class Engine(object):
     populate the configuration.
     @type path: string
     
-    @param keywords: Keywords used to filter the set of variants the
-    configuration will be executed with.
-    @type keywords: dictionary of string -> string or list of string
-    
     @return: The Configuration that has been configured with the
     specified boot script.
     @rtype: L{Configuration}
     """
     configuration = self._configurations.get(path, None)
     if configuration is None:
-      configuration = Configuration(path=path, engine=self, keywords=keywords)
+      configuration = Configuration(path=path, engine=self)
       script = Script(
         path=path,
         configuration=configuration,
@@ -216,7 +212,7 @@ class Engine(object):
       configuration = self._configurations.setdefault(path, configuration)
     return configuration
   
-  def findConfiguration(self, path, bootScriptName=None, keywords={}):
+  def findConfiguration(self, path, bootScriptName=None):
     """Find the configuration for a particular path.
     
     @param path: Absolute path to start searching for a boot script.
@@ -226,17 +222,13 @@ class Engine(object):
     If not supplied then self.defaultBootScriptName is used.
     @type bootScriptName: string or None
 
-    @param keywords: Keywords used to filter the set of variants the
-    configuration will be executed with.
-    @type keywords: dictionary of string -> string or list of string
-
     @return: The initialised Configuration object corresponding
     to the found boot script.
     @rtype: L{Configuration}
     """
     # TODO: Handle boot script not found error
     bootScript = self.findBootScriptPath(path, bootScriptName)
-    return self.getConfiguration(bootScript, keywords)
+    return self.getConfiguration(bootScript)
   
   def execute(self, path, bootScript=None, bootScriptName=None, keywords={}):
     """Execute a script at specified path with all matching variants.
@@ -258,8 +250,7 @@ class Engine(object):
     @type bootScriptName: string or None
     
     @param keywords: Keywords used to filter the set of variants the
-    script will be executed with. Any keywords specified here may
-    be overridden by the boot script.
+    script will be executed with.
     @type keywords: dictionary of string -> string or list of string
 
     @return: A task that will complete when the script and any tasks
@@ -267,14 +258,14 @@ class Engine(object):
     @rtype: L{Task}
     """
     if bootScript is None:
-      configuration = self.findConfiguration(path, bootScriptName, keywords)
+      configuration = self.findConfiguration(path, bootScriptName)
     else:
-      configuration = self.getConfiguration(bootScript, keywords)
+      configuration = self.getConfiguration(bootScript)
 
     path = cake.path.relativePath(path, configuration.baseDir)
 
     tasks = []
-    for variant in configuration.findDefaultVariants():
+    for variant in configuration.findAllVariants(keywords):
       task = configuration.execute(path, variant)
       tasks.append(task)
       
@@ -656,10 +647,6 @@ class Configuration(object):
   paths will be assumed to be relative to. Defaults to the directory
   of the boot script but may be overridden by the boot script.
   @type baseDir: string
-  
-  @ivar keywords: A dictionary of keyword values used to filter the
-  set of variants a script will be built with.
-  @type keywords: dict of string -> string or list of string.
   """
   
   defaultBuildScriptName = 'build.cake'
@@ -667,7 +654,7 @@ class Configuration(object):
   build a directory.
   """
   
-  def __init__(self, path, engine, keywords={}):
+  def __init__(self, path, engine):
     """Construct a new Configuration.
     
     @param path: Absolute path of the boot script that will be 
@@ -676,14 +663,9 @@ class Configuration(object):
     
     @param engine: The Engine object this configuration belongs to.
     @type engine: L{Engine}
-    
-    @param keywords: A dictionary of keyword values used to filter the
-    set of variants a script will be built with.
-    @type keywords: dict of string -> string or list of string.    
     """
     self.engine = engine
     self.path = path
-    self.keywords = dict(keywords)
     self.dir = cake.path.dirName(path)
     self.baseDir = self.dir
     self._variants = {}
@@ -720,13 +702,6 @@ class Configuration(object):
     
     self._variants[key] = variant
 
-  def findDefaultVariants(self):
-    """Find all variants that match the specified keywords.
-    
-    Keywords not specified will assume the 'defaultKeywords' values.
-    """
-    return self.findAllVariants(self.keywords)
-    
   def findAllVariants(self, keywords={}):
     """Find all variants that match the specified keywords.
     

@@ -116,7 +116,9 @@ def renameFile(source, target):
   # Note: When compiling small programs it is common to get a 'Permission denied'
   # exception here. Presumably it's because the OS has a handle to the destination
   # file open after we have called os.remove(). For this reason we sit in a loop
-  # attempting to rename until we reach a timeout of 1 second.
+  # attempting to rename until we reach a timeout of 1 second. However I've
+  # noticed under Python 2.4 it's still possible to get 'Permission denied'
+  # errors the first time the examples are built. 
   timeout = time.clock() + 1.0
   while True:
     try:

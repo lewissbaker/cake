@@ -5,7 +5,7 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import ScriptResult
+from cake.engine import Script
 from cake.task import Task
 
 class ToolMetaclass(type):
@@ -121,6 +121,144 @@ class FileTarget(object):
     self.path = path
     self.task = task
 
+class AsyncResult(object):
+  """Base class for asynchronous results.
+  
+  @ivar task: A Task that will complete when the result is available.
+  @ivar result: The result of the asynchronous operation.
+  """ 
+
+class DeferredResult(AsyncResult):
+  
+  def __init__(self, func):
+    self.task = Task(func)
+
+  @property
+  def result(self):
+    return self.task.result
+
+class ScriptResult(AsyncResult):
+  """A placeholder that can be used to reference a result of another
+  script that may not be available yet.
+  
+  The result will be available when the task has completed successfully.
+  """
+  
+  __slots__ = ['__execute', '__script', '__name']
+  
+  def __init__(self, execute, name):
+    self.__execute = execute
+    self.__script = None
+    self.__name = name
+    
+  @property
+  def script(self):
+    """The Script that will be executed.
+    """
+    script = self.__script
+    if script is None:
+      script = self.__script = self.__execute()
+      assert isinstance(script, Script)
+    return script
+    
+  @property
+  def task(self):
+    """The script's task.
+    """
+    return self.script.task
+
+  @property
+  def result(self):
+    assert self.task.completed
+    return self.__script.getResult(self.__name)
+
+def waitForAsyncResult(func):
+  """Decorator to be used with functions that need to
+  wait for its argument values to become available before
+  calling the function.
+  
+  eg.
+  @waitForAsyncResult
+  def someFunction(source):
+    return source + '.obj'
+
+  Calling above someFunction() with an AsyncResult will return an AsyncResult
+  whose result is the return value of the function
+  """
+  def call(*args, **kwargs):
+    tasks = []
+    for arg in args:
+      if isinstance(arg, AsyncResult):
+        task = arg.task
+        if not task.completed:
+          tasks.append(task)
+    for arg in kwargs.itervalues():
+      if isinstance(arg, AsyncResult):
+        task = arg.task
+        if not task.completed:
+          tasks.append(task)
+
+    def run():
+      newArgs = tuple(getResult(x) for x in args)
+      newKwargs = dict((k, getResult(v)) for k, v in kwargs.iteritems())
+      return func(*newArgs, **newKwargs)
+        
+    if tasks:
+      deferred = DeferredResult(run)
+      deferred.task.startAfter(tasks)
+      return deferred
+    else:
+      return run()
+  
+  return call
+
+@waitForAsyncResult
+def flatten(value):
+  """Flattens lists/tuples recursively to a single flat list of items.
+
+  @param value: A potentially nested list of items, potentially containing
+  AsyncResult values.
+
+  @return: The flattened list or if any of the items are AsyncResult values then
+  an AsyncResult value that results in the flattened items.
+  """
+  sequenceTypes = (list, tuple)
+  
+  assert not isinstance(value, AsyncResult)
+  
+  if not isinstance(value, sequenceTypes):
+    return value
+  
+  items = []
+  tasks = []
+  
+  def processItem(item):
+    if isinstance(item, AsyncResult):
+      task = item.task
+      if task.completed:
+        item = getResult(item)
+      else:
+        tasks.append(task)
+    assert not isinstance(item, sequenceTypes)
+    items.append(item)
+  
+  for item in value:
+    item = flatten(item)
+    if isinstance(item, sequenceTypes):
+      for subItem in item:
+        processItem(subItem)
+    else:
+      processItem(item)
+  
+  if tasks:
+    # Some items are AsyncResults, need to re-flatten once they're
+    # done 
+    result = DeferredResult(lambda: flatten(items))
+    result.task.startAfter(tasks)
+    return result
+  else:
+    return items
+
 def getTask(value):
   """Get the task that builds this file.
   
@@ -129,7 +267,7 @@ def getTask(value):
   
   @return: 
   """
-  if isinstance(value, (FileTarget, ScriptResult)):
+  if isinstance(value, (FileTarget, AsyncResult)):
     return value.task
   elif isinstance(value, Task):
     return value
@@ -154,7 +292,7 @@ def getTasks(files):
 def getResult(value):
   """Get the result of a value that may be a ScriptResult.
   """
-  while isinstance(value, ScriptResult):
+  while isinstance(value, AsyncResult):
     value = value.result
   return value
 

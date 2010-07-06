@@ -7,7 +7,8 @@
 
 import cake.path
 import cake.filesys
-from cake.library import Tool, FileTarget, getPath, getTask
+from cake.library import Tool, FileTarget, getPath, getTask, \
+                         flatten, waitForAsyncResult
 
 class FileSystemTool(Tool):
   """Tool that provides file system related utilities. 
@@ -62,21 +63,25 @@ class FileSystemTool(Tool):
 
       engine.notifyFileChanged(targetAbsPath)
     
-    if self.enabled:  
-      sourceTask = getTask(source)
+    @waitForAsyncResult
+    def run(source):
+      if self.enabled:  
+        sourceTask = getTask(source)
+        copyTask = self.engine.createTask(doCopy)
+        copyTask.startAfter(sourceTask)
+      else:
+        copyTask = None
 
-      copyTask = self.engine.createTask(doCopy)
-      copyTask.startAfter(sourceTask)
-    else:
-      copyTask = None
+      return FileTarget(path=target, task=copyTask)
 
-    return FileTarget(path=target, task=copyTask)
+    return run(source)
 
   def copyFiles(self, sources, targetDir):
     """Copy a collection of files to a target directory.
     
     @param sources: A list of files to copy.
-    @type sources: list of string's
+    @type sources: list of string's, FileTargets or AsyncResult yielding
+    a string, FileTarget or list of same.
     @param targetDir: The target directory to copy to.
     @type targetDir: string
     
@@ -87,17 +92,16 @@ class FileSystemTool(Tool):
     if not isinstance(targetDir, basestring):
       raise TypeError("targetDir must be a string")
     
-    # TODO: Add support for ScriptResult objects as sources here.
-    # We'd need to get the source tasks and only call getPath()
-    # once the tasks are complete. This would require us returning
-    # a ScriptResult ourselves here.
+    @waitForAsyncResult
+    def run(sources):
+      results = []
+      for s in sources:
+        sourcePath = getPath(s)
+        target = cake.path.join(targetDir, cake.path.baseName(sourcePath))
+        results.append(self.copyFile(source=s, target=target))
+      return results
     
-    results = []
-    for s in sources:
-      sourcePath = getPath(s)
-      target = cake.path.join(targetDir, cake.path.baseName(sourcePath))
-      results.append(self.copyFile(source=s, target=target))
-    return results
+    return run(flatten(sources))
 
   
   

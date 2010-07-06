@@ -641,42 +641,6 @@ class Script(object):
     finally:
       Script._current.value = old
 
-class ScriptResult(object):
-  """A placeholder that can be used to reference a result of another
-  script that may not be available yet.
-  
-  The result will be available when the task has completed successfully.
-  """
-  
-  __slots__ = ['__execute', '__script', '__name']
-  
-  def __init__(self, execute, name):
-    self.__execute = execute
-    self.__script = None
-    self.__name = name
-    
-  @property
-  def script(self):
-    """The Script that will be executed.
-    """
-    script = self.__script
-    if script is None:
-      script = self.__script = self.__execute()
-      assert isinstance(script, Script)
-    return script
-    
-  @property
-  def task(self):
-    """The script's task.
-    """
-    return self.script.task
-
-  @property
-  def result(self):
-    assert self.task.completed
-    return self.__script.getResult(self.__name)
-
-
 class Configuration(object):
   """A configuration is a collection of related Variants.
   

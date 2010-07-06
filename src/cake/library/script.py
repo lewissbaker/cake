@@ -5,8 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script, ScriptResult
-from cake.library import Tool, FileTarget, getPaths, getTasks
+from cake.engine import Script
+from cake.library import Tool, ScriptResult, FileTarget, getPaths, getTasks
 
 class ScriptTool(Tool):
   """Tool that provides utilities for performing Script operations.
@@ -101,8 +101,6 @@ class ScriptTool(Tool):
         return configuration.execute(path=path, variant=variant)
       
     return ScriptProxy(execute)
-  
-
 
   def cwd(self, *args):
     """Return the path prefixed with the this script's directory.

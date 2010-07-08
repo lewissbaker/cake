@@ -44,7 +44,7 @@ class ScriptTool(Tool):
     """
     return self.get(script).getResult(name)
   
-  def get(self, script, keywords={}, useContext=None, bootScript=None, bootScriptName=None):
+  def get(self, script, keywords={}, useContext=None, configScript=None, configScriptName=None):
     """Get another script to use in referencing targets.
     
     @param script: Path of the script to load.
@@ -54,26 +54,26 @@ class ScriptTool(Tool):
     will be executed with. The variant is looked up in the script's configuration.
     @type keywords: dictionary of string -> string
     
-    @param useContext: If False or if None and either bootScript or bootScriptName
-    are not None then lookup the corresponding boot script starting from the
+    @param useContext: If False or if None and either configScript or configScriptName
+    are not None then lookup the corresponding configuration script starting from the
     script's path, if True then use the current configuration/variant.
     @type useContext: bool or None
     
-    @param bootScript: The path of the boot script to use to execute the script.
+    @param configScript: The path of the configuration script to use to execute the script.
     Ignored if useContext is True.
-    @type bootScript: string or None
+    @type configScript: string or None
     
-    @param bootScriptName: If not None and bootScript is None then find the
-    boot script with this name starting the search at the script's path.
+    @param configScriptName: If not None and configScript is None then find the
+    configuration script with this name starting the search at the script's path.
     Ignored if useContext is True.
-    @type bootScriptName: string or None
+    @type configScriptName: string or None
     """
   
     if not isinstance(script, basestring):
       raise ValueError("'script' must be a string")
   
     if useContext is None:
-      useContext = bootScript is None and bootScriptName is None
+      useContext = configScript is None and configScriptName is None
   
     if useContext:
       # Use the current configuration and lookup the variant relative
@@ -88,14 +88,14 @@ class ScriptTool(Tool):
       # defined in that configuration.
       def execute():
         path = self.configuration.abspath(script)
-        if bootScript is None:
+        if configScript is None:
           configuration = self.engine.findConfiguration(
             path=path,
-            bootScriptName=bootScriptName,
+            configScriptName=configScriptName,
             )
         else:
           configuration = self.engine.getConfiguration(
-            path=self.configuration.abspath(bootScript),
+            path=self.configuration.abspath(configScript),
             )
         variant = configuration.findVariant(keywords)
         return configuration.execute(path=path, variant=variant)
@@ -159,6 +159,7 @@ class ScriptTool(Tool):
       return execute(scripts, variant)
     else:
       return [execute(path, variant) for path in scripts]
+
 
   def run(self, func, args=None, targets=None, sources=[]):
     """Execute the specified python function as a task.

@@ -18,13 +18,6 @@ configuration = script.configuration
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
 
-# This is how you specify the default keyword values that will be used
-# if not specified on the command-line.
-keywords = configuration.defaultKeywords
-keywords["platform"] = hostPlatform
-keywords["architecture"] = hostArchitecture
-keywords["compiler"] = "dummy"
-keywords["release"] = "debug"
 
 # This is how you set an alternative base-directory
 # All relative paths will be relative to this absolute path.

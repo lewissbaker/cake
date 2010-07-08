@@ -741,7 +741,7 @@ class Compiler(Tool):
     if value is None:
       self.defines.append(name)
     else:
-      self.defines.append("{0}={1}".format(name, value))
+      self.defines.append("%s=%s" % (name, value))
     self._clearCache()
     
   def insertDefine(self, index, name, value=None):
@@ -760,7 +760,7 @@ class Compiler(Tool):
     if value is None:
       self.defines.insert(index, name)
     else:
-      self.defines.insert(index, "{0}={1}".format(name, value))
+      self.defines.insert(index, "%s=%s" % (name, value))
     self._clearCache()
       
   def getDefines(self):

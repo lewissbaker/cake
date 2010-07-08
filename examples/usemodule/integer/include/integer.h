@@ -4,7 +4,7 @@
 #include "module.h"
 
 // Example export class
-class MODULEAPI Integer
+class MODULE_API Integer
 {
 public:
 	Integer();

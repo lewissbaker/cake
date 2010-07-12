@@ -225,9 +225,14 @@ class Engine(object):
     @return: The initialised Configuration object corresponding
     to the found config script.
     @rtype: L{Configuration}
+
+    @raise BuildError: If the config script could not be found.
     """
-    # TODO: Handle config script not found error
     configScript = self.findConfigScriptPath(path, configScriptName)
+    if configScript is None:
+      if configScriptName is None:
+        configScriptName = self.defaultConfigScriptName
+      self.raiseError("Unable to find %s in %s\n" % (configScriptName, path))
     return self.getConfiguration(configScript)
   
   def execute(self, path, configScript=None, configScriptName=None, keywords={}):

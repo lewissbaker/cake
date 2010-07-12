@@ -80,3 +80,22 @@ def getPlatformSdkDir():
     return str(_winreg.QueryValueEx(key, "CurrentInstallFolder")[0])
   finally:
     _winreg.CloseKey(key)
+
+def getDotNetFrameworkSdkDir(version='2.0'):
+  """Looks up the path of the Microsoft .NET Framework SDK directory.
+
+  @param version: The .NET Framework version to search for.
+  @type version: string
+
+  @return: The path to the .NET Framework SDK root directory.
+  @rtype: string
+
+  @raise WindowsError: If the .NET Framework SDK is not installed.
+  """
+  subKey = r"SOFTWARE\Microsoft\.NETFramework"
+  valueName = "sdkInstallRootv" + version
+  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+  try:
+    return str(_winreg.QueryValueEx(key, valueName)[0])
+  finally:
+    _winreg.CloseKey(key)

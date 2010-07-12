@@ -894,6 +894,8 @@ class Configuration(object):
       dependencyInfo = self.engine.getDependencyInfo(absTargetPath)
     except EnvironmentError:
       return None, "'" + targetPath + ".dep' doesn't exist"
+    except Exception:
+      return None, "'" + targetPath + ".dep' can't be understood"
 
     if dependencyInfo.version != DependencyInfo.VERSION:
       return None, "'" + targetPath + ".dep' version has changed"

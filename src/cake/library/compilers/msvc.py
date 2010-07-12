@@ -101,7 +101,12 @@ def _createMsvcCompiler(
   mtExe = cake.path.join(msvcBinDir, "mt.exe")
 
   if not cake.filesys.isFile(rcExe):
+    rcExe = cake.path.join(msvcProductDir, "Bin", "rc.exe")
+  if not cake.filesys.isFile(rcExe):
     rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
+
+  if not cake.filesys.isFile(mtExe):
+    mtExe = cake.path.join(msvcProductDir, "Bin", "mt.exe")
   if not cake.filesys.isFile(mtExe):
     mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
 

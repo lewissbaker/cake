@@ -153,6 +153,19 @@ def getLinkPaths(files):
       paths.append(f)
   return paths
 
+def getLibraryPaths(files):
+  paths = []
+  for f in files:
+    while isinstance(f, AsyncResult):
+      f = f.result
+    if isinstance(f, ModuleTarget):
+      paths.append(f.library.path)
+    elif isinstance(f, FileTarget):
+      paths.append(f.path)
+    else:
+      paths.append(f)
+  return paths
+
 class Command(object):
   
   def __init__(self, args, func):
@@ -1212,12 +1225,12 @@ class Compiler(Tool):
         manifest = target + self.manifestSuffix
   
       if self.enabled:
-        tasks = getTasks(sources)
-    
         def build():
           paths = getLinkPaths(sources)
           self.buildModule(target, paths)
         
+        tasks = getTasks(sources)
+        tasks.extend(getTasks(self.getLibraries()))
         moduleTask = self.engine.createTask(build)
         moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
@@ -1551,7 +1564,7 @@ class Compiler(Tool):
     @rtype: tuple of (list of string, list of string)
     """
     objects = []
-    libraries = getPaths(self.getLibraries())
+    libraries = getLibraryPaths(self.getLibraries())
 
     if not self.linkObjectsInLibrary:
       return objects, libraries

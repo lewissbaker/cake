@@ -9,8 +9,11 @@ def makeFile(target, contents):
     absTarget = configuration.abspath(target)
     logging.outputInfo("Creating %s\n" % target)
     cake.filesys.makeDirs(cake.path.dirName(absTarget))
-    with open(absTarget, 'wb') as f:
+    f = open(absTarget, 'wb')
+    try:
       f.write(contents)
+    finally:
+      f.close()
   return script.run(run, targets=[target], args=[contents])[0]
 
 sources = []

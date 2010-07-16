@@ -138,7 +138,15 @@ def run(args=None, cwd=None):
   
   if args is None:
     args = sys.argv[1:]
-  
+
+  if cwd is not None:
+    cwd = os.path.abspath(cwd)
+  else:
+    cwd = os.getcwd()
+
+  logger = cake.logging.Logger()
+  engine = cake.engine.Engine(logger)
+
   class MyOption(optparse.Option):
     """Subclass the Option class to provide an 'extend' action.
     """  
@@ -159,6 +167,13 @@ def run(args=None, cwd=None):
   usage = "usage: %prog [options] <cake-script>*"
   
   parser = optparse.OptionParser(usage=usage,option_class=MyOption)
+#  parser.add_option(
+#    "-b", "--boot",
+#    metavar="FILE",
+#    dest="boot",
+#    help="Path to the boot.cake file to use.",
+#    default=None,
+#    )
   parser.add_option(
     "-c", "--config",
     metavar="FILE",
@@ -195,17 +210,30 @@ def run(args=None, cwd=None):
     help="Set features to debug, eg: 'reason,run,script,scan'.",
     default=[],
     )
-  
-  options, args = parser.parse_args(args)
-  
-  if cwd is not None:
-    cwd = os.path.abspath(cwd)
-  else:
-    cwd = os.getcwd()
 
-  keywords = {}
+  options, args = parser.parse_args(args)
+
+  # Find script filenames from the arguments left
   scripts = []
-  
+  for arg in args:
+    if not os.path.isabs(arg):
+      arg = os.path.join(cwd, arg)
+    # If it's a file or directory assume it's a script path
+    if os.path.exists(arg):
+      scripts.append(arg)
+
+  # Default to building a script file in the working directory.    
+  if not scripts:
+    scripts.append(cwd)
+
+#  if options.boot is None:
+#    bootFileName = engine.searchUpForFile(path, "boot.cake")
+
+  for c in options.debugComponents:
+    logger.enableDebug(c)
+
+  # Find keyword arguments  
+  keywords = {}
   for arg in args:
     if '=' in arg:
       keyword, value = arg.split('=', 1)
@@ -213,19 +241,10 @@ def run(args=None, cwd=None):
       if len(value) == 1:
         value = value[0]
       keywords[keyword] = value
-    else:
-      if not os.path.isabs(arg):
-        arg = os.path.join(cwd, arg)
-      scripts.append(arg)
-    
-  if not scripts:
-    scripts.append(cwd)
   
   threadPool = cake.threadpool.ThreadPool(options.jobs)
   cake.task.setThreadPool(threadPool)
 
-  logger = cake.logging.Logger(debugComponents=options.debugComponents)
-  engine = cake.engine.Engine(logger)
   engine.forceBuild = options.forceBuild
   engine.createProjects = options.createProjects
   

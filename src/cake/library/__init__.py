@@ -5,6 +5,9 @@
 @license: Licensed under the MIT license.
 """
 
+from cake.engine import Script
+from cake.task import Task
+
 class ToolMetaclass(type):
   """This metaclass ensures that new instance variables can only be added to
   an instance during its __init__.
@@ -118,36 +121,207 @@ class FileTarget(object):
     self.path = path
     self.task = task
 
-def getPathAndTask(file):
-  """Returns a path and task given a file.
+class AsyncResult(object):
+  """Base class for asynchronous results.
   
-  @param file: The path or FileTarget to split.
-  @type file: string or L{FileTarget} 
-  @return: A file path and task (or None). 
-  @rtype: tuple of string, L{Task}
+  @ivar task: A Task that will complete when the result is available.
+  @ivar result: The result of the asynchronous operation.
+  """ 
+
+class DeferredResult(AsyncResult):
+  
+  def __init__(self, func):
+    self.task = Task(func)
+
+  @property
+  def result(self):
+    return self.task.result
+
+class ScriptResult(AsyncResult):
+  """A placeholder that can be used to reference a result of another
+  script that may not be available yet.
+  
+  The result will be available when the task has completed successfully.
   """
-  if isinstance(file, FileTarget):
-    return file.path, file.task
+  
+  __slots__ = ['__execute', '__script', '__name']
+  
+  def __init__(self, execute, name):
+    self.__execute = execute
+    self.__script = None
+    self.__name = name
+    
+  @property
+  def script(self):
+    """The Script that will be executed.
+    """
+    script = self.__script
+    if script is None:
+      script = self.__script = self.__execute()
+      assert isinstance(script, Script)
+    return script
+    
+  @property
+  def task(self):
+    """The script's task.
+    """
+    return self.script.task
+
+  @property
+  def result(self):
+    assert self.task.completed
+    return self.__script.getResult(self.__name)
+
+def waitForAsyncResult(func):
+  """Decorator to be used with functions that need to
+  wait for its argument values to become available before
+  calling the function.
+  
+  eg.
+  @waitForAsyncResult
+  def someFunction(source):
+    return source + '.obj'
+
+  Calling above someFunction() with an AsyncResult will return an AsyncResult
+  whose result is the return value of the function
+  """
+  def call(*args, **kwargs):
+    tasks = []
+    for arg in args:
+      if isinstance(arg, AsyncResult):
+        task = arg.task
+        if not task.completed:
+          tasks.append(task)
+    for arg in kwargs.itervalues():
+      if isinstance(arg, AsyncResult):
+        task = arg.task
+        if not task.completed:
+          tasks.append(task)
+
+    def run():
+      newArgs = tuple(getResult(x) for x in args)
+      newKwargs = dict((k, getResult(v)) for k, v in kwargs.iteritems())
+      return func(*newArgs, **newKwargs)
+        
+    if tasks:
+      deferred = DeferredResult(run)
+      deferred.task.startAfter(tasks)
+      return deferred
+    else:
+      return run()
+  
+  return call
+
+@waitForAsyncResult
+def flatten(value):
+  """Flattens lists/tuples recursively to a single flat list of items.
+
+  @param value: A potentially nested list of items, potentially containing
+  AsyncResult values.
+
+  @return: The flattened list or if any of the items are AsyncResult values then
+  an AsyncResult value that results in the flattened items.
+  """
+  sequenceTypes = (list, tuple)
+  
+  assert not isinstance(value, AsyncResult)
+  
+  if not isinstance(value, sequenceTypes):
+    return value
+  
+  items = []
+  tasks = []
+  
+  def processItem(item):
+    if isinstance(item, AsyncResult):
+      task = item.task
+      if task.completed:
+        item = getResult(item)
+      else:
+        tasks.append(task)
+    assert not isinstance(item, sequenceTypes)
+    items.append(item)
+  
+  for item in value:
+    item = flatten(item)
+    if isinstance(item, sequenceTypes):
+      for subItem in item:
+        processItem(subItem)
+    else:
+      processItem(item)
+  
+  if tasks:
+    # Some items are AsyncResults, need to re-flatten once they're
+    # done 
+    result = DeferredResult(lambda: flatten(items))
+    result.task.startAfter(tasks)
+    return result
   else:
-    return file, None
+    return items
 
-def getPathsAndTasks(files):
-  """Returns a list of paths and tasks for given files.
-
-  @param files: The paths or FileTarget's to split.
-  @type files: list of string's or L{FileTarget}'s 
-  @return: Lists of paths and tasks.
-  @rtype: tuple of (list of string), (list of L{Task}) 
+def getTask(value):
+  """Get the task that builds this file.
+  
+  @param value: The ScriptResult, FileTarget, Task or string
+  representing the value.
+  
+  @return: 
   """
-  paths = []
+  if isinstance(value, (FileTarget, AsyncResult)):
+    return value.task
+  elif isinstance(value, Task):
+    return value
+  else:
+    return None
+
+def getTasks(files):
+  """Get the set of all tasks that build these files.
+  
+  @param files: A list of ScriptResult, FileTarget, Task or string
+  representing the sources of some operation.
+  
+  @return: A list of the Task that build the
+  """
   tasks = []
   for f in files:
-    if isinstance(f, FileTarget):
-      paths.append(f.path)
-      tasks.append(f.task)
-    else:
-      paths.append(f)
-  return paths, tasks
+    task = getTask(f)
+    if task is not None:
+      tasks.append(task)
+  return tasks
+
+def getResult(value):
+  """Get the result of a value that may be a ScriptResult.
+  """
+  while isinstance(value, AsyncResult):
+    value = value.result
+  return value
+
+def getResults(values):
+  """Get the results of a list of values that may be ScriptResult
+  objects.
+  """
+  for value in values: 
+    yield getResult(value)
+
+def getPath(file):
+  """Get the set of paths from the build.
+  """
+  file = getResult(file)
+    
+  if isinstance(file, FileTarget):
+    return file.path
+  elif isinstance(file, Task):
+    return None
+  else:
+    return file
+  
+def getPaths(files):
+  paths = []
+  for f in files:
+    path = getPath(f)
+    if path is not None:
+      paths.append(path)
+  return paths
 
 def deepCopyBuiltins(obj):
   """Returns a deep copy of only builtin types.

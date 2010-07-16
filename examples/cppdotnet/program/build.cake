@@ -18,3 +18,7 @@ compiler.program(
   target=env.expand("${BUILD}/cppdotnet/program/main"),
   sources=objects,
   )
+
+compiler.copyModulesTo(
+  targetDir=env.expand("${BUILD}/cppdotnet/program"),
+  )

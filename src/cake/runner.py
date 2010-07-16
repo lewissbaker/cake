@@ -254,6 +254,8 @@ def run(args=None, cwd=None):
   if configScript is not None and not os.path.isabs(configScript):
     configScript = os.path.abspath(configScript)
   
+  bootFailed = False
+  
   for script in scripts:
     script = cake.path.fileSystemPath(script)
     try:
@@ -263,12 +265,16 @@ def run(args=None, cwd=None):
         keywords=keywords,
         )
       tasks.append(task)
+    except cake.engine.BuildError:
+      # Error already output
+      bootFailed = True
     except Exception:
+      bootFailed = True
       msg = traceback.format_exc()
       engine.logger.outputError(msg)
     
   def onFinish():
-    if mainTask.succeeded:
+    if not bootFailed and mainTask.succeeded:
       engine.onBuildSucceeded()
       if engine.logger.warningCount:
         msg = "Build succeeded with %i warnings.\n" % engine.logger.warningCount

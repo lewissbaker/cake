@@ -16,10 +16,8 @@ import cake.filesys
 import cake.path
 import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
-from cake.library import memoise, getPathsAndTasks
-from cake.task import Task
+from cake.library import memoise, getPaths, getTasks
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
-from cake.engine import Script
 
 def _toArchitectureDir(architecture):
   """Re-map 'x64' to 'amd64' to match MSVC directory names.
@@ -103,7 +101,12 @@ def _createMsvcCompiler(
   mtExe = cake.path.join(msvcBinDir, "mt.exe")
 
   if not cake.filesys.isFile(rcExe):
+    rcExe = cake.path.join(msvcProductDir, "Bin", "rc.exe")
+  if not cake.filesys.isFile(rcExe):
     rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
+
+  if not cake.filesys.isFile(mtExe):
+    mtExe = cake.path.join(msvcProductDir, "Bin", "mt.exe")
   if not cake.filesys.isFile(mtExe):
     mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
 
@@ -369,7 +372,6 @@ class MsvcCompiler(Compiler):
     self.__architecture = architecture
     self.__messageExpression = re.compile(r'^(\s*)(.+)\(\d+\) :', re.MULTILINE)
     self.forcedUsings = []
-    self.forcedUsingScripts = []
     
   @property
   def architecture(self):
@@ -378,21 +380,12 @@ class MsvcCompiler(Compiler):
   def addForcedUsing(self, assembly):
     """Add a .NET assembly to be forcibly referenced on the command-line.
     
-    @param assembly: A path or FileTarget
+    @param assembly: A path or FileTarget or ScriptResult that results
+    in a path or FileTarget.
     """
     self.forcedUsings.append(assembly)
     self._clearCache()
     
-  def addForcedUsingScript(self, script):
-    """Add a script that should be executed prior to any operation
-    that makes use of the forcedUsings list of .NET assemblies.
-    
-    These scripts will typically build the .NET assembly that will
-    be referenced on the command-line.
-    """
-    self.forcedUsingScripts.append(script)
-    self._clearCache()
-
   def _formatMessage(self, inputText):
     """Format errors to be clickable in MS Visual Studio.
     """
@@ -431,14 +424,7 @@ class MsvcCompiler(Compiler):
       # Take a copy so we're not modifying the potentially cached
       # base version.
       tasks = list(tasks)
-      
-      if self.forcedUsingScripts:
-        variant = Script.getCurrent().variant
-        execute = self.configuration.execute
-        for path in self.forcedUsingScripts:
-          tasks.append(execute(path, variant))
-          
-      tasks.extend(getPathsAndTasks(self.forcedUsings)[1])
+      tasks.extend(getTasks(self.forcedUsings))
     
     return tasks
     
@@ -504,7 +490,7 @@ class MsvcCompiler(Compiler):
       else:
         args.append('/clr') # Compile to mixed CLR/native code
         
-      for assembly in getPathsAndTasks(self.forcedUsings)[0]:
+      for assembly in getPaths(self.forcedUsings):
         args.append('/FU' + assembly)
 
     else:
@@ -618,7 +604,7 @@ class MsvcCompiler(Compiler):
       if deps is not None:
         dependencies.extend(deps)
       if self.language == 'c++/cli':
-        dependencies.extend(getPathsAndTasks(self.forcedUsings)[0])
+        dependencies.extend(getPaths(self.forcedUsings))
       dependenciesSet = set()
 
       def processStdout(text):

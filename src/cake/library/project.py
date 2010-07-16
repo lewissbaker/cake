@@ -18,7 +18,7 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.library import Tool, FileTarget, getPathAndTask
+from cake.library import Tool, FileTarget, getPath, getPaths
 from cake.engine import Script
   
 class _Project(object):
@@ -428,7 +428,7 @@ class ProjectTool(Tool):
 # TODO: Fill these out when the compiler has them.
     compileAsManaged = ""
     assemblyPaths = []
-    forcedUsings = getattr(compiler, "forcedUsings", [])
+    forcedUsings = getPaths(getattr(compiler, "forcedUsings", []))
 
     # Project name defaults the base filename without extension
     if name is None:
@@ -541,7 +541,7 @@ class ProjectTool(Tool):
       if not isinstance(p, self.SolutionProjectItem):
         p = self.SolutionProjectItem(p)
 
-      projectPath, _projectTask = getPathAndTask(p.project) 
+      projectPath = getPath(p.project) 
       projectPath = cake.path.forceExtension(projectPath, projectExtension)
         
       configuration.addProjectConfiguration(_SolutionProjectConfiguration(

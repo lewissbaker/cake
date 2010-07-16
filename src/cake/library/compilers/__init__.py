@@ -25,8 +25,11 @@ import cake.path
 import cake.filesys
 import cake.hash
 from cake.engine import Script, DependencyInfo, BuildError
+from cake.library.filesys import FileSystemTool
 from cake.library import (
-  Tool, FileTarget, getPathsAndTasks, getPathAndTask, memoise
+  Tool, FileTarget, AsyncResult, DeferredResult,
+  memoise, waitForAsyncResult, flatten,
+  getPaths, getPath, getResult, getResults, getTasks, getTask,
   )
 from cake.task import Task
 
@@ -136,20 +139,32 @@ class ResourceTarget(CompilerTarget):
     CompilerTarget.__init__(self, path, task, compiler)
     self.resource = FileTarget(path, task)
 
-def getLinkPathsAndTasks(files):
+def getLinkPaths(files):
   paths = []
-  tasks = []
   for f in files:
+    while isinstance(f, AsyncResult):
+      f = f.result
     if isinstance(f, PchTarget):
       if f.object is not None:
         paths.append(f.object.path)
-        tasks.append(f.object.task)
     elif isinstance(f, FileTarget):
       paths.append(f.path)
-      tasks.append(f.task)
     else:
       paths.append(f)
-  return paths, tasks
+  return paths
+
+def getLibraryPaths(files):
+  paths = []
+  for f in files:
+    while isinstance(f, AsyncResult):
+      f = f.result
+    if isinstance(f, ModuleTarget):
+      paths.append(f.library.path)
+    elif isinstance(f, FileTarget):
+      paths.append(f.path)
+    else:
+      paths.append(f)
+  return paths
 
 class Command(object):
   
@@ -623,10 +638,8 @@ class Compiler(Tool):
     self.includePaths = []
     self.defines = []
     self.forcedIncludes = []
-    self.libraryScripts = []
     self.libraryPaths = []
     self.libraries = []
-    self.moduleScripts = []
     self.modules = []
     self.__binPaths = binPaths
 
@@ -875,18 +888,6 @@ class Compiler(Tool):
     """
     return reversed(self.libraryPaths)
 
-  def addLibraryScript(self, path):
-    """Add a script to be executed before performing a link.
-    
-    The script will be executed prior to any subsequent
-    program() or module() targets being built.
-    
-    @param path: Path of the script to execute.
-    @type path: string
-    """
-    self.libraryScripts.append(path)
-    self._clearCache()
-
   def addModule(self, name):
     """Add a module to the list of modules to copy.
     
@@ -894,18 +895,6 @@ class Compiler(Tool):
     @type name: string
     """
     self.modules.append(name)
-    self._clearCache()
-    
-  def addModuleScript(self, path):
-    """Add a script to be executed before copying modules.
-    
-    The script will be executed by the copyModulesTo()
-    function.
-    
-    @param path: Path of the script to execute.
-    @type path: string
-    """
-    self.moduleScripts.append(path)
     self._clearCache()
     
   def copyModulesTo(self, targetDir, **kwargs):
@@ -917,9 +906,9 @@ class Compiler(Tool):
     @param targetDir: The directory to copy modules to.
     @type targetDir: string
 
-    @return: A list of Task objects, one for each module being
+    @return: A list of FileTarget objects, one for each module being
     copied.
-    @rtype: list of L{Task}
+    @rtype: list of L{FileTarget}
     """
     compiler = self.clone()
     for k, v in kwargs.iteritems():
@@ -927,66 +916,15 @@ class Compiler(Tool):
       
     return compiler._copyModulesTo(targetDir)
 
-  def _copyModulesTo(self, targetDir, **kwargs):
+  def _copyModulesTo(self, targetDir):
     
-    if not self.enabled:
-      return []
+    filesysTool = FileSystemTool(self.configuration)
+    filesysTool.enabled = self.enabled
     
-    script = Script.getCurrent()
-    engine = self.engine
-    configuration = self.configuration
-
-    tasks = []
-    for moduleScript in self.moduleScripts:
-      tasks.append(configuration.execute(moduleScript, script.variant))
-
-    def doCopy(source, targetDir):
-      # Try without and with the extension
-      absSource = configuration.abspath(source)
-      
-      # HACK: We should really be passing in the correct file name here
-      if not cake.filesys.isFile(absSource):
-        prefix, suffix = self.modulePrefixSuffixes[0]
-        source = cake.path.forcePrefixSuffix(source, prefix, suffix)
-        absSource = configuration.abspath(source)
-        
-      target = cake.path.join(targetDir, cake.path.baseName(absSource))
-      absTarget = configuration.abspath(target)
-      
-      if engine.forceBuild:
-        reasonToBuild = "rebuild has been forced"
-      elif not cake.filesys.isFile(absTarget):
-        reasonToBuild = "'%s' does not exist" % target
-      elif engine.getTimestamp(absSource) > engine.getTimestamp(absTarget):
-        reasonToBuild = "'%s' is newer than '%s'" % (source, target)
-      else:
-        # up-to-date
-        return
-
-      engine.logger.outputDebug(
-        "reason",
-        "Rebuilding '%s' because %s.\n" % (target, reasonToBuild),
-        )
-      engine.logger.outputInfo("Copying %s to %s\n" % (source, target))
-      
-      try:
-        cake.filesys.makeDirs(cake.path.dirName(absTarget))
-        cake.filesys.copyFile(source=absSource, target=absTarget)
-      except EnvironmentError, e:
-        engine.raiseError("%s: %s\n" % (target, str(e)))
-
-      engine.notifyFileChanged(absTarget)
-
-    moduleTasks = []
-    for module in self.modules:
-      copyTask = engine.createTask(
-        lambda s=module,t=targetDir:
-          doCopy(s, t)
-        )
-      copyTask.startAfter(tasks)
-      moduleTasks.append(copyTask)
+    # TODO: Handle copying .manifest files if present for MSVC
+    # built DLLs.
     
-    return moduleTasks
+    return filesysTool.copyFiles(self.modules, targetDir)    
 
   def pch(self, target, source, header, forceExtension=True, **kwargs):
     """Compile an individual header to a pch file.
@@ -1017,32 +955,35 @@ class Compiler(Tool):
 
   def _pch(self, target, source, header, forceExtension=True):
     
-    if forceExtension:
-      target = cake.path.forceExtension(target, self.pchSuffix)
-    
-    if self.pchObjectSuffix is None:
-      object = None
-    else:
-      object = cake.path.stripExtension(target) + self.pchObjectSuffix
-    
-    if self.enabled:
-      source, sourceTask = getPathAndTask(source)
+    @waitForAsyncResult
+    def run(target, source, header):
+      if forceExtension:
+        target = cake.path.forceExtension(target, self.pchSuffix)
       
-      pchTask = self.engine.createTask(
-        lambda t=target, s=source, h=header, o=object, c=self:
-          c.buildPch(t, s, h, o)
+      if self.pchObjectSuffix is None:
+        object = None
+      else:
+        object = cake.path.stripExtension(target) + self.pchObjectSuffix
+      
+      if self.enabled:
+        sourceTask = getTask(source)
+        pchTask = self.engine.createTask(
+          lambda t=target, s=source, h=header, o=object, c=self:
+            c.buildPch(t, getPath(s), h, o)
+          )
+        pchTask.startAfter(sourceTask, threadPool=self.engine.scriptThreadPool)
+      else:
+        pchTask = None
+      
+      return PchTarget(
+        path=target,
+        task=pchTask,
+        compiler=self,
+        header=header,
+        object=object,
         )
-      pchTask.startAfter(sourceTask, threadPool=self.engine.scriptThreadPool)
-    else:
-      pchTask = None
-    
-    return PchTarget(
-      path=target,
-      task=pchTask,
-      compiler=self,
-      header=header,
-      object=object,
-      )
+      
+    return run(target, source, header)
 
   def object(self, target, source, pch=None, forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
@@ -1076,41 +1017,45 @@ class Compiler(Tool):
     
   def _object(self, target, source, pch=None, forceExtension=True, shared=False):
     
-    if forceExtension:
-      target = cake.path.forceExtension(target, self.objectSuffix)
+    @waitForAsyncResult
+    def run(target, source, pch):
+      if forceExtension:
+        target = cake.path.forceExtension(target, self.objectSuffix)
+        
+      if self.enabled:
       
-    if self.enabled:
-    
-      prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
+        prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
+        
+        sourceTask = getTask(source)
+        if sourceTask is not None:
+          prerequisiteTasks.append(sourceTask)
+        
+        pchTask = getTask(pch)
+        if pchTask is not None:
+          prerequisiteTasks.append(pchTask)
+        
+        objectTask = self.engine.createTask(
+          lambda t=target, s=source, p=pch, h=shared, c=self:
+            c.buildObject(t, getPath(s), getResult(p), h)
+          )
+        objectTask.startAfter(prerequisiteTasks, threadPool=self.engine.scriptThreadPool)
+      else:
+        objectTask = None
       
-      source, sourceTask = getPathAndTask(source)
-      if sourceTask is not None:
-        prerequisiteTasks.append(sourceTask)
-      
-      _, pchTask = getPathAndTask(pch)
-      if pchTask is not None:
-        prerequisiteTasks.append(pchTask)
-      
-      objectTask = self.engine.createTask(
-        lambda t=target, s=source, p=pch, h=shared, c=self:
-          c.buildObject(t, s, p, h)
+      return ObjectTarget(
+        path=target,
+        task=objectTask,
+        compiler=self,
         )
-      objectTask.startAfter(prerequisiteTasks, threadPool=self.engine.scriptThreadPool)
-    else:
-      objectTask = None
-    
-    return ObjectTarget(
-      path=target,
-      task=objectTask,
-      compiler=self,
-      )
+      
+    return run(target, source, pch)
     
   @memoise
   def _getObjectPrerequisiteTasks(self):
     """Return a list of the tasks that are prerequisites for
     building an object file.
     """
-    return getPathsAndTasks(self.forcedIncludes)[1]
+    return getTasks(self.forcedIncludes)
     
   def objects(self, targetDir, sources, pch=None, **kwargs):
     """Build a collection of objects to a target directory.
@@ -1133,17 +1078,17 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
     
-    results = []
-    for source in sources:
-      sourcePath, _ = getPathAndTask(source)
-      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
-      targetPath = cake.path.join(targetDir, sourceName)
-      results.append(compiler._object(
-        targetPath,
-        source,
-        pch=pch,
-        ))
-    return results
+    @waitForAsyncResult
+    def run(sources):
+      results = []
+      for source in sources:
+        sourcePath = getPath(source)
+        sourceName = cake.path.baseNameWithoutExtension(sourcePath)
+        targetPath = cake.path.join(targetDir, sourceName)
+        results.append(compiler._object(targetPath, source, pch=pch))
+      return results
+
+    return run(flatten(sources))
 
   def sharedObjects(self, targetDir, sources, pch=None, **kwargs):
     """Build a collection of objects used by a shared library/module to a target directory.
@@ -1166,18 +1111,22 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
 
-    results = []
-    for source in sources:
-      sourcePath, _ = getPathAndTask(source)
-      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
-      targetPath = cake.path.join(targetDir, sourceName)
-      results.append(compiler._object(
-        targetPath,
-        source,
-        pch=pch,
-        shared=True
-        ))
-    return results
+    @waitForAsyncResult
+    def run(sources):
+      results = []
+      for source in sources:
+        sourcePath = getPath(source)
+        sourceName = cake.path.baseNameWithoutExtension(sourcePath)
+        targetPath = cake.path.join(targetDir, sourceName)
+        results.append(compiler._object(
+          targetPath,
+          source,
+          pch=pch,
+          shared=True
+          ))
+      return results
+    
+    return run(flatten(sources))
     
   def library(self, target, sources, forceExtension=True, **kwargs):
     """Build a library from a collection of objects.
@@ -1205,28 +1154,33 @@ class Compiler(Tool):
   
   def _library(self, target, sources, forceExtension=True):
     
-    if forceExtension:
-      prefix, suffix = self.libraryPrefixSuffixes[0]
-      target = cake.path.forcePrefixSuffix(target, prefix, suffix)
-
-    if self.enabled:
-      paths, tasks = getLinkPathsAndTasks(sources)
-      
-      self._setObjectsInLibrary(target, paths)
-      
-      libraryTask = self.engine.createTask(
-        lambda t=target, s=paths, c=self:
-          c.buildLibrary(t, s)
-        )
-      libraryTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
-    else:
-      libraryTask = None
+    @waitForAsyncResult
+    def run(target, sources):
+      if forceExtension:
+        prefix, suffix = self.libraryPrefixSuffixes[0]
+        target = cake.path.forcePrefixSuffix(target, prefix, suffix)
+  
+      if self.enabled:
     
-    return LibraryTarget(
-      path=target,
-      task=libraryTask,
-      compiler=self,
-      )
+        tasks = getTasks(sources)
+  
+        def build():
+          paths = getLinkPaths(sources)
+          self._setObjectsInLibrary(target, paths)
+          self.buildLibrary(target, paths)
+        
+        libraryTask = self.engine.createTask(build)
+        libraryTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+      else:
+        libraryTask = None
+      
+      return LibraryTarget(
+        path=target,
+        task=libraryTask,
+        compiler=self,
+        )
+      
+    return run(target, flatten(sources))
     
   def module(self, target, sources, forceExtension=True, **kwargs):
     """Build a module/dynamic-library.
@@ -1245,55 +1199,54 @@ class Compiler(Tool):
   
   def _module(self, target, sources, forceExtension=True):
     
-    if forceExtension:
-      prefix, suffix = self.modulePrefixSuffixes[0]
-      target = cake.path.forcePrefixSuffix(target, prefix, suffix)
-      if self.importLibrary:
-        prefix, suffix = self.libraryPrefixSuffixes[0]
-        self.importLibrary = cake.path.forcePrefixSuffix(
-          self.importLibrary,
-          prefix,
-          suffix,
-          )
-      if self.installName:
+    @waitForAsyncResult
+    def run(target, sources):
+      if forceExtension:
         prefix, suffix = self.modulePrefixSuffixes[0]
-        self.installName = cake.path.forcePrefixSuffix(
-          self.installName,
-          prefix,
-          suffix,
-          )
-
-    if self.manifestSuffix is None:
-      manifest = None
-    else:
-      manifest = target + self.manifestSuffix
-
-    if self.enabled:
-      variant = Script.getCurrent().variant
+        target = cake.path.forcePrefixSuffix(target, prefix, suffix)
+        if self.importLibrary:
+          prefix, suffix = self.libraryPrefixSuffixes[0]
+          self.importLibrary = cake.path.forcePrefixSuffix(
+            self.importLibrary,
+            prefix,
+            suffix,
+            )
+        if self.installName:
+          prefix, suffix = self.modulePrefixSuffixes[0]
+          self.installName = cake.path.forcePrefixSuffix(
+            self.installName,
+            prefix,
+            suffix,
+            )
   
-      paths, tasks = getLinkPathsAndTasks(sources)
+      if self.manifestSuffix is None:
+        manifest = None
+      else:
+        manifest = target + self.manifestSuffix
   
-      execute = self.configuration.execute
-      for libraryScript in self.libraryScripts:
-        tasks.append(execute(libraryScript, variant))
+      if self.enabled:
+        def build():
+          paths = getLinkPaths(sources)
+          self.buildModule(target, paths)
+        
+        tasks = getTasks(sources)
+        tasks.extend(getTasks(self.getLibraries()))
+        moduleTask = self.engine.createTask(build)
+        moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+      else:
+        moduleTask = None
       
-      moduleTask = self.engine.createTask(
-        lambda t=target, s=paths, c=self:
-          c.buildModule(t, s)
+      # XXX: What about returning paths to import libraries?
+      
+      return ModuleTarget(
+        path=target,
+        task=moduleTask,
+        compiler=self,
+        library=self.importLibrary,
+        manifest=manifest,
         )
-      moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
-    else:
-      moduleTask = None
-    
-    # XXX: What about returning paths to import libraries?
-    
-    return ModuleTarget(
-      path=target,
-      task=moduleTask,
-      compiler=self,
-      library=self.importLibrary,
-      manifest=manifest,
-      )
+
+    return run(target, flatten(sources))
 
   def program(self, target, sources, forceExtension=True, **kwargs):
     """Build an executable program.
@@ -1318,39 +1271,39 @@ class Compiler(Tool):
     return compiler._program(target, sources, forceExtension)
 
   def _program(self, target, sources, forceExtension=True, **kwargs):
+
+    @waitForAsyncResult
+    def run(target, sources):
     
-    if forceExtension:
-      target = cake.path.forceExtension(target, self.programSuffix)
+      if forceExtension:
+        target = cake.path.forceExtension(target, self.programSuffix)
     
-    if self.manifestSuffix is None:
-      manifest = None
-    else:
-      manifest = target + self.manifestSuffix
+      if self.manifestSuffix is None:
+        manifest = None
+      else:
+        manifest = target + self.manifestSuffix
     
-    if self.enabled:
-      variant = Script.getCurrent().variant
-  
-      paths, tasks = getLinkPathsAndTasks(sources)
-      
-      execute = self.configuration.execute
-      for libraryScript in self.libraryScripts:
-        tasks.append(execute(libraryScript, variant))
-      
-      programTask = self.engine.createTask(
-        lambda t=target, s=paths, c=self:
-          c.buildProgram(t, s)
+      if self.enabled:
+        def build():
+          paths = getLinkPaths(sources)
+          self.buildProgram(target, paths)
+
+        tasks = getTasks(sources)
+        tasks.extend(getTasks(self.getLibraries()))
+        programTask = self.engine.createTask(build)
+        programTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+      else:
+        programTask = None
+    
+      return ProgramTarget(
+        path=target,
+        task=programTask,
+        compiler=self,
+        manifest=manifest,
         )
-      programTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
-    else:
-      programTask = None
-    
-    return ProgramTarget(
-      path=target,
-      task=programTask,
-      compiler=self,
-      manifest=manifest,
-      )
       
+    return run(target, flatten(sources))
+
   def resource(self, target, source, forceExtension=True, **kwargs):
     """Build a resource from a collection of sources.
     
@@ -1377,26 +1330,30 @@ class Compiler(Tool):
   
   def _resource(self, target, source, forceExtension=True):
     
-    if forceExtension:
-      target = cake.path.forceExtension(target, self.resourceSuffix)
-
-    if self.enabled:
- 
-      path, task = getPathAndTask(source)
+    @waitForAsyncResult
+    def run(target, source):
+      if forceExtension:
+        target = cake.path.forceExtension(target, self.resourceSuffix)
+  
+      if self.enabled:
+   
+        def build():
+          path = getPath(source)
+          self.buildResource(target, path)
+  
+        task = getTask(source)      
+        resourceTask = self.engine.createTask(build)
+        resourceTask.startAfter(task, threadPool=self.engine.scriptThreadPool)
+      else:
+        resourceTask = None
       
-      resourceTask = self.engine.createTask(
-        lambda t=target, s=path, c=self:
-          c.buildResource(t, s)
+      return ResourceTarget(
+        path=target,
+        task=resourceTask,
+        compiler=self,
         )
-      resourceTask.startAfter(task, threadPool=self.engine.scriptThreadPool)
-    else:
-      resourceTask = None
-    
-    return ResourceTarget(
-      path=target,
-      task=resourceTask,
-      compiler=self,
-      )
+      
+    return run(target, source)
 
   def resources(self, targetDir, sources, **kwargs):
     """Build a collection of resources to a target directory.
@@ -1415,17 +1372,21 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
     
-    results = []
-    for source in sources:
-      sourcePath, _ = getPathAndTask(source)
-      sourceName = cake.path.baseNameWithoutExtension(sourcePath)
-      targetPath = cake.path.join(targetDir, sourceName)
-      results.append(compiler._resource(
-        targetPath,
-        source,
-        ))
-    return results
-              
+    @waitForAsyncResult
+    def run(sources):
+      results = []
+      for source in sources:
+        sourcePath = getPath(source)
+        sourceName = cake.path.baseNameWithoutExtension(sourcePath)
+        targetPath = cake.path.join(targetDir, sourceName)
+        results.append(compiler._resource(
+          targetPath,
+          source,
+          ))
+      return results
+
+    return run(flatten(sources))
+
   ###########################
   # Internal methods not part of public API
   
@@ -1603,10 +1564,10 @@ class Compiler(Tool):
     @rtype: tuple of (list of string, list of string)
     """
     objects = []
-    libraries = list(self.getLibraries())
+    libraries = getLibraryPaths(self.getLibraries())
 
     if not self.linkObjectsInLibrary:
-      return objects, libraries 
+      return objects, libraries
 
     paths = self._scanForLibraries(libraries, True)
     newLibraries = []

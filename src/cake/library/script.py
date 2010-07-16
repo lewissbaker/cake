@@ -6,7 +6,7 @@
 """
 
 from cake.engine import Script
-from cake.library import Tool, FileTarget, getPathsAndTasks
+from cake.library import Tool, ScriptResult, FileTarget, getPaths, getTasks
 
 class ScriptTool(Tool):
   """Tool that provides utilities for performing Script operations.
@@ -29,6 +29,78 @@ class ScriptTool(Tool):
     """The Variant the currently executing script is being built with.
     """
     return Script.getCurrent().variant
+
+  def setResult(self, **kwargs):
+    """Export a result from this script that other scripts can import.
+    
+    Other scripts can use getResult(script, name) to get the result
+    exported by the other script calling setResult(name=result).
+    """
+    Script.getCurrent().setResult(**kwargs)
+  
+  def getResult(self, script, name):
+    """Get a placeholder value that will yield the result of another
+    script once that other script has finished executing.
+    """
+    return self.get(script).getResult(name)
+  
+  def get(self, script, keywords={}, useContext=None, configScript=None, configScriptName=None):
+    """Get another script to use in referencing targets.
+    
+    @param script: Path of the script to load.
+    @type script: string
+    
+    @param keywords: A set of keywords used to find the variant the script
+    will be executed with. The variant is looked up in the script's configuration.
+    @type keywords: dictionary of string -> string
+    
+    @param useContext: If False or if None and either configScript or configScriptName
+    are not None then lookup the corresponding configuration script starting from the
+    script's path, if True then use the current configuration/variant.
+    @type useContext: bool or None
+    
+    @param configScript: The path of the configuration script to use to execute the script.
+    Ignored if useContext is True.
+    @type configScript: string or None
+    
+    @param configScriptName: If not None and configScript is None then find the
+    configuration script with this name starting the search at the script's path.
+    Ignored if useContext is True.
+    @type configScriptName: string or None
+    """
+  
+    if not isinstance(script, basestring):
+      raise ValueError("'script' must be a string")
+  
+    if useContext is None:
+      useContext = configScript is None and configScriptName is None
+  
+    if useContext:
+      # Use the current configuration and lookup the variant relative
+      # to the current variant.
+      baseVariant = Script.getCurrent().variant 
+      def execute():
+        variant = self.configuration.findVariant(keywords, baseVariant=baseVariant)
+        return self.configuration.execute(path=script, variant=variant)
+    else:
+      # Re-evaluate the configuration to execute the script with.
+      # Uses the keywords specified to find the variant in the variants
+      # defined in that configuration.
+      def execute():
+        path = self.configuration.abspath(script)
+        if configScript is None:
+          configuration = self.engine.findConfiguration(
+            path=path,
+            configScriptName=configScriptName,
+            )
+        else:
+          configuration = self.engine.getConfiguration(
+            path=self.configuration.abspath(configScript),
+            )
+        variant = configuration.findVariant(keywords)
+        return configuration.execute(path=path, variant=variant)
+      
+    return ScriptProxy(execute)
 
   def cwd(self, *args):
     """Return the path prefixed with the this script's directory.
@@ -74,9 +146,10 @@ class ScriptTool(Tool):
     @param scripts: A path or sequence of paths of scripts to execute.
     @type scripts: string or sequence of string
 
-    @return: A task or sequence of tasks that can be used to determine
-      when all tasks created by the script have finished executing.
-    @rtype: L{Task} or C{list} of L{Task}
+    @return: A Script object or sequence of Script objects that can be used
+    to determine what scripts will be executed. The script's task will
+    complete when the script has finished executing.
+    @rtype: L{Script} or C{list} of L{Script}
     """
     script = Script.getCurrent()
     configuration = script.configuration
@@ -87,66 +160,6 @@ class ScriptTool(Tool):
     else:
       return [execute(path, variant) for path in scripts]
 
-  def executeNoContext(self, scripts, configScript=None, configScriptName=None, **keywords):
-    """Execute another script as a background task.
-    
-    Does not use any context from the current script's variant or
-    configuration.
-    
-    @param scripts: Paths of scripts to execute.
-    @type scripts: string or list of string
-    
-    @param configScript: Path of the config script to execute these scripts
-    with or None to find the config script for each script.
-    @type configScript: string or None
-    
-    @param configScriptName: If configScript is None then this specifies
-    the name of the config script to search for. If None then use the
-    default config script name specified by the Engine.
-    @type configScriptName: string or None
-    
-    @param keywords: Collection of keywords that specify the variant
-    to execute the script with.
-    """
-    
-    script = Script.getCurrent()
-    engine = script.engine
-    if configScript is None:
-      # Calculate the config script for each script path
-      if isinstance(scripts, basestring):
-        path = self.abspath(scripts)
-        configuration = engine.findConfiguration(
-          path=path,
-          configScriptName=configScriptName,
-          )
-        variant = configuration.findVariant(keywords)
-        result = configuration.execute(scripts, variant)
-      else:
-        result = []
-        abspath = self.abspath
-        for path in scripts:
-          path = abspath(path)
-          configuration = engine.findConfiguration(
-            path=path,
-            configScriptName=configScriptName,
-            )
-          variant = configuration.findVariant(keywords)
-          result.append(configuration.execute(path, variant))
-    else:
-      # Calculate config script once and reuse for each script path
-      abspath = self.abspath
-      configScript = abspath(configScript)
-      configuration = engine.getConfiguration(configScript)
-      variant = configuration.findVariant(keywords)
-      execute = configuration.execute
-      if isinstance(scripts, basestring):
-        result = execute(abspath(scripts), variant)
-      else:
-        result = []
-        for path in scripts:
-          result.append(execute(abspath(path), variant))
-          
-    return result
 
   def run(self, func, args=None, targets=None, sources=[]):
     """Execute the specified python function as a task.
@@ -161,10 +174,10 @@ class ScriptTool(Tool):
     engine = self.engine
     configuration = self.configuration
 
-    sourcePaths, sourceTasks = getPathsAndTasks(sources)
+    sourceTasks = getTasks(sources)
 
     def _run():
-
+      sourcePaths = getPaths(sources)
       if targets:
         buildArgs = (args, sourcePaths)
         try:
@@ -201,3 +214,29 @@ class ScriptTool(Tool):
       return [FileTarget(path=t, task=task) for t in targets]
     else:
       return task
+
+class ScriptProxy(object):
+  """A proxy that can be used to perform actions on a particular
+  script.
+  """
+ 
+  def __init__(self, execute):
+    self.__execute = execute
+
+  def execute(self):
+    """Start the execution of the script if it hasn't already been started.
+    
+    The script will complete execution at some point in the future.
+    
+    @return: The Script object that will be executed.
+    """
+    return self.__execute()
+  
+  def getResult(self, name):
+    """Get a placeholder for the result defined by this script when it is
+    executed.
+    
+    The script will be executed if the result is ever required.
+    """
+    return ScriptResult(self.__execute, name)
+

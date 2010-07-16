@@ -18,6 +18,7 @@ configuration = script.configuration
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
 
+
 # This is how you set an alternative base-directory
 # All relative paths will be relative to this absolute path.
 #configuration.baseDir = configuration.baseDir + '/..'

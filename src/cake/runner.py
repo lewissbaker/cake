@@ -160,6 +160,13 @@ def run(args=None, cwd=None):
   
   parser = optparse.OptionParser(usage=usage,option_class=MyOption)
   parser.add_option(
+    "-V", "--version",
+    dest="outputVersion",
+    action="store_true",
+    help="Print the current version of Cake and exit.",
+    default=False,
+    )
+  parser.add_option(
     "-c", "--config",
     metavar="FILE",
     dest="config",
@@ -197,6 +204,13 @@ def run(args=None, cwd=None):
     )
   
   options, args = parser.parse_args(args)
+
+  if options.outputVersion:
+    cakeVersion = cake.__version__
+    cakePath = cake.path.dirName(cake.__file__)
+    sys.stdout.write("Cake %s\n" % cake.__version__)
+    sys.stdout.write("Python %s\n" % sys.version)
+    return 1
   
   if cwd is not None:
     cwd = os.path.abspath(cwd)

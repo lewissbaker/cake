@@ -339,9 +339,10 @@ class ProjectTool(Tool):
     self,
     target,
     items,
-    output,
+    output=None,
     name=None,
     intermediateDir=None,
+    compiler=None,
     **kwargs
     ):
     """Generate a project file.
@@ -383,6 +384,10 @@ class ProjectTool(Tool):
     @param intermediateDir: The path to intermediate files. If this is
     None the directory of the first output is used instead.
     @type intermediateDir: string
+    @param compiler: A compiler tool containing the compile settings
+    used for the aid of intellisense. If not supplied the compiler is
+    obtained implicitly via 'ouput.compiler'.
+    @type compiler: L{cake.library.compilers.Compiler} or C{None}
 
     @return: A L{FileTarget} that specifies the full path to the
     generated project file (with extension if applicable).
@@ -391,13 +396,14 @@ class ProjectTool(Tool):
     tool = self.clone()
     for k, v in kwargs.iteritems():
       setattr(tool, k, v)
-      
+    
     return tool._project(
       target,
       items,
       output,
       name,
       intermediateDir,
+      compiler,
       )
     
   def _project(
@@ -407,7 +413,14 @@ class ProjectTool(Tool):
     output,
     name,
     intermediateDir,
+    compiler,
     ):
+
+    if compiler is None and output is not None:
+      try:
+        compiler = output.compiler
+      except AttributeError:
+        pass
 
     if self.product == self.VS2010:
       target = cake.path.forceExtension(target, self._msvsProjectSuffix2010)
@@ -419,16 +432,25 @@ class ProjectTool(Tool):
     if not self.enabled:
       return FileTarget(path=target, task=None)
     
-    outputPath = output.path
-    compiler = output.compiler
-    defines = compiler.getDefines()
-    includePaths = compiler.getIncludePaths()
-    forcedIncludes = compiler.getForcedIncludes()
-    
-# TODO: Fill these out when the compiler has them.
+    if output is not None:
+      outputPath = output.path
+    else:
+      outputPath = target
+
+    if compiler is not None:
+      defines = compiler.getDefines()
+      includePaths = compiler.getIncludePaths()
+      forcedIncludes = compiler.getForcedIncludes()
+      forcedUsings = getPaths(getattr(compiler, "forcedUsings", []))
+    else:
+      defines = []
+      includePaths = []
+      forcedIncludes = []
+      forcedUsings = []
+
+    # TODO: Fill these out when the compiler has them.
     compileAsManaged = ""
     assemblyPaths = []
-    forcedUsings = getPaths(getattr(compiler, "forcedUsings", []))
 
     # Project name defaults the base filename without extension
     if name is None:

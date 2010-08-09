@@ -15,17 +15,30 @@ class Logger(object):
   with other messages output due to the use of a thread lock.
   """
   
-  def __init__(self, debugComponents=[]):
+  def __init__(self):
     """Default construction.
-    
-    @param debugComponents: The components to output debug messages for.
-    @type debugComponents: list of string
     """
-    self.debugComponents = debugComponents
+    self.debugComponents = set()
     self.errorCount = 0
     self.warningCount = 0
     self._lock = threading.Lock()
-  
+
+  def enableDebug(self, component):
+    """Enable debugging for a given component.  
+
+    @param component: The component to enable debugging of.
+    @type component: string
+    """
+    self.debugComponents.add(component)
+    
+  def dsableDebug(self, component):
+    """Disable debugging for a given component.  
+
+    @param component: The component to disable debugging of.
+    @type component: string
+    """
+    self.debugComponents.discard(component)
+
   def debugEnabled(self, keyword):
     """Returns True if currently debugging the given component.
     

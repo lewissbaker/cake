@@ -977,7 +977,7 @@ class MsvsProjectGenerator(object):
     args = escapeArgs(list(config.buildArgs))
 
     buildCmd = " ".join(args)
-    cleanCmd = buildCmd + " -clean-not-implemented"
+    cleanCmd = "@"
     rebuildCmd = buildCmd + " -f"
 
     self.file.write(_msvsProjectConfigurationHeader % {
@@ -1351,7 +1351,7 @@ class MsBuildProjectGenerator(object):
     args = escapeArgs(list(config.buildArgs))
 
     buildCmd = " ".join(args)
-    cleanCmd = buildCmd + " -clean-not-implemented"
+    cleanCmd = "@"
     rebuildCmd = buildCmd + " -f"
         
     self.file.write(_msbuildConfiguration % {

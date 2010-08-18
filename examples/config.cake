@@ -18,7 +18,6 @@ configuration = script.configuration
 hostPlatform = cake.system.platform().lower()
 hostArchitecture = cake.system.architecture().lower()
 
-
 # This is how you set an alternative base-directory
 # All relative paths will be relative to this absolute path.
 #configuration.baseDir = configuration.baseDir + '/..'
@@ -35,11 +34,11 @@ env = base.tools["env"] = Environment(configuration=configuration)
 env["EXAMPLES"] = "."
 projectTool = base.tools["project"] = ProjectTool(configuration=configuration)
 projectTool.product = projectTool.VS2008
-projectTool.enabled = engine.createProjects
+projectTool.enabled = engine.options.createProjects
 engine.addBuildSuccessCallback(projectTool.build)
 
 # Disable tools during project generation
-if engine.createProjects:
+if engine.options.createProjects:
   filesys.enabled = False
   shell.enabled = False
   zipping.enabled = False
@@ -79,7 +78,7 @@ def createVariants(parent):
       compiler.optimisation = compiler.FULL_OPTIMISATION
     
     # Disable the compiler during project generation
-    if engine.createProjects:
+    if engine.options.createProjects:
       compiler.enabled = False
 
     # Set project/solution configuration and platform names

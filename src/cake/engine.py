@@ -102,7 +102,7 @@ class Engine(object):
   forceBuild = False
   defaultConfigScriptName = "config.cake"
   
-  def __init__(self, logger):
+  def __init__(self, logger, parser):
     """Default Constructor.
     """
     self._byteCodeCache = {}
@@ -110,6 +110,8 @@ class Engine(object):
     self._digestCache = {}
     self._dependencyInfoCache = {}
     self.logger = logger
+    self.parser = parser
+    self.options = None
     self.buildSuccessCallbacks = []
     self.buildFailureCallbacks = []
     self._searchUpCache = {}
@@ -635,7 +637,10 @@ class Script(object):
     # Use an absolute path so an absolute path is embedded in the .pyc file.
     # This will make exceptions clickable in Eclipse, but it means copying
     # your .pyc files may cause their embedded paths to be incorrect.
-    absPath = self.configuration.abspath(self.path)
+    if self.configuration is not None:
+      absPath = self.configuration.abspath(self.path)
+    else:
+      absPath = os.path.abspath(self.path)
     byteCode = self.engine.getByteCode(absPath)
     old = Script.getCurrent()
     Script._current.value = self

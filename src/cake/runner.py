@@ -144,9 +144,20 @@ def run(args=None, cwd=None):
   else:
     cwd = os.getcwd()
 
-  logger = cake.logging.Logger()
-  engine = cake.engine.Engine(logger)
-
+  class MyParser(optparse.OptionParser):
+    """Subclass OptionParser to allow us to ignore errors during the initial
+    option parsing.
+    """
+    def parse_args(self, args=None, values=None, noErrors=False):
+      if noErrors:
+        self.error = self.noError
+      try:
+        return optparse.OptionParser.parse_args(self, args, values)
+      finally:
+        self.error = optparse.OptionParser.error
+    def noError(self, msg):
+      pass
+    
   class MyOption(optparse.Option):
     """Subclass the Option class to provide an 'extend' action.
     """  
@@ -163,36 +174,36 @@ def run(args=None, cwd=None):
         optparse.Option.take_action(
           self, action, dest, opt, value, values, parser
           )
-  
+        
   usage = "usage: %prog [options] <cake-script>*"
   
-  parser = optparse.OptionParser(usage=usage,option_class=MyOption)
-#  parser.add_option(
-#    "-b", "--boot",
-#    metavar="FILE",
-#    dest="boot",
-#    help="Path to the boot.cake file to use.",
-#    default=None,
-#    )
+  parser = MyParser(usage=usage, option_class=MyOption, add_help_option=False)
   parser.add_option(
-    "-c", "--config",
+    "--args",
+    metavar="FILE",
+    dest="args",
+    help="Path to the args.cake file to use.",
+    default=None,
+    )
+  parser.add_option(
+    "--config",
     metavar="FILE",
     dest="config",
     help="Path to the config.cake configuration file to use.",
     default=None,
     )
   parser.add_option(
+    "--debug", metavar="KEYWORDS",
+    action="extend",
+    dest="debugComponents",
+    help="Set features to debug, eg: 'reason,run,script,scan'.",
+    default=[],
+    )
+  parser.add_option(
     "-f", "--force",
     action="store_true",
     dest="forceBuild",
     help="Force rebuild of every target.",
-    default=False,
-    )
-  parser.add_option(
-    "-p", "--projects",
-    action="store_true",
-    dest="createProjects",
-    help="Create projects instead of building a variant.",
     default=False,
     )
   parser.add_option(
@@ -203,17 +214,13 @@ def run(args=None, cwd=None):
     help="Number of simultaneous jobs to execute.",
     default=cake.threadpool.getProcessorCount(),
     )
-  parser.add_option(
-    "-d", "--debug", metavar="KEYWORDS",
-    action="extend",
-    dest="debugComponents",
-    help="Set features to debug, eg: 'reason,run,script,scan'.",
-    default=[],
-    )
 
-  options, args = parser.parse_args(args)
+  options, _args = parser.parse_args(args, noErrors=True)
 
-  # Find script filenames from the arguments left
+  logger = cake.logging.Logger()
+  engine = cake.engine.Engine(logger, parser)
+
+  # Find script filenames from the arguments
   scripts = []
   for arg in args:
     if not os.path.isabs(arg):
@@ -226,9 +233,37 @@ def run(args=None, cwd=None):
   if not scripts:
     scripts.append(cwd)
 
-#  if options.boot is None:
-#    bootFileName = engine.searchUpForFile(path, "boot.cake")
+  argsFileName = options.args
+  if argsFileName is None:
+    # Try to find an args.cake by searching up from each scripts directory
+    for script in scripts:
+      # Script could be a file or directory name
+      if os.path.isdir(script):
+        scriptDirName = script
+      else:
+        scriptDirName = os.path.dirname(script)
+      argsFileName = engine.searchUpForFile(scriptDirName, "args.cake")
 
+  # Run the args.cake
+  if argsFileName is not None:
+    script = cake.engine.Script(
+      path=argsFileName,
+      configuration=None,
+      variant=None,
+      task=None,
+      engine=engine,
+      )
+    script.execute()
+
+  # Parse again, this time with user options and help/errors enabled
+  parser.add_option(
+    "-h", "--help",
+    action="help",
+    help="Show this help message and exit.",
+    )
+  engine.options, args = parser.parse_args(args)
+
+  # Set components to debug
   for c in options.debugComponents:
     logger.enableDebug(c)
 
@@ -246,8 +281,7 @@ def run(args=None, cwd=None):
   cake.task.setThreadPool(threadPool)
 
   engine.forceBuild = options.forceBuild
-  engine.createProjects = options.createProjects
-  
+ 
   tasks = []
   
   configScript = options.config

@@ -158,7 +158,9 @@ def getLibraryPaths(files):
   for f in files:
     while isinstance(f, AsyncResult):
       f = f.result
-    if isinstance(f, ModuleTarget):
+    if isinstance(f, (list, set, tuple)):
+      paths.extend(getLibraryPaths(f))
+    elif isinstance(f, ModuleTarget):
       paths.append(f.library.path)
     elif isinstance(f, FileTarget):
       paths.append(f.path)

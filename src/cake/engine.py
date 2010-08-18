@@ -276,7 +276,14 @@ class Engine(object):
       tasks.append(task)
       
     if not tasks:
-      self.raiseError("No build variants for %s" % path)
+      if keywords:
+        self.raiseError(
+          "No build variants found in %s that match the keywords.\n" % configuration.path
+          )
+      else:
+        self.raiseError(
+          "No build variants found in %s.\n" % configuration.path
+          )
     elif len(tasks) > 1:
       task = self.createTask()
       task.completeAfter(tasks)

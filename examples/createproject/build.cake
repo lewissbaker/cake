@@ -23,8 +23,8 @@ program = compiler.program(
   sources=objects,
   )
 
-project.project(
-  target=script.cwd("createproject"),
+proj = project.project(
+  target=env.expand("${BUILD}/createproject/project/createproject"),
   name="My Project",
   items={
     "Include" : includes,
@@ -35,6 +35,6 @@ project.project(
   )
 
 project.solution(
-  target=script.cwd("createproject"),
-  projects=[script.cwd("createproject")],
+  target=env.expand("${BUILD}/createproject/project/createproject"),
+  projects=[proj],
   )

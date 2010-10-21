@@ -42,7 +42,6 @@ class DummyCompiler(Compiler):
     return args
 
   def getPchCommands(self, target, source, header, object):
-
     language = self.language
     if not language:
       if source.lower().endswith('.c'):
@@ -64,7 +63,6 @@ class DummyCompiler(Compiler):
     return compile, compilerArgs, canBeCached
 
   def getObjectCommands(self, target, source, pch, shared):
-
     language = self.language
     if not language:
       if source.lower().endswith('.c'):
@@ -89,7 +87,6 @@ class DummyCompiler(Compiler):
     return compile, compilerArgs, canBeCached
 
   def getLibraryCommand(self, target, sources):
-    
     args = ['ar'] + sources + ['/o' + target]
 
     @makeCommand(args)
@@ -105,7 +102,9 @@ class DummyCompiler(Compiler):
     return archive, scan
   
   def getProgramCommands(self, target, sources):
-    args = ['ld'] + sources + ['/o' + target]
+    objects, libraries = self._resolveObjects()
+
+    args = ['ld'] + sources + objects + ['/o' + target]
     
     @makeCommand(args)
     def link():
@@ -115,7 +114,7 @@ class DummyCompiler(Compiler):
     
     @makeCommand("dummy-scanner")
     def scan():
-      return sources
+      return sources + objects + self._scanForLibraries(libraries)
     
     return link, scan
     

@@ -364,8 +364,6 @@ class Compiler(Tool):
   line limit, causing your link to fail with unexpected results. 
   @type: bool
   """
-# TODO: Should this be a string mapFile name? It's inconsistent with importLibrary
-# at the moment.
   outputMapFile = None
   """Output a map file.
   
@@ -1237,9 +1235,7 @@ class Compiler(Tool):
         moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         moduleTask = None
-      
-      # XXX: What about returning paths to import libraries?
-      
+     
       return ModuleTarget(
         path=target,
         task=moduleTask,

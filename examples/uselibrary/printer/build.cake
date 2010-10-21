@@ -1,28 +1,32 @@
-# Script to build printer library
-from cake.tools import compiler, env, script
+#-------------------------------------------------------------------------------
+# Script used to build the printer library.
+#-------------------------------------------------------------------------------
+from cake.tools import compiler, script
 
-# Add the .h include path
+# Add the .h include path.
 compiler.addIncludePath(script.cwd("include"))
 
-# List of includes
+# List of includes.
 includes = script.cwd("include", [
   "printer.h",
   ])
 
-# List of sources
+# List of sources.
 sources = script.cwd("source", [
   "printer.cpp",
   ])
 
-# Build objects
+# Build the objects.
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/uselibrary/printer/obj"),
+  targetDir=script.cwd("../../build/uselibrary/printer/obj"),
   sources=sources,
   )
 
-# Build library
-lib = compiler.library(
-  target=env.expand("${BUILD}/uselibrary/printer/lib/printer"),
+# Build the library.
+library = compiler.library(
+  target=script.cwd("../../build/uselibrary/printer/lib/printer"),
   sources=objects,
   )
-script.setResult(library=lib)
+
+# Set the 'library' result of this script to the library we built above.
+script.setResult(library=library)

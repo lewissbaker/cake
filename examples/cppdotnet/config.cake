@@ -1,13 +1,13 @@
 #-------------------------------------------------------------------------------
-# Configuration to build a dummy program using a precompiled header.
+# Configuration to build a .NET assembly and use it in a program.
 #-------------------------------------------------------------------------------
 from cake.engine import Script, Variant
 from cake.library.script import ScriptTool
-from cake.library.compilers.dummy import DummyCompiler
+from cake.library.compilers.msvc import findMsvcCompiler
 
 configuration = Script.getCurrent().configuration
 
 variant = Variant()
 variant.tools["script"] = ScriptTool(configuration=configuration)
-variant.tools["compiler"] = DummyCompiler(configuration=configuration)
+variant.tools["compiler"] = findMsvcCompiler(configuration=configuration)
 configuration.addVariant(variant)

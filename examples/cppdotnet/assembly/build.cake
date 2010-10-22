@@ -1,4 +1,7 @@
-from cake.tools import script, env, compiler
+#-------------------------------------------------------------------------------
+# Script used to build the .NET assembly.
+#-------------------------------------------------------------------------------
+from cake.tools import script, compiler
 
 sources = script.cwd([
   "point.cpp",
@@ -7,13 +10,13 @@ sources = script.cwd([
 compiler.clrMode = 'safe' 
 
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/cppdotnet/assembly"),
+  targetDir=script.cwd("../../build/cppdotnet/assembly"),
   sources=sources,
   language='c++/cli',
   )
 
 module = compiler.module(
-  target=env.expand("${BUILD}/cppdotnet/assembly/point"),
+  target=script.cwd("../../build/cppdotnet/assembly/point"),
   sources=objects,
   )
 

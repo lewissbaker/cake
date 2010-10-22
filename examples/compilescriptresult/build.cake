@@ -1,19 +1,22 @@
-from cake.tools import env, script, compiler
+#-------------------------------------------------------------------------------
+# Script used to build the main program.
+#-------------------------------------------------------------------------------
+from cake.tools import script, compiler
 
 otherSources = script.getResult(script.cwd('gensources.cake'), 'sources')
 mainSource = script.getResult(script.cwd('gensources.cake'), 'main')
 
 otherObjects = compiler.objects(
-  targetDir=env.expand('${BUILD}/compilescriptresult/obj'),
+  targetDir=script.cwd('../build/compilescriptresult/obj'),
   sources=otherSources,
   )
 
 mainObjects = compiler.objects(
-  targetDir=env.expand('${BUILD}/compilescriptresult/obj'),
+  targetDir=script.cwd('../build/compilescriptresult/obj'),
   sources=[mainSource],
   )
 
 program = compiler.program(
-  target=env.expand('${BUILD}/compilescriptresult/test'),
+  target=script.cwd('../build/compilescriptresult/test'),
   sources=[otherObjects, mainObjects],
   )

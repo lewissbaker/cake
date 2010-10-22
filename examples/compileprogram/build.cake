@@ -1,15 +1,21 @@
-from cake.tools import compiler, env, script
+#-------------------------------------------------------------------------------
+# Script used to build the main program.
+#-------------------------------------------------------------------------------
+from cake.tools import compiler, script
 
+# List of sources.
 sources = script.cwd([
   "main.cpp",
   ])
 
+# Build the objects.
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/compileprogram/obj"),
+  targetDir=script.cwd("../build/compileprogram/obj"),
   sources=sources,
   )
 
+# Build the program.
 compiler.program(
-  target=env.expand("${BUILD}/compileprogram/bin/main"),
+  target=script.cwd("../build/compileprogram/bin/main"),
   sources=objects,
   )

@@ -1,4 +1,7 @@
-from cake.tools import compiler, env, script, project
+#-------------------------------------------------------------------------------
+# Script used to build the main program and generate projects.
+#-------------------------------------------------------------------------------
+from cake.tools import compiler, script, project
 
 includes = script.cwd([
   "main.h",
@@ -14,17 +17,17 @@ extras = script.cwd([
   ])
 
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/createproject/obj"),
+  targetDir=script.cwd("../build/createproject/obj"),
   sources=sources,
   )
 
 program = compiler.program(
-  target=env.expand("${BUILD}/createproject/bin/main"),
+  target=script.cwd("../build/createproject/bin/main"),
   sources=objects,
   )
 
 proj = project.project(
-  target=env.expand("${BUILD}/createproject/project/createproject"),
+  target=script.cwd("../build/createproject/project/createproject"),
   name="My Project",
   items={
     "Include" : includes,
@@ -35,6 +38,6 @@ proj = project.project(
   )
 
 project.solution(
-  target=env.expand("${BUILD}/createproject/project/createproject"),
+  target=script.cwd("../build/createproject/project/createproject"),
   projects=[proj],
   )

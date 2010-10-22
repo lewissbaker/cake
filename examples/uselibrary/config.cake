@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
-# Configuration to build a program with a library dependency.
+# Configuration to build a dummy program with a library dependency.
 #-------------------------------------------------------------------------------
-from cake.library.script import ScriptTool
 from cake.engine import Script, Variant
+from cake.library.script import ScriptTool
 from cake.library.compilers.dummy import DummyCompiler
 
 configuration = Script.getCurrent().configuration

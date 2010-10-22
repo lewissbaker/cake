@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Configuration to build a dummy program using a precompiled header.
+# Configuration to build a dummy program.
 #-------------------------------------------------------------------------------
 from cake.engine import Script, Variant
 from cake.library.script import ScriptTool

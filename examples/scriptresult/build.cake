@@ -1,3 +1,6 @@
+#-------------------------------------------------------------------------------
+# Script used to obtain the result of another script.
+#-------------------------------------------------------------------------------
 from cake.tools import script
 
 library = script.getResult(script.cwd('other.cake'), 'library')

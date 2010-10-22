@@ -1,11 +1,12 @@
-# Options will be stored in 'engine.options' which you can later access
-# in your own config.cake.
+#-------------------------------------------------------------------------------
+# Command line argument file used to add a project generation option.
+#-------------------------------------------------------------------------------
 from cake.engine import Script
 
-script = Script.getCurrent()
-engine = script.engine
-parser = engine.parser
+parser = Script.getCurrent().engine.parser
 
+# Add a project generation option. It will be stored in 'engine.options' which
+# can later be accessed config.cake.
 parser.add_option(
   "-p", "--projects",
   action="store_true",

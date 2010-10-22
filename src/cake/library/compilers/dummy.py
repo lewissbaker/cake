@@ -100,8 +100,14 @@ class DummyCompiler(Compiler):
       return sources
       
     return archive, scan
-  
+ 
   def getProgramCommands(self, target, sources):
+    return self._getLinkCommands(target, sources, dll=False)
+  
+  def getModuleCommands(self, target, sources):
+    return self._getLinkCommands(target, sources, dll=True)
+
+  def _getLinkCommands(self, target, sources, dll):
     objects, libraries = self._resolveObjects()
 
     args = ['ld'] + sources + objects + ['/o' + target]
@@ -111,13 +117,15 @@ class DummyCompiler(Compiler):
       self.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
       absTarget = self.configuration.abspath(target)
       cake.filesys.writeFile(absTarget, "".encode("latin1"))
+      if self.importLibrary:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        cake.filesys.writeFile(importLibrary, "".encode("latin1"))
     
     @makeCommand("dummy-scanner")
     def scan():
-      return sources + objects + self._scanForLibraries(libraries)
-    
+      dependencies = sources + objects + self._scanForLibraries(libraries)
+      if self.importLibrary:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        dependencies.append(importLibrary)
+      return dependencies    
     return link, scan
-    
-  def getModuleCommands(self, target, sources):
-    # Lazy
-    return self.getProgramCommands(target, sources)

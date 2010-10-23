@@ -11,9 +11,6 @@ from cake.library.filesys import FileSystemTool
 from cake.library.zipping import ZipTool
 from cake.library.compilers import CompilerNotFoundError
 from cake.library.compilers.dummy import DummyCompiler
-from cake.library.compilers.gcc import findGccCompiler
-from cake.library.compilers.gcc import findMinGWCompiler
-from cake.library.compilers.msvc import findMsvcCompiler
 import cake.system
 
 hostPlatform = cake.system.platform().lower()
@@ -30,19 +27,30 @@ variant.tools["filesys"] = FileSystemTool(configuration=configuration)
 variant.tools["zipping"] = ZipTool(configuration=configuration)
 variant.tools["dummy"] = DummyCompiler(configuration=configuration)
 variant.tools["compiler"] = variant.tools["dummy"]
+# GCC Compiler
 try:
-  variant.tools["gcc"] = findGccCompiler(configuration=configuration)
-  variant.tools["compiler"] = variant.tools["gcc"]
+  from cake.library.compilers.gcc import findGccCompiler
+  gcc = variant.tools["gcc"] = findGccCompiler(configuration=configuration)
+  variant.tools["compiler"] = gcc
+  gcc.addLibrary("stdc++")
 except CompilerNotFoundError:
   pass
-try:
-  variant.tools["mingw"] = findMinGWCompiler(configuration=configuration)
-  variant.tools["compiler"] = variant.tools["mingw"]
-except CompilerNotFoundError:
-  pass
-try:
-  variant.tools["msvc"] = findMsvcCompiler(configuration=configuration)
-  variant.tools["compiler"] = variant.tools["msvc"]
-except CompilerNotFoundError:
-  pass
+if cake.system.isWindows():
+  # MSVC Compiler
+  try:
+    from cake.library.compilers.gcc import findMinGWCompiler
+    mingw = findMinGWCompiler(configuration=configuration)
+    variant.tools["compiler"] = mingw
+  except CompilerNotFoundError:
+    pass
+  # MinGW Compiler
+  try:
+    from cake.library.compilers.msvc import findMsvcCompiler
+    msvc = variant.tools["msvc"] = findMsvcCompiler(configuration=configuration)
+    variant.tools["compiler"] = msvc
+    msvc.addDefine("WIN32")
+    if msvc.architecture in ["x64", "ia64"]:
+      msvc.addDefine("WIN64")
+  except CompilerNotFoundError:
+    pass
 configuration.addVariant(variant)

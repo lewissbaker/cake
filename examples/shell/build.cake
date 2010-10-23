@@ -27,9 +27,7 @@ args = [
   "42",
   ]
 
-# Execute the program with the arguments above. Note that the program
-# will not execute correctly as this example uses an empty file created
-# by the dummy compiler.
+# Execute the program with the arguments above.
 shell.run(
   args=args,
   targets=[],

@@ -15,9 +15,12 @@ _undefined = object()
 
 class ShellTool(Tool):
 
-  def __init__(self, configuration):
+  def __init__(self, configuration, env=None):
     Tool.__init__(self, configuration)
-    self.__env = {}
+    if env is None:
+      self.__env = dict(os.environ)
+    else:
+      self.__env = dict(env)
 
   def run(self, args, targets=None, sources=[], cwd=None):
 

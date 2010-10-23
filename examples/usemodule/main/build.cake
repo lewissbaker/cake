@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
-# Script used to build the main program.
+# This example demonstrates building and using a module (.dll on windows) with
+# the compiler tool.
 #-------------------------------------------------------------------------------
 from cake.tools import compiler, script
 

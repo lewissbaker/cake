@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Script used to copy a file.
+# This example demonstrates copying a single file using the filesys tool.
 #-------------------------------------------------------------------------------
 from cake.tools import filesys, script
 

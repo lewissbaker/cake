@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
-# Script used to build the main program using a .NET assembly.
+# This example demonstrates building then using a cpp .NET assembly in a
+# program.
+#
+# Note that this example will only work on Windows with an MSVC compiler
+# installed.
 #-------------------------------------------------------------------------------
-from cake.tools import script, compiler
+from cake.tools import script, msvc
 
 script.include(script.cwd("../assembly/use.cake"))
 
@@ -9,19 +13,19 @@ sources = script.cwd([
   "main.cpp",
   ])
 
-compiler.clrMode = 'safe'
+msvc.clrMode = 'safe'
 
-objects = compiler.objects(
+objects = msvc.objects(
   targetDir=script.cwd("../../build/cppdotnet/program"),
   sources=sources,
   language='c++/cli',
   )
 
-compiler.program(
+msvc.program(
   target=script.cwd("../../build/cppdotnet/program/main"),
   sources=objects,
   )
 
-compiler.copyModulesTo(
+msvc.copyModulesTo(
   targetDir=script.cwd("../../build/cppdotnet/program"),
   )

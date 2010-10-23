@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Script used to obtain the result of another script.
+# This example demonstrates setting and obtaining the result of a script.
 #-------------------------------------------------------------------------------
 from cake.tools import script
 

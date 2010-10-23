@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
-# Script used to build the main program.
+# This example demonstrates building a program from a single source file using
+# the compiler tool.
 #-------------------------------------------------------------------------------
 from cake.tools import compiler, script
 

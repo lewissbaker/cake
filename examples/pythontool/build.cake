@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
-# Script used to run a python function.
+# This example demonstrates using the script tool's run() function to build an
+# empty target file.
 #-------------------------------------------------------------------------------
 import cake.filesys
 import cake.path
@@ -19,7 +20,7 @@ class TestTool(object):
 
     # Use the script tool to run our function. Note that we could also
     # add source file dependencies by passing a 'sources' argument.
-    return script.run(run, targets=[target], args=[path, self.name])[0]
+    return script.run(run, targets=[target], args=[path])[0]
   
 tool = TestTool()
 target = tool.build(script.cwd("../build/pythontool/target"))

@@ -1,1 +1,0 @@
-This example demonstrates querying properties of the current variant using the variant tool.

@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
-# Script used to build and execute the main program.
+# This example demonstrates building a program then executing it using the shell
+# tool.
 #-------------------------------------------------------------------------------
 from cake.tools import compiler, script, shell
 

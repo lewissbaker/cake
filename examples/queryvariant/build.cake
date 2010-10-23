@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
-# Script used to query the current variant.
+# This example demonstrates querying properties of the current variant using the
+# variant tool.
 #-------------------------------------------------------------------------------
 from cake.tools import variant, logging
 

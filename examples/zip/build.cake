@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
-# Script used to build a zip file.
+# This example demonstrates how to build a zip file from a source file/directory
+# using the ZipTool.
 #-------------------------------------------------------------------------------
 from cake.tools import script, zipping
 

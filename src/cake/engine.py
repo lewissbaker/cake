@@ -231,10 +231,12 @@ class Engine(object):
     @raise BuildError: If the config script could not be found.
     """
     configScript = self.findConfigScriptPath(path, configScriptName)
+    # Fall back on the default config script in this files path
     if configScript is None:
-      if configScriptName is None:
-        configScriptName = self.defaultConfigScriptName
-      self.raiseError("Unable to find %s in %s\n" % (configScriptName, path))
+      configScript = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        self.defaultConfigScriptName,
+        )
     return self.getConfiguration(configScript)
   
   def execute(self, path, configScript=None, configScriptName=None, keywords={}):

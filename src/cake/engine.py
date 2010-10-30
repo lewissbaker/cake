@@ -117,6 +117,16 @@ class Engine(object):
     self._searchUpCache = {}
     self._configurations = {}
     self.scriptThreadPool = cake.threadpool.ThreadPool(1)
+    self.errors = []
+    self.warnings = []
+
+  @property
+  def errorCount(self):
+    return len(self.errors)
+
+  @property
+  def warningCount(self):
+    return len(self.warnings)
   
   def searchUpForFile(self, path, fileName):
     """Attempt to find a file in a particular path or any of its parent
@@ -364,6 +374,7 @@ class Engine(object):
         if not self.logger.debugEnabled("stack"):
           message += "Pass '-d stack' if you require a more complete stack trace.\n"    
         self.logger.outputError(message)
+        self.errors.append(message)
         raise
 
     task = cake.task.Task(_wrapper)
@@ -385,6 +396,7 @@ class Engine(object):
     task to fail.
     """
     self.logger.outputError(message)
+    self.errors.append(message)
     raise BuildError(message)
     
   def getByteCode(self, path):

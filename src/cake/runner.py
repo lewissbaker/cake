@@ -148,15 +148,16 @@ def run(args=None, cwd=None):
     """Subclass OptionParser to allow us to ignore errors during the initial
     option parsing.
     """
-    def parse_args(self, args=None, values=None, noErrors=False):
-      if noErrors:
-        self.error = self.noError
+    showErrors = True
+    def parse_args(self, args=None, values=None, showErrors=True):
+      self.showErrors = showErrors;
       try:
         return optparse.OptionParser.parse_args(self, args, values)
       finally:
-        self.error = optparse.OptionParser.error
-    def noError(self, msg):
-      pass
+        self.showErrors = True;
+    def error(self, msg):
+      if self.showErrors:
+        optparse.OptionParser.error(self, msg);
     
   class MyOption(optparse.Option):
     """Subclass the Option class to provide an 'extend' action.
@@ -200,6 +201,13 @@ def run(args=None, cwd=None):
     default=[],
     )
   parser.add_option(
+    "-s", "--silent", "--quiet",
+    action="store_true",
+    dest="quiet",
+    help="Suppress printing of all Cake messages, warnings and errors.",
+    default=False,
+    )
+  parser.add_option(
     "-f", "--force",
     action="store_true",
     dest="forceBuild",
@@ -215,7 +223,7 @@ def run(args=None, cwd=None):
     default=cake.threadpool.getProcessorCount(),
     )
 
-  options, _args = parser.parse_args(args, noErrors=True)
+  options, _args = parser.parse_args(args, showErrors=False)
 
   logger = cake.logging.Logger()
   engine = cake.engine.Engine(logger, parser)
@@ -267,6 +275,9 @@ def run(args=None, cwd=None):
   for c in options.debugComponents:
     logger.enableDebug(c)
 
+  # Set quiet mode    
+  logger.quiet = options.quiet;
+
   # Find keyword arguments  
   keywords = {}
   for arg in args:
@@ -306,23 +317,24 @@ def run(args=None, cwd=None):
       bootFailed = True
       msg = traceback.format_exc()
       engine.logger.outputError(msg)
+      engine.errors.append(msg)
     
   def onFinish():
     if not bootFailed and mainTask.succeeded:
       engine.onBuildSucceeded()
-      if engine.logger.warningCount:
-        msg = "Build succeeded with %i warnings.\n" % engine.logger.warningCount
+      if engine.warningCount:
+        msg = "Build succeeded with %i warnings.\n" % engine.warningCount
       else:
         msg = "Build succeeded.\n"
     else:
       engine.onBuildFailed()
-      if engine.logger.warningCount:
+      if engine.warningCount:
         msg = "Build failed with %i errors and %i warnings.\n" % (
-          engine.logger.errorCount,
-          engine.logger.warningCount,
+          engine.errorCount,
+          engine.warningCount,
           )
       else:
-        msg = "Build failed with %i errors.\n" % engine.logger.errorCount
+        msg = "Build failed with %i errors.\n" % engine.errorCount
     engine.logger.outputInfo(msg)
   
   mainTask = cake.task.Task()
@@ -339,4 +351,4 @@ def run(args=None, cwd=None):
   endTime = datetime.datetime.utcnow()
   engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
   
-  return engine.logger.errorCount
+  return engine.errorCount

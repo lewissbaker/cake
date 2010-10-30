@@ -1514,18 +1514,16 @@ class Compiler(Tool):
   
   def _outputStdout(self, text):
     # Output stdout to stderr as well. Some compilers will output errors
-    # to stderr, and all unexpected output should be treated as an error,
+    # to stdout, and all unexpected output should be treated as an error,
     # or handled/output by client code.
     # An example of a compiler outputting errors to stdout is Mavc's link
     # error, "LINK : fatal error LNK1104: cannot open file '<filename>'".
     text = text.replace("\r\n", "\n")
-    sys.stderr.write(text.encode("latin1"))
-    sys.stderr.flush()
+    self.engine.logger.outputError(text.encode("latin1"))
 
   def _outputStderr(self, text):
     text = text.replace("\r\n", "\n")
-    sys.stderr.write(text.encode("latin1"))
-    sys.stderr.flush()
+    self.engine.logger.outputError(text.encode("latin1"))
 
   def _getObjectsInLibrary(self, path):
     """Get a list of the paths of object files in the specified library.

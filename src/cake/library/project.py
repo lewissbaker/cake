@@ -18,9 +18,11 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.library import Tool, FileTarget, getPath, getPaths
+from cake.library import (
+  Tool, FileTarget, AsyncResult, waitForAsyncResult, flatten, getPath, getPaths
+  )
 from cake.engine import Script
-  
+
 class _Project(object):
   
   def __init__(self, path, filtersPath, name, version):
@@ -310,7 +312,7 @@ class ProjectTool(Tool):
     configName = self.projectConfigName
     if configName is None:
       keywords = Script.getCurrent().variant.keywords
-      configName = " ".join(v.capitalize() for v in keywords.values())
+      configName = " ".join(keywords.values())
     return configName
       
   def _getProjectPlatformName(self):
@@ -325,7 +327,7 @@ class ProjectTool(Tool):
     configName = self.solutionConfigName
     if configName is None:
       keywords = Script.getCurrent().variant.keywords
-      configName = " ".join(v.capitalize() for v in keywords.values())
+      configName = " ".join(keywords.values())
     return configName
   
   def _getSolutionPlatformName(self):
@@ -531,49 +533,57 @@ class ProjectTool(Tool):
     projects,
     **kwargs
     ):
-    
-    target = cake.path.forceExtension(target, self._msvsSolutionSuffix)
 
-    if not self.enabled:
-      return FileTarget(path=target, task=None)
-    
+    # Obtain these now because they may rely on the value of Script.getCurrent() 
     configName = self._getSolutionConfigName()
     platformName = self._getSolutionPlatformName()
     projectConfigName = self._getProjectConfigName()
     projectPlatformName = self._getProjectPlatformName()
-    
-    try:
-      version = self._toSolutionVersion[self.product]
-    except KeyError:
-      raise ValueError("Unknown product: '%d'" % self.product)
-      
-    solution = self._solutions.getSolution(target, version)
-    configuration = _SolutionConfiguration(
-      configName,
-      platformName,
-      )
-    solution.addConfiguration(configuration)
-    
-    if self.product == self.VS2010:
-      projectExtension = self._msvsProjectSuffix2010
-    else:
-      projectExtension = self._msvsProjectSuffix
-      
-    for p in projects:
-      if not isinstance(p, self.SolutionProjectItem):
-        p = self.SolutionProjectItem(p)
 
-      projectPath = getPath(p.project) 
-      projectPath = cake.path.forceExtension(projectPath, projectExtension)
+    @waitForAsyncResult
+    def run(target, projects):
+      target = cake.path.forceExtension(target, self._msvsSolutionSuffix)
+  
+      if not self.enabled:
+        return FileTarget(path=target, task=None)
+      
+      try:
+        version = self._toSolutionVersion[self.product]
+      except KeyError:
+        raise ValueError("Unknown product: '%d'" % self.product)
         
-      configuration.addProjectConfiguration(_SolutionProjectConfiguration(
-        projectConfigName,
-        projectPlatformName,
-        projectPath,
-        p.build,
-        ))
-
-    return SolutionTarget(path=target, task=None, tool=self)
+      solution = self._solutions.getSolution(target, version)
+      configuration = _SolutionConfiguration(
+        configName,
+        platformName,
+        )
+      solution.addConfiguration(configuration)
+      
+      if self.product == self.VS2010:
+        projectExtension = self._msvsProjectSuffix2010
+      else:
+        projectExtension = self._msvsProjectSuffix
+        
+      for p in projects:
+        while isinstance(p, AsyncResult):
+          p = p.result
+          
+        if not isinstance(p, self.SolutionProjectItem):
+          p = self.SolutionProjectItem(p)
+  
+        projectPath = getPath(p.project) 
+        projectPath = cake.path.forceExtension(projectPath, projectExtension)
+          
+        configuration.addProjectConfiguration(_SolutionProjectConfiguration(
+          projectConfigName,
+          projectPlatformName,
+          projectPath,
+          p.build,
+          ))
+  
+      return SolutionTarget(path=target, task=None, tool=self)
+  
+    return run(target, flatten(projects))
   
   def build(self):
     """Build project and solution files.

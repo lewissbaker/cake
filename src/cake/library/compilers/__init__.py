@@ -643,6 +643,18 @@ class Compiler(Tool):
     self.modules = []
     self.__binPaths = binPaths
 
+  @property
+  def libraryPrefix(self):
+    """The prefix to use for library files.
+    """
+    return self.libraryPrefixSuffixes[0][0]
+
+  @property
+  def librarySuffix(self):
+    """The suffix to use for library files.
+    """
+    return self.libraryPrefixSuffixes[0][1]
+    
   def addCFlag(self, flag):
     """Add a flag to be used during .c compilation.
     
@@ -1157,7 +1169,7 @@ class Compiler(Tool):
     @waitForAsyncResult
     def run(target, sources):
       if forceExtension:
-        prefix, suffix = self.libraryPrefixSuffixes[0]
+        prefix, suffix = self.libraryPrefix, self.librarySuffix
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
   
       if self.enabled:
@@ -1205,7 +1217,7 @@ class Compiler(Tool):
         prefix, suffix = self.modulePrefixSuffixes[0]
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
         if self.importLibrary:
-          prefix, suffix = self.libraryPrefixSuffixes[0]
+          prefix, suffix = self.libraryPrefix, self.librarySuffix
           self.importLibrary = cake.path.forcePrefixSuffix(
             self.importLibrary,
             prefix,

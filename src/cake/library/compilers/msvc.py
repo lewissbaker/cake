@@ -852,7 +852,7 @@ class MsvcCompiler(Compiler):
     args.extend(objects)
 
     # Msvc requires a .lib extension otherwise it will assume an .obj
-    libraryPrefix, librarySuffix = self.libraryPrefixSuffixes[0]
+    libraryPrefix, librarySuffix = self.libraryPrefix, self.librarySuffix
     for l in libraries:
       if not cake.path.hasExtension(l):
         l = cake.path.forcePrefixSuffix(l, libraryPrefix, librarySuffix)

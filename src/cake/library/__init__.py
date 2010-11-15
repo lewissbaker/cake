@@ -98,12 +98,13 @@ class Tool(object):
   def clone(self):
     """Return an independent clone of this tool.
     
-    The default clone behaviour performs a shallow copy of the
-    member variables of the tool. You should override this method
-    if you need a more sophisticated clone.
+    The default clone behaviour performs a deep copy of any builtin
+    types, and a clone of any Tool-derived objects. Everything else
+    will be shallow copied. You should override this method if you
+    need a more sophisticated clone.
     """
     new = object.__new__(self.__class__)
-    new.__dict__ = deepCopyBuiltins(self.__dict__)
+    new.__dict__ = cloneTools(self.__dict__)
     return new
 
 class FileTarget(object):
@@ -323,6 +324,22 @@ def getPaths(files):
       paths.append(path)
   return paths
 
+def cloneTools(obj):
+  """Return a deep copy of any Tool-derived objects or builtin types.
+
+  @param obj: The given object to copy.
+  @return: A copy of the given object for Tool-dervied or builtin types,
+  and references to the same object for user-defined types.
+  """
+  if isinstance(obj, Tool):
+    return obj.clone()
+  elif isinstance(obj, dict):
+    return dict((cloneTools(k), cloneTools(v)) for k, v in obj.iteritems())
+  elif isinstance(obj, (list, tuple, set)):
+    return type(obj)(cloneTools(i) for i in obj)
+  else:
+    return obj
+  
 def deepCopyBuiltins(obj):
   """Returns a deep copy of only builtin types.
   

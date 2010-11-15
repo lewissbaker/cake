@@ -98,4 +98,4 @@ class Logger(object):
     @type message: string
     """
     if keyword in self._debugComponents:
-      self.outputStdOut(message)
+      self.outputInfo(message)

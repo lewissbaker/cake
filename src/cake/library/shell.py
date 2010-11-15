@@ -31,10 +31,20 @@ class ShellTool(Tool):
 
       sourcePaths = getPaths(sources)
       configuration = self.configuration
+      abspath = configuration.abspath
 
+      if isinstance(args, basestring):
+        argsString = args
+        argsList = [args]
+        executable = None
+      else:
+        argsString = " ".join(args)
+        argsList = args
+        executable = abspath(args[0])
+        
       if targets:
         # Check dependencies to see if they've changed
-        buildArgs = args + sourcePaths + targets
+        buildArgs = argsList + sourcePaths + targets
         try:
           _, reasonToBuild = configuration.checkDependencyInfo(
             targets[0],
@@ -50,10 +60,8 @@ class ShellTool(Tool):
           "reason",
           "Rebuilding '%s' because %s.\n" % (targets[0], reasonToBuild),
           )
-        
-      # Create target directories first
-      abspath = configuration.abspath
       
+      # Create target directories first
       if targets:
         for t in targets:
           cake.filesys.makeDirs(cake.path.dirName(abspath(t)))
@@ -64,15 +72,14 @@ class ShellTool(Tool):
         cwd = abspath(cwd)
 
       # Output the command-line we're about to run.
-      engine.logger.outputInfo("Running %s\n" % args[0])
+      engine.logger.outputInfo("Running %s\n" % argsList[0])
 
       engine.logger.outputDebug(
         "run",
-        "run: %s\n" % " ".join(args),
+        "run: %s\n" % argsString,
         )
 
       try:
-        executable = abspath(args[0])
         p = subprocess.Popen(
           args=args,
           executable=executable,
@@ -81,14 +88,14 @@ class ShellTool(Tool):
           cwd=cwd,
           )
       except EnvironmentError, e:
-        msg = "cake: failed to launch %s: %s\n" % (args[0], str(e))
+        msg = "cake: failed to launch %s: %s\n" % (argsList[0], str(e))
         engine.raiseError(msg)
 
       p.stdin.close()
       exitCode = p.wait()
       
       if exitCode != 0:
-        msg = "%s exited with code %i\n" % (args[0], exitCode)
+        msg = "%s exited with code %i\n" % (argsList[0], exitCode)
         engine.raiseError(msg)
 
       if targets:

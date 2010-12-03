@@ -711,7 +711,9 @@ class MsvcCompiler(Compiler):
     #if self.errorReport:
     #  args.append('/ERRORREPORT:%s' % self.errorReport.upper())
       
-    if self.useIncrementalLinking is not None:
+    # Trying to combine /incremental with /clrimagetype gives a linker
+    # warning LNK4075: ingoring '/INCREMENTAL'
+    if self.useIncrementalLinking is not None and self.clrMode is not None:
       if self.useIncrementalLinking:
         args.append('/INCREMENTAL')
       else:

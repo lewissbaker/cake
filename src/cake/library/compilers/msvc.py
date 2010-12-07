@@ -698,7 +698,7 @@ class MsvcCompiler(Compiler):
     @makeCommand("lib-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by lib.exe
-      return [self.__libExe] + sources
+      return [target], [self.__libExe] + sources
 
     return archive, scan
 
@@ -862,7 +862,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      if self.importLibrary:
+      if dll and self.importLibrary is not None:
         importLibrary = self.configuration.abspath(self.importLibrary)
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)
@@ -989,7 +989,18 @@ class MsvcCompiler(Compiler):
         
     @makeCommand("link-scan")
     def scan():
-      return [self.__linkExe] + sources + objects + self._scanForLibraries(libraries)
+      targets = [target]
+      if dll and self.importLibrary is not None:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        exportFile = cake.path.stripExtension(importLibrary) + '.exp'
+        targets.append(importLibrary)
+        targets.append(exportFile)
+        
+      dependencies = [self.__linkExe]
+      dependencies += sources
+      dependencies += objects
+      dependencies += self._scanForLibraries(libraries)
+      return targets, dependencies
     
     if self.embedManifest:
       if self.useIncrementalLinking:
@@ -1020,6 +1031,6 @@ class MsvcCompiler(Compiler):
     @makeCommand("rc-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by rc.exe
-      return [self.__rcExe, source]
+      return [target], [self.__rcExe, source]
 
     return compile, scan

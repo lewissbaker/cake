@@ -1941,10 +1941,10 @@ class Compiler(Tool):
       
       archive()
       
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -1956,6 +1956,10 @@ class Compiler(Tool):
   
   def getLibraryCommand(self, target, sources):
     """Get the command for constructing a library.
+    
+    @return: A tuple (build, scan) where build is the function to call to
+    build the library, scan is a function that when called returns a
+    (targets, dependencies) tuple. 
     """
     self.engine.raiseError("Don't know how to archive %s\n" % target)
   
@@ -1990,10 +1994,10 @@ class Compiler(Tool):
     
       link()
     
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2015,7 +2019,7 @@ class Compiler(Tool):
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
-    returns the list of dependencies. 
+    returns a tuple of (targets, dependencies). 
     """
     self.engine.raiseError("Don't know how to link %s\n" % target)
   
@@ -2051,10 +2055,10 @@ class Compiler(Tool):
     
       link()
     
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2076,7 +2080,7 @@ class Compiler(Tool):
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
-    returns the list of dependencies. 
+    returns the tuple (targets, dependencies). 
     """
     self.engine.raiseError("Don't know how to link %s\n" % target)
     
@@ -2108,10 +2112,10 @@ class Compiler(Tool):
       
       compile()
       
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2123,5 +2127,9 @@ class Compiler(Tool):
   
   def getResourceCommand(self, target, sources):
     """Get the command for constructing a resource.
+    
+    @return: A tuple (build, scan) where build is the function to call to
+    build the resource, scan is a function that when called returns a
+    (targets, dependencies) tuple. 
     """
     self.engine.raiseError("Don't know how to compile %s\n" % target)

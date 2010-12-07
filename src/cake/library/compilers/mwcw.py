@@ -286,7 +286,10 @@ class MwcwCompiler(Compiler):
     @makeCommand("lib-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by ld.exe
-      return [args[0]] + sources
+      targets = [target]
+      dependencies = [args[0]]
+      dependencies += sources
+      return targets, dependencies
 
     return archive, scan
 
@@ -331,10 +334,17 @@ class MwcwCompiler(Compiler):
     
     @makeCommand("link-scan")
     def scan():
+      targets = [target]
+        
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + objects + self._scanForLibraries(libraries)
+      dependencies = [args[0]]
+      dependencies += sources
+      dependencies += objects
+      dependencies += self._scanForLibraries(libraries)
+      
+      return targets, dependencies
     
     return link, scan
 

@@ -131,8 +131,8 @@ class AsyncResult(object):
 
 class DeferredResult(AsyncResult):
   
-  def __init__(self, func):
-    self.task = Task(func)
+  def __init__(self, task):
+    self.task = task
 
   @property
   def result(self):
@@ -205,9 +205,15 @@ def waitForAsyncResult(func):
       return func(*newArgs, **newKwargs)
         
     if tasks:
-      deferred = DeferredResult(run)
-      deferred.task.startAfter(tasks)
-      return deferred
+      currentScript = Script.getCurrent()
+      if currentScript is not None:
+        engine = currentScript.engine
+        task = engine.createTask(run)
+      else:
+        task = Task(run)
+      task.startAfter(tasks)
+      
+      return DeferredResult(task)
     else:
       return run()
   
@@ -253,10 +259,19 @@ def flatten(value):
   
   if tasks:
     # Some items are AsyncResults, need to re-flatten once they're
-    # done 
-    result = DeferredResult(lambda: flatten(items))
-    result.task.startAfter(tasks)
-    return result
+    # done
+    def run():
+      return flatten(items)
+    
+    currentScript = Script.getCurrent()
+    if currentScript is not None:
+      engine = currentScript.engine
+      task = engine.createTask(run)
+    else:
+      task = Task(run)
+    task.startAfter(tasks)
+    
+    return DeferredResult(task)
   else:
     return items
 

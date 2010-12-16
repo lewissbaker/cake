@@ -350,9 +350,19 @@ class Engine(object):
     if func is None:
       return cake.task.Task()
     
+    # Save the script that created the task so that the task
+    # inherits that same script when executed.
+    currentScript = Script.getCurrent()
+    
     def _wrapper():
       try:
-        return func()
+        # Restore the old script
+        oldScript = Script.getCurrent()
+        Script._current.value = currentScript
+        try:
+          return func()
+        finally:
+          Script._current.value = oldScript
       except BuildError:
         # Assume build errors have already been reported
         raise
@@ -381,7 +391,7 @@ class Engine(object):
 
     # Set a traceback for the parent script task
     if self.logger.debugEnabled("stack"):    
-      if Script.getCurrent() is not None:
+      if currentScript is not None:
         task.traceback = traceback.extract_stack()[:-1]
 
     return task

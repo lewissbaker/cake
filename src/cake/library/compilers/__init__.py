@@ -27,7 +27,7 @@ import cake.hash
 from cake.engine import Script, DependencyInfo, BuildError
 from cake.library.filesys import FileSystemTool
 from cake.library import (
-  Tool, FileTarget, AsyncResult, DeferredResult,
+  Tool, FileTarget, AsyncResult,
   memoise, waitForAsyncResult, flatten,
   getPaths, getPath, getResult, getResults, getTasks, getTask,
   )

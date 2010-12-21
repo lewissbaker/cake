@@ -222,6 +222,20 @@ def run(args=None, cwd=None):
     help="Number of simultaneous jobs to execute.",
     default=cake.threadpool.getProcessorCount(),
     )
+  parser.add_option(
+    "-k", "--keep-going",
+    dest="maximumErrorCount",
+    action="store_const",
+    const=None,
+    help="Keep building even in the presence of errors.",
+    )
+  parser.add_option(
+    "-e", "--max-errors",
+    dest="maximumErrorCount",
+    type="int",
+    help="Halt the build after a certain number of errors.",
+    default=100,
+    )
 
   options, _args = parser.parse_args(args, showErrors=False)
 
@@ -292,6 +306,7 @@ def run(args=None, cwd=None):
   cake.task.setThreadPool(threadPool)
 
   engine.forceBuild = options.forceBuild
+  engine.maximumErrorCount = options.maximumErrorCount
  
   tasks = []
   

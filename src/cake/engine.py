@@ -101,6 +101,7 @@ class Engine(object):
   
   forceBuild = False
   defaultConfigScriptName = "config.cake"
+  maximumErrorCount = None
   
   def __init__(self, logger, parser):
     """Default Constructor.
@@ -355,6 +356,12 @@ class Engine(object):
     currentScript = Script.getCurrent()
     
     def _wrapper():
+      if self.maximumErrorCount and self.errorCount >= self.maximumErrorCount:
+        # TODO: Output some sort of message saying the build is being terminated
+        # because of too many errors. But only output it once. Perhaps just set
+        # a flag and check that in the runner.
+        raise BuildError()
+      
       try:
         # Restore the old script
         oldScript = Script.getCurrent()

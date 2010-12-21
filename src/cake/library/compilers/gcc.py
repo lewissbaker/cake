@@ -583,7 +583,8 @@ class MacGccCompiler(GccCompiler):
       args.extend(["-install_name", self.installName])
 
     if self.outputMapFile:
-      args.append('-map=' + cake.path.stripExtension(target) + '.map')
+      mapFile = cake.path.stripExtension(target) + '.map'
+      args.append('-map=' + mapFile)
 
     @makeCommand(args)
     def link():
@@ -601,6 +602,9 @@ class MacGccCompiler(GccCompiler):
       if dll and self.importLibrary:
         importLibrary = self.configuration.abspath(self.importLibrary)
         targets.append(importLibrary)
+      if self.outputMapFile:
+        targets.append(mapFile)
+      
       return targets, [args[0]] + sources
 
     return link, scan

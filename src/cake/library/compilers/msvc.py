@@ -753,9 +753,6 @@ class MsvcCompiler(Compiler):
       # Link-time code generation (global optimisation)
       args.append('/LTCG:NOSTATUS')
     
-    if self.outputMapFile:
-      args.append('/MAP')
-    
     if self.clrMode is not None:
       if self.clrMode == "pure":
         args.append('/CLRIMAGETYPE:PURE')
@@ -848,6 +845,10 @@ class MsvcCompiler(Compiler):
         args.append(embeddedRes)
       else:
         args.append('/MANIFESTFILE:' + embeddedManifest)
+    
+    if self.outputMapFile:
+      mapFile = cake.path.stripExtension(target) + '.map'
+      args.append('/MAP:' + mapFile)
     
     args.append('/OUT:' + target)
     args.extend(sources)
@@ -995,6 +996,20 @@ class MsvcCompiler(Compiler):
         exportFile = cake.path.stripExtension(importLibrary) + '.exp'
         targets.append(importLibrary)
         targets.append(exportFile)
+      if self.outputMapFile:
+        targets.append(mapFile)
+      if self.debugSymbols:
+        if self.pdbFile is not None:
+          targets.append(self.pdbFile)
+        if self.strippedPdbFile is not None:
+          targets.append(self.strippedPdbFile)
+      if not self.embedManifest:
+        # If we are linking with static runtimes there may be no manifest
+        # output, in which case we don't need to flag it as a target.
+        manifestFile = target + '.manifest'
+        absManifestFile = self.configuration.abspath(manifestFile)
+        if cake.filesys.isFile(absManifestFile):
+          targets.append(manifestFile)
         
       dependencies = [self.__linkExe]
       dependencies += sources

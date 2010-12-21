@@ -326,7 +326,8 @@ class MwcwCompiler(Compiler):
     args.extend(['-o', target])
 
     if self.outputMapFile:
-      args.extend(['-map', cake.path.stripExtension(target) + '.map'])
+      mapFile = cake.path.stripExtension(target) + '.map'
+      args.extend(['-map', mapFile])
       
     @makeCommand(args)
     def link():
@@ -335,6 +336,8 @@ class MwcwCompiler(Compiler):
     @makeCommand("link-scan")
     def scan():
       targets = [target]
+      if self.outputMapFile:
+        targets.append(mapFile)
         
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps

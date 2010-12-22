@@ -27,7 +27,7 @@ import cake.hash
 from cake.engine import Script, DependencyInfo, BuildError
 from cake.library.filesys import FileSystemTool
 from cake.library import (
-  Tool, FileTarget, AsyncResult, DeferredResult,
+  Tool, FileTarget, AsyncResult,
   memoise, waitForAsyncResult, flatten,
   getPaths, getPath, getResult, getResults, getTasks, getTask,
   )
@@ -158,7 +158,9 @@ def getLibraryPaths(files):
   for f in files:
     while isinstance(f, AsyncResult):
       f = f.result
-    if isinstance(f, ModuleTarget):
+    if isinstance(f, (list, set, tuple)):
+      paths.extend(getLibraryPaths(f))
+    elif isinstance(f, ModuleTarget):
       paths.append(f.library.path)
     elif isinstance(f, FileTarget):
       paths.append(f.path)
@@ -362,8 +364,6 @@ class Compiler(Tool):
   line limit, causing your link to fail with unexpected results. 
   @type: bool
   """
-# TODO: Should this be a string mapFile name? It's inconsistent with importLibrary
-# at the moment.
   outputMapFile = None
   """Output a map file.
   
@@ -643,6 +643,18 @@ class Compiler(Tool):
     self.modules = []
     self.__binPaths = binPaths
 
+  @property
+  def libraryPrefix(self):
+    """The prefix to use for library files.
+    """
+    return self.libraryPrefixSuffixes[0][0]
+
+  @property
+  def librarySuffix(self):
+    """The suffix to use for library files.
+    """
+    return self.libraryPrefixSuffixes[0][1]
+    
   def addCFlag(self, flag):
     """Add a flag to be used during .c compilation.
     
@@ -1157,7 +1169,7 @@ class Compiler(Tool):
     @waitForAsyncResult
     def run(target, sources):
       if forceExtension:
-        prefix, suffix = self.libraryPrefixSuffixes[0]
+        prefix, suffix = self.libraryPrefix, self.librarySuffix
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
   
       if self.enabled:
@@ -1205,7 +1217,7 @@ class Compiler(Tool):
         prefix, suffix = self.modulePrefixSuffixes[0]
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
         if self.importLibrary:
-          prefix, suffix = self.libraryPrefixSuffixes[0]
+          prefix, suffix = self.libraryPrefix, self.librarySuffix
           self.importLibrary = cake.path.forcePrefixSuffix(
             self.importLibrary,
             prefix,
@@ -1235,9 +1247,7 @@ class Compiler(Tool):
         moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         moduleTask = None
-      
-      # XXX: What about returning paths to import libraries?
-      
+     
       return ModuleTarget(
         path=target,
         task=moduleTask,
@@ -1516,18 +1526,16 @@ class Compiler(Tool):
   
   def _outputStdout(self, text):
     # Output stdout to stderr as well. Some compilers will output errors
-    # to stderr, and all unexpected output should be treated as an error,
+    # to stdout, and all unexpected output should be treated as an error,
     # or handled/output by client code.
     # An example of a compiler outputting errors to stdout is Mavc's link
     # error, "LINK : fatal error LNK1104: cannot open file '<filename>'".
     text = text.replace("\r\n", "\n")
-    sys.stderr.write(text.encode("latin1"))
-    sys.stderr.flush()
+    self.engine.logger.outputError(text.encode("latin1"))
 
   def _outputStderr(self, text):
     text = text.replace("\r\n", "\n")
-    sys.stderr.write(text.encode("latin1"))
-    sys.stderr.flush()
+    self.engine.logger.outputError(text.encode("latin1"))
 
   def _getObjectsInLibrary(self, path):
     """Get a list of the paths of object files in the specified library.
@@ -1933,10 +1941,10 @@ class Compiler(Tool):
       
       archive()
       
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -1948,6 +1956,10 @@ class Compiler(Tool):
   
   def getLibraryCommand(self, target, sources):
     """Get the command for constructing a library.
+    
+    @return: A tuple (build, scan) where build is the function to call to
+    build the library, scan is a function that when called returns a
+    (targets, dependencies) tuple. 
     """
     self.engine.raiseError("Don't know how to archive %s\n" % target)
   
@@ -1982,10 +1994,10 @@ class Compiler(Tool):
     
       link()
     
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2007,7 +2019,7 @@ class Compiler(Tool):
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
-    returns the list of dependencies. 
+    returns a tuple of (targets, dependencies). 
     """
     self.engine.raiseError("Don't know how to link %s\n" % target)
   
@@ -2043,10 +2055,10 @@ class Compiler(Tool):
     
       link()
     
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2068,7 +2080,7 @@ class Compiler(Tool):
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
-    returns the list of dependencies. 
+    returns the tuple (targets, dependencies). 
     """
     self.engine.raiseError("Don't know how to link %s\n" % target)
     
@@ -2100,10 +2112,10 @@ class Compiler(Tool):
       
       compile()
       
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2115,5 +2127,9 @@ class Compiler(Tool):
   
   def getResourceCommand(self, target, sources):
     """Get the command for constructing a resource.
+    
+    @return: A tuple (build, scan) where build is the function to call to
+    build the resource, scan is a function that when called returns a
+    (targets, dependencies) tuple. 
     """
     self.engine.raiseError("Don't know how to compile %s\n" % target)

@@ -1,22 +1,30 @@
-from cake.tools import compiler, env, script
+#-------------------------------------------------------------------------------
+# This example demonstrates building and using a module (.dll on windows) with
+# the compiler tool.
+#-------------------------------------------------------------------------------
+from cake.tools import compiler, script
 
 # Use the integer library.
-script.include(env.expand("${EXAMPLES}/usemodule/integer/use.cake"))
+script.include(script.cwd("../integer/use.cake"))
 
+# List of sources.
 sources = script.cwd([
   "main.cpp",
   ])
 
+# Build the objects.
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/usemodule/main/obj"),
+  targetDir=script.cwd("../../build/usemodule/main/obj"),
   sources=sources,
   )
 
+# Build the program.
 compiler.program(
-  target=env.expand("${BUILD}/usemodule/main/bin/main"),
+  target=script.cwd("../../build/usemodule/main/bin/main"),
   sources=objects,
   )
 
+# Copy any modules used next to the built program.
 compiler.copyModulesTo(
-  targetDir=env.expand("${BUILD}/usemodule/main/bin"),
+  targetDir=script.cwd("../../build/usemodule/main/bin"),
   )

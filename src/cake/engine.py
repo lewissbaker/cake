@@ -101,8 +101,9 @@ class Engine(object):
   
   forceBuild = False
   defaultConfigScriptName = "config.cake"
+  maximumErrorCount = None
   
-  def __init__(self, logger):
+  def __init__(self, logger, parser):
     """Default Constructor.
     """
     self._byteCodeCache = {}
@@ -110,11 +111,23 @@ class Engine(object):
     self._digestCache = {}
     self._dependencyInfoCache = {}
     self.logger = logger
+    self.parser = parser
+    self.options = None
     self.buildSuccessCallbacks = []
     self.buildFailureCallbacks = []
     self._searchUpCache = {}
     self._configurations = {}
     self.scriptThreadPool = cake.threadpool.ThreadPool(1)
+    self.errors = []
+    self.warnings = []
+
+  @property
+  def errorCount(self):
+    return len(self.errors)
+
+  @property
+  def warningCount(self):
+    return len(self.warnings)
   
   def searchUpForFile(self, path, fileName):
     """Attempt to find a file in a particular path or any of its parent
@@ -229,10 +242,12 @@ class Engine(object):
     @raise BuildError: If the config script could not be found.
     """
     configScript = self.findConfigScriptPath(path, configScriptName)
+    # Fall back on the default config script in this files path
     if configScript is None:
-      if configScriptName is None:
-        configScriptName = self.defaultConfigScriptName
-      self.raiseError("Unable to find %s in %s\n" % (configScriptName, path))
+      configScript = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        self.defaultConfigScriptName,
+        )
     return self.getConfiguration(configScript)
   
   def execute(self, path, configScript=None, configScriptName=None, keywords={}):
@@ -336,9 +351,25 @@ class Engine(object):
     if func is None:
       return cake.task.Task()
     
+    # Save the script that created the task so that the task
+    # inherits that same script when executed.
+    currentScript = Script.getCurrent()
+    
     def _wrapper():
+      if self.maximumErrorCount and self.errorCount >= self.maximumErrorCount:
+        # TODO: Output some sort of message saying the build is being terminated
+        # because of too many errors. But only output it once. Perhaps just set
+        # a flag and check that in the runner.
+        raise BuildError()
+      
       try:
-        return func()
+        # Restore the old script
+        oldScript = Script.getCurrent()
+        Script._current.value = currentScript
+        try:
+          return func()
+        finally:
+          Script._current.value = oldScript
       except BuildError:
         # Assume build errors have already been reported
         raise
@@ -360,13 +391,14 @@ class Engine(object):
         if not self.logger.debugEnabled("stack"):
           message += "Pass '-d stack' if you require a more complete stack trace.\n"    
         self.logger.outputError(message)
+        self.errors.append(message)
         raise
 
     task = cake.task.Task(_wrapper)
 
     # Set a traceback for the parent script task
     if self.logger.debugEnabled("stack"):    
-      if Script.getCurrent() is not None:
+      if currentScript is not None:
         task.traceback = traceback.extract_stack()[:-1]
 
     return task
@@ -381,6 +413,7 @@ class Engine(object):
     task to fail.
     """
     self.logger.outputError(message)
+    self.errors.append(message)
     raise BuildError(message)
     
   def getByteCode(self, path):
@@ -642,7 +675,10 @@ class Script(object):
     # Use an absolute path so an absolute path is embedded in the .pyc file.
     # This will make exceptions clickable in Eclipse, but it means copying
     # your .pyc files may cause their embedded paths to be incorrect.
-    absPath = self.configuration.abspath(self.path)
+    if self.configuration is not None:
+      absPath = self.configuration.abspath(self.path)
+    else:
+      absPath = os.path.abspath(self.path)
     byteCode = self.engine.getByteCode(absPath)
     old = Script.getCurrent()
     Script._current.value = self

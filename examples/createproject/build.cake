@@ -1,40 +1,17 @@
-from cake.tools import compiler, env, script, project
+#-------------------------------------------------------------------------------
+# This example demonstrates creating a project and solution using the project
+# tool.
+#
+# Note that the example must be run with '-p' or '--projects' on the command
+# line to generate the projects.
+#-------------------------------------------------------------------------------
+from cake.tools import script, project
 
-includes = script.cwd([
-  "main.h",
-  ])
-
-sources = script.cwd([
-  "main.cpp",
-  ])
-
-extras = script.cwd([
-  "build.cake",
-  "readme.txt",
-  ])
-
-objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/createproject/obj"),
-  sources=sources,
-  )
-
-program = compiler.program(
-  target=env.expand("${BUILD}/createproject/bin/main"),
-  sources=objects,
-  )
-
-project.project(
-  target=script.cwd("createproject"),
-  name="My Project",
-  items={
-    "Include" : includes,
-    "Source" : sources,
-    "" : extras,
-    },
-  output=program,
-  )
-
+# Build the solution. Use the 'project' result of the main programs build.cake
+# as one of the solutions project files.
 project.solution(
-  target=script.cwd("createproject"),
-  projects=[script.cwd("createproject")],
+  target=script.cwd("../build/createproject/project/createproject"),
+  projects=[
+    script.getResult(script.cwd("main/build.cake"), "project"),
+    ],
   )

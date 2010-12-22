@@ -247,7 +247,7 @@ class ZipTool(Tool):
     includeMatch=None,
     excludeMatch=None,
     ):
-    """Extract all files in a Zip to the specified path.
+    """Compress a source file/directory to the specified zip target path.
   
     @param target: Path to the zip file to add files to.
     @type target: string

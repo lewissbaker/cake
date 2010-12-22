@@ -1,3 +1,7 @@
+#-------------------------------------------------------------------------------
+# This example demonstrates querying properties of the current variant using the
+# variant tool.
+#-------------------------------------------------------------------------------
 from cake.tools import variant, logging
 
 if variant.platform in ["windows"]:
@@ -5,14 +9,7 @@ if variant.platform in ["windows"]:
 else:
   logging.outputInfo("The platform is not Windows.\n")
 
-if variant.release in ["debug"]:
-  logging.outputInfo("This is debug mode.\n")
+if variant.architecture in ["x86"]:
+  logging.outputInfo("The architecture is Intel based x86.\n")
 else:
-  logging.outputInfo("This is not debug mode.\n")
-
-if variant.compiler in ["mingw", "gcc"]:
-  logging.outputInfo("The compiler is a GNU C Compiler.\n")
-elif variant.compiler in ["msvc"]:
-  logging.outputInfo("The compiler is Microsoft Visual C.\n")
-else:
-  logging.outputInfo("The compiler is %s.\n" % variant.compiler.capitalize())
+  logging.outputInfo("This architecture is %s.\n" % variant.architecture)

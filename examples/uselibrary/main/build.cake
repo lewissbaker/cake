@@ -1,24 +1,29 @@
-# Script to build main program
-from cake.tools import compiler, env, script
+#-------------------------------------------------------------------------------
+# This example demonstrates building a program that links to a library. Both the
+# program and library are built using the compiler tool. If the program is built
+# before the library it will implicitly build the library via the libraries
+# 'use.cake' dependency.
+#-------------------------------------------------------------------------------
+from cake.tools import compiler, script
 
-# Use the printer library. The libraries include path, library path
-# and library filename will be added to the compilers command line
-# during our object file and program builds.
-script.include(env.expand("${EXAMPLES}/uselibrary/printer/use.cake"))
+# Use the printer library. The libraries include path will be added to the
+# compilers command line for object file builds, and the library filename and
+# library include path will be added to the command line for program builds.
+script.include(script.cwd("../printer/use.cake"))
 
-# List of sources
+# List of sources.
 sources = script.cwd([
   "main.cpp",
   ])
 
-# Build objects
+# Build the objects.
 objects = compiler.objects(
-  targetDir=env.expand("${BUILD}/uselibrary/main/obj"),
+  targetDir=script.cwd("../../build/uselibrary/main/obj"),
   sources=sources,
   )
 
-# Build program
+# Build the program.
 compiler.program(
-  target=env.expand("${BUILD}/uselibrary/main/bin/main"),
+  target=script.cwd("../../build/uselibrary/main/bin/main"),
   sources=objects,
   )

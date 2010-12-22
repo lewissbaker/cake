@@ -387,7 +387,7 @@ class GccCompiler(Compiler):
     @makeCommand("lib-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by ar.exe
-      return [args[0]] + sources
+      return [target], [args[0]] + sources
 
     return archive, scan
 
@@ -430,7 +430,7 @@ class GccCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      if self.importLibrary:
+      if dll and self.importLibrary is not None:
         importLibrary = self.configuration.abspath(self.importLibrary)
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)
@@ -440,7 +440,15 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources + objects + self._scanForLibraries(libraries)
+      targets = [target]
+      if dll and self.importLibrary is not None:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        targets.append(importLibrary)
+      dependencies = [args[0]]
+      dependencies += sources
+      dependencies += objects
+      dependencies += self._scanForLibraries(libraries)
+      return targets, dependencies
     
     return link, scan
 
@@ -506,7 +514,7 @@ class WindowsGccCompiler(GccCompiler):
     @makeCommand("rc-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by rc.exe
-      return [args[0], source]
+      return [target], [args[0], source]
 
     return compile, scan
   
@@ -534,7 +542,7 @@ class MacGccCompiler(GccCompiler):
     @makeCommand("lib-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by ar.exe
-      return [args[0]] + sources
+      return [target], [args[0]] + sources
 
     return archive, scan
     
@@ -575,11 +583,12 @@ class MacGccCompiler(GccCompiler):
       args.extend(["-install_name", self.installName])
 
     if self.outputMapFile:
-      args.append('-map=' + cake.path.stripExtension(target) + '.map')
+      mapFile = cake.path.stripExtension(target) + '.map'
+      args.append('-map=' + mapFile)
 
     @makeCommand(args)
     def link():
-      if self.importLibrary:
+      if dll and self.importLibrary:
         importLibrary = self.configuration.abspath(self.importLibrary)
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)      
@@ -589,7 +598,14 @@ class MacGccCompiler(GccCompiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
-      return [args[0]] + sources
+      targets = [target]
+      if dll and self.importLibrary:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        targets.append(importLibrary)
+      if self.outputMapFile:
+        targets.append(mapFile)
+      
+      return targets, [args[0]] + sources
 
     return link, scan
 

@@ -42,7 +42,6 @@ class DummyCompiler(Compiler):
     return args
 
   def getPchCommands(self, target, source, header, object):
-
     language = self.language
     if not language:
       if source.lower().endswith('.c'):
@@ -64,7 +63,6 @@ class DummyCompiler(Compiler):
     return compile, compilerArgs, canBeCached
 
   def getObjectCommands(self, target, source, pch, shared):
-
     language = self.language
     if not language:
       if source.lower().endswith('.c'):
@@ -89,7 +87,6 @@ class DummyCompiler(Compiler):
     return compile, compilerArgs, canBeCached
 
   def getLibraryCommand(self, target, sources):
-    
     args = ['ar'] + sources + ['/o' + target]
 
     @makeCommand(args)
@@ -100,25 +97,40 @@ class DummyCompiler(Compiler):
       
     @makeCommand("dummy-scanner")
     def scan():
-      return sources
+      return [target], sources
       
     return archive, scan
-  
+ 
   def getProgramCommands(self, target, sources):
-    args = ['ld'] + sources + ['/o' + target]
+    return self._getLinkCommands(target, sources, dll=False)
+  
+  def getModuleCommands(self, target, sources):
+    return self._getLinkCommands(target, sources, dll=True)
+
+  def _getLinkCommands(self, target, sources, dll):
+    objects, libraries = self._resolveObjects()
+
+    libFlags = ['-l' + lib for lib in libraries]
+    args = ['ld'] + sources + objects + libFlags + ['/o' + target]
     
     @makeCommand(args)
     def link():
       self.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
       absTarget = self.configuration.abspath(target)
       cake.filesys.writeFile(absTarget, "".encode("latin1"))
+      if dll and self.importLibrary:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        cake.filesys.writeFile(importLibrary, "".encode("latin1"))
     
     @makeCommand("dummy-scanner")
     def scan():
-      return sources
+      targets = [target]
+      if dll and self.importLibrary is not None:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        targets.append(importLibrary)
+      dependencies = list(sources)
+      dependencies += objects
+      dependencies += self._scanForLibraries(libraries)
+      return targets, dependencies
     
     return link, scan
-    
-  def getModuleCommands(self, target, sources):
-    # Lazy
-    return self.getProgramCommands(target, sources)

@@ -18,10 +18,9 @@ class Logger(object):
   def __init__(self):
     """Default construction.
     """
-    self.debugComponents = set()
-    self.errorCount = 0
-    self.warningCount = 0
     self._lock = threading.Lock()
+    self._debugComponents = set()
+    self.quiet = False
 
   def enableDebug(self, component):
     """Enable debugging for a given component.  
@@ -29,15 +28,15 @@ class Logger(object):
     @param component: The component to enable debugging of.
     @type component: string
     """
-    self.debugComponents.add(component)
+    self._debugComponents.add(component)
     
-  def dsableDebug(self, component):
+  def disableDebug(self, component):
     """Disable debugging for a given component.  
 
     @param component: The component to disable debugging of.
     @type component: string
     """
-    self.debugComponents.discard(component)
+    self._debugComponents.discard(component)
 
   def debugEnabled(self, keyword):
     """Returns True if currently debugging the given component.
@@ -49,7 +48,7 @@ class Logger(object):
     otherwise False.
     @rtype: bool
     """
-    return keyword in self.debugComponents
+    return keyword in self._debugComponents
     
   def outputError(self, message):
     """Output an error message.
@@ -57,40 +56,35 @@ class Logger(object):
     @param message: The message to output.
     @type message: string
     """
-    self._lock.acquire()
-    try:
-      self.errorCount += 1
-      sys.stderr.write(message)
-      sys.stderr.flush()
-    finally:
-      self._lock.release()
-      
+    if not self.quiet:
+      self._lock.acquire()
+      try:
+        sys.stderr.write(message)
+        sys.stderr.flush()
+      finally:
+        self._lock.release()
+
   def outputWarning(self, message):
     """Output a warning message.
     
     @param message: The message to output.
     @type message: string
-    """
-    self._lock.acquire()
-    try:
-      self.warningCount += 1
-      sys.stderr.write(message)
-      sys.stderr.flush()
-    finally:
-      self._lock.release()
-      
+    """    
+    self.outputError(message)
+
   def outputInfo(self, message):
     """Output an informative message.
     
     @param message: The message to output.
     @type message: string
     """
-    self._lock.acquire()
-    try:
-      sys.stdout.write(message)
-      sys.stdout.flush()
-    finally:
-      self._lock.release()
+    if not self.quiet:
+      self._lock.acquire()
+      try:
+        sys.stdout.write(message)
+        sys.stdout.flush()
+      finally:
+        self._lock.release()
       
   def outputDebug(self, keyword, message):
     """Output a debug message.
@@ -103,10 +97,5 @@ class Logger(object):
     @param message: The message to output.
     @type message: string
     """
-    if keyword in self.debugComponents:
-      self._lock.acquire()
-      try:
-        sys.stdout.write(message)
-        sys.stdout.flush()
-      finally:
-        self._lock.release()
+    if keyword in self._debugComponents:
+      self.outputInfo(message)

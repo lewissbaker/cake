@@ -1,3 +1,6 @@
+#-------------------------------------------------------------------------------
+# This example demonstrates setting and obtaining the result of a script.
+#-------------------------------------------------------------------------------
 from cake.tools import script
 
 library = script.getResult(script.cwd('other.cake'), 'library')

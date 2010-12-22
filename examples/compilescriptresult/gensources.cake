@@ -1,6 +1,9 @@
+#-------------------------------------------------------------------------------
+# Script used to generate the source files.
+#-------------------------------------------------------------------------------
 import cake.filesys
 import cake.path
-from cake.tools import env, script, logging
+from cake.tools import script, logging
 
 def makeFile(target, contents):
   engine = script.engine
@@ -19,14 +22,14 @@ def makeFile(target, contents):
 sources = []
 
 sources.append(makeFile(
-  target=env.expand('${BUILD}/compilescriptresult/a.c'),
+  target=script.cwd('../build/compilescriptresult/a.c'),
   contents="""
 void a()
 {
 }
   """))
 sources.append(makeFile(
-  target=env.expand('${BUILD}/compilescriptresult/b.c'),
+  target=script.cwd('../build/compilescriptresult/b.c'),
   contents="""
 void b()
 {
@@ -34,7 +37,7 @@ void b()
   """))
 
 mainSource = makeFile(
-  target=env.expand('${BUILD}/compilescriptresult/main.c'),
+  target=script.cwd('../build/compilescriptresult/main.c'),
   contents="""
 extern void a();
 extern void b();
@@ -47,6 +50,8 @@ int main()
 }
 """)
 
+# Set the 'sources' result of this script to the list of sources and 'main'
+# to the main source file.
 script.setResult(
   sources=sources,
   main=mainSource,

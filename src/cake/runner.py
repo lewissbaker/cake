@@ -144,9 +144,21 @@ def run(args=None, cwd=None):
   else:
     cwd = os.getcwd()
 
-  logger = cake.logging.Logger()
-  engine = cake.engine.Engine(logger)
-
+  class MyParser(optparse.OptionParser):
+    """Subclass OptionParser to allow us to ignore errors during the initial
+    option parsing.
+    """
+    showErrors = True
+    def parse_args(self, args=None, values=None, showErrors=True):
+      self.showErrors = showErrors;
+      try:
+        return optparse.OptionParser.parse_args(self, args, values)
+      finally:
+        self.showErrors = True;
+    def error(self, msg):
+      if self.showErrors:
+        optparse.OptionParser.error(self, msg);
+    
   class MyOption(optparse.Option):
     """Subclass the Option class to provide an 'extend' action.
     """  
@@ -163,17 +175,10 @@ def run(args=None, cwd=None):
         optparse.Option.take_action(
           self, action, dest, opt, value, values, parser
           )
-  
+        
   usage = "usage: %prog [options] <cake-script>*"
   
-  parser = optparse.OptionParser(usage=usage,option_class=MyOption)
-#  parser.add_option(
-#    "-b", "--boot",
-#    metavar="FILE",
-#    dest="boot",
-#    help="Path to the boot.cake file to use.",
-#    default=None,
-#    )
+  parser = MyParser(usage=usage, option_class=MyOption, add_help_option=False)
   parser.add_option(
     "-V", "--version",
     dest="outputVersion",
@@ -182,24 +187,38 @@ def run(args=None, cwd=None):
     default=False,
     )
   parser.add_option(
-    "-c", "--config",
+    "--args",
+    metavar="FILE",
+    dest="args",
+    help="Path to the args.cake file to use.",
+    default=None,
+    )
+  parser.add_option(
+    "--config",
     metavar="FILE",
     dest="config",
     help="Path to the config.cake configuration file to use.",
     default=None,
     )
   parser.add_option(
+    "--debug", metavar="KEYWORDS",
+    action="extend",
+    dest="debugComponents",
+    help="Set features to debug, eg: 'reason,run,script,scan'.",
+    default=[],
+    )
+  parser.add_option(
+    "-s", "--silent", "--quiet",
+    action="store_true",
+    dest="quiet",
+    help="Suppress printing of all Cake messages, warnings and errors.",
+    default=False,
+    )
+  parser.add_option(
     "-f", "--force",
     action="store_true",
     dest="forceBuild",
     help="Force rebuild of every target.",
-    default=False,
-    )
-  parser.add_option(
-    "-p", "--projects",
-    action="store_true",
-    dest="createProjects",
-    help="Create projects instead of building a variant.",
     default=False,
     )
   parser.add_option(
@@ -211,14 +230,21 @@ def run(args=None, cwd=None):
     default=cake.threadpool.getProcessorCount(),
     )
   parser.add_option(
-    "-d", "--debug", metavar="KEYWORDS",
-    action="extend",
-    dest="debugComponents",
-    help="Set features to debug, eg: 'reason,run,script,scan'.",
-    default=[],
+    "-k", "--keep-going",
+    dest="maximumErrorCount",
+    action="store_const",
+    const=None,
+    help="Keep building even in the presence of errors.",
+    )
+  parser.add_option(
+    "-e", "--max-errors",
+    dest="maximumErrorCount",
+    type="int",
+    help="Halt the build after a certain number of errors.",
+    default=100,
     )
 
-  options, args = parser.parse_args(args)
+  options, _args = parser.parse_args(args, showErrors=False)
 
   if options.outputVersion:
     cakeVersion = cake.__version__
@@ -228,6 +254,10 @@ def run(args=None, cwd=None):
     return 1
 
   # Find script filenames from the arguments left
+  logger = cake.logging.Logger()
+  engine = cake.engine.Engine(logger, parser)
+
+  # Find script filenames from the arguments
   scripts = []
   for arg in args:
     if not os.path.isabs(arg):
@@ -240,11 +270,42 @@ def run(args=None, cwd=None):
   if not scripts:
     scripts.append(cwd)
 
-#  if options.boot is None:
-#    bootFileName = engine.searchUpForFile(path, "boot.cake")
+  argsFileName = options.args
+  if argsFileName is None:
+    # Try to find an args.cake by searching up from each scripts directory
+    for script in scripts:
+      # Script could be a file or directory name
+      if os.path.isdir(script):
+        scriptDirName = script
+      else:
+        scriptDirName = os.path.dirname(script)
+      argsFileName = engine.searchUpForFile(scriptDirName, "args.cake")
 
+  # Run the args.cake
+  if argsFileName is not None:
+    script = cake.engine.Script(
+      path=argsFileName,
+      configuration=None,
+      variant=None,
+      task=None,
+      engine=engine,
+      )
+    script.execute()
+
+  # Parse again, this time with user options and help/errors enabled
+  parser.add_option(
+    "-h", "--help",
+    action="help",
+    help="Show this help message and exit.",
+    )
+  engine.options, args = parser.parse_args(args)
+
+  # Set components to debug
   for c in options.debugComponents:
     logger.enableDebug(c)
+
+  # Set quiet mode    
+  logger.quiet = options.quiet;
 
   # Find keyword arguments  
   keywords = {}
@@ -260,8 +321,8 @@ def run(args=None, cwd=None):
   cake.task.setThreadPool(threadPool)
 
   engine.forceBuild = options.forceBuild
-  engine.createProjects = options.createProjects
-  
+  engine.maximumErrorCount = options.maximumErrorCount
+ 
   tasks = []
   
   configScript = options.config
@@ -286,23 +347,24 @@ def run(args=None, cwd=None):
       bootFailed = True
       msg = traceback.format_exc()
       engine.logger.outputError(msg)
+      engine.errors.append(msg)
     
   def onFinish():
     if not bootFailed and mainTask.succeeded:
       engine.onBuildSucceeded()
-      if engine.logger.warningCount:
-        msg = "Build succeeded with %i warnings.\n" % engine.logger.warningCount
+      if engine.warningCount:
+        msg = "Build succeeded with %i warnings.\n" % engine.warningCount
       else:
         msg = "Build succeeded.\n"
     else:
       engine.onBuildFailed()
-      if engine.logger.warningCount:
+      if engine.warningCount:
         msg = "Build failed with %i errors and %i warnings.\n" % (
-          engine.logger.errorCount,
-          engine.logger.warningCount,
+          engine.errorCount,
+          engine.warningCount,
           )
       else:
-        msg = "Build failed with %i errors.\n" % engine.logger.errorCount
+        msg = "Build failed with %i errors.\n" % engine.errorCount
     engine.logger.outputInfo(msg)
   
   mainTask = cake.task.Task()
@@ -319,4 +381,4 @@ def run(args=None, cwd=None):
   endTime = datetime.datetime.utcnow()
   engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
   
-  return engine.logger.errorCount
+  return engine.errorCount

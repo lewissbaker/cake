@@ -1,7 +1,10 @@
-# Script to use printer library
-from cake.tools import compiler, env, script
+#-------------------------------------------------------------------------------
+# Script that can be included to use the printer library.
+#-------------------------------------------------------------------------------
+from cake.tools import compiler, script
 
-# Add the libraries include path, library build script and library
-# filename to the compiler.
+# Add the libraries include path.
 compiler.addIncludePath(script.cwd("include"))
+
+# Add the library. All subsequent program and module builds will link with it.
 compiler.addLibrary(script.getResult(script.cwd("build.cake"), "library"))

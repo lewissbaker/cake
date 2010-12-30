@@ -11,7 +11,6 @@ import sys
 import weakref
 import os
 import os.path
-import binascii
 import tempfile
 import subprocess
 import zlib
@@ -1717,7 +1716,7 @@ class Compiler(Tool):
       # Find the directory that will contain all cached dependency
       # entries for this particular target object file.
       targetDigest = cake.hash.sha1(targetDigestPath.encode("utf8")).digest()
-      targetDigestStr = binascii.hexlify(targetDigest).decode("utf8")
+      targetDigestStr = cake.hash.hexlify(targetDigest)
       targetCacheDir = cake.path.join(
         self.objectCachePath,
         targetDigestStr[0],
@@ -1782,7 +1781,7 @@ class Compiler(Tool):
         # Check if the state of our files matches that of a cached
         # object file.
         cachedObjectDigest = configuration.calculateDigest(newDependencyInfo)
-        cachedObjectDigestStr = binascii.hexlify(cachedObjectDigest).decode("utf8")
+        cachedObjectDigestStr = cake.hash.hexlify(cachedObjectDigest)
         cachedObjectPath = cake.path.join(
           self.objectCachePath,
           cachedObjectDigestStr[0],
@@ -1844,13 +1843,13 @@ class Compiler(Tool):
       if useCacheForThisObject:
         try:
           objectDigest = configuration.calculateDigest(newDependencyInfo)
-          objectDigestStr = binascii.hexlify(objectDigest).decode("utf8")
+          objectDigestStr = cake.hash.hexlify(objectDigest)
           
           dependencyDigest = cake.hash.sha1()
           for dep in dependencies:
             dependencyDigest.update(dep.encode("utf8"))
           dependencyDigest = dependencyDigest.digest()
-          dependencyDigestStr = binascii.hexlify(dependencyDigest).decode("utf8")
+          dependencyDigestStr = cake.hash.hexlify(dependencyDigest)
           
           cacheDepPath = cake.path.join(
             targetCacheDir,

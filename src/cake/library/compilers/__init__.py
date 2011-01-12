@@ -189,6 +189,8 @@ def _escapeArg(arg):
     if '"' in arg:
       arg = arg.replace('"', '\\"')
     return '"' + arg + '"'
+  elif '"' in arg:
+    return arg.replace('"', '\\"')
   else:
     return arg
 
@@ -786,7 +788,7 @@ class Compiler(Tool):
     else:
       self.defines.insert(index, "%s=%s" % (name, value))
     self._clearCache()
-      
+
   def getDefines(self):
     """Get an iterator for preprocessor defines.
     

@@ -239,6 +239,7 @@ def run(args=None, cwd=None):
   parser.add_option(
     "-e", "--max-errors",
     dest="maximumErrorCount",
+    metavar="COUNT",
     type="int",
     help="Halt the build after a certain number of errors.",
     default=100,

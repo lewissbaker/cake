@@ -14,12 +14,21 @@ _isWindows = _platform.lower().startswith('windows')
 _isCygwin = _platform.lower().startswith('cygwin')
 _isDarwin = _platform.lower().startswith('darwin')
 
-try:
-  _architecture = os.environ['PROCESSOR_ARCHITECTURE']
-except KeyError:
+if _isWindows or _isCygwin:
+  try:
+    _architecture = os.environ['PROCESSOR_ARCHITEW6432']
+  except KeyError:
+    try:
+      _architecture = os.environ['PROCESSOR_ARCHITECTURE']
+    except KeyError:
+      _architecture = platty.machine()
+else:
   _architecture = platty.machine()
-  if not _architecture:
-    _architecture = 'unknown'
+if not _architecture:
+  _architecture = 'unknown'
+
+_isWindows64 = (_isWindows or _isCygwin) and \
+               _architecture.lower() in ('amd64', 'x64', 'x86_64', 'ia64')
 
 def platform():
   """Returns the current operating system (platform).
@@ -30,6 +39,14 @@ def isWindows():
   """Returns True if the current platform is Windows.
   """
   return _isWindows
+
+def isWindows64():
+  """Returns True if the current underlying platform is Windows 64-bit.
+
+  This can return True even if running under 32-bit Python or running
+  under Cygwin.
+  """
+  return _isWindows64
 
 def isCygwin():
   """Returns True if the current platform is Cygwin.
@@ -42,7 +59,7 @@ def isDarwin():
   return _isDarwin
 
 def architecture():
-  """Returns the current machines architecture.
+  """Returns the current machine's architecture.
   
   @return: The host architecture, or 'unknown' if the host
   architecture could not be determined.

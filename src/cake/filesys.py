@@ -9,6 +9,8 @@ import shutil
 import os
 import os.path
 import time
+import fnmatch
+import re
 
 def toUtc(timestamp):
   """Convert a timestamp from local time-zone to UTC.
@@ -166,7 +168,53 @@ def walkTree(path):
       
     for name in fileNames:
       yield os.path.join(dirPath, name)
+
+def findFiles(path, recursive=True, pattern=None, patternRe=None):
+  """Find files matching a particular pattern or regex.
+
+  @param path: The path of the directory to search under.
+  @param recursive: Whether or not to search recursively.
+  @param pattern: A glob-style file-name pattern. eg. '*.txt'
+  @param patternRe: A regular expression
+
+  @return: A sequence of paths relative to the specified directory path.
+  """
+  if pattern is not None and patternRe is not None:
+    raise ValueError("Cannot search by both pattern and patternRe")
+
+  if pattern is not None:
+    def match(name):
+      return fnmatch.fnmatch(name, pattern)
+  elif patternRe is not None:
+    if isinstance(patternRe, basestring):
+      patternRe = re.compile(patternRe)
+    def match(name):
+      return patternRe.match(name) is not None
+  else:
+    def match(name):
+      return True
+
+  if recursive:
+
+    for dirPath, dirNames, fileNames in os.walk(path):
+      # Make dirPath relative to path
+      if dirPath != path:
+        dirPath = cake.path.relativePath(dirPath, path)
+      else:
+        dirPath = ""
       
+      for name in fileNames:
+        if match(name):
+          if dirPath:
+            yield os.path.join(dirPath, name)
+          else:
+            yield name
+
+  else:
+    for name in os.listdir(path):
+      if match(name):
+        yield name
+          
 def readFile(path):
   """Read data from a file as safely as possible.
 

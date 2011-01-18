@@ -713,12 +713,12 @@ class MsvcCompiler(Compiler):
       
     # Trying to combine /incremental with /clrimagetype gives a linker
     # warning LNK4075: ingoring '/INCREMENTAL'
-    if self.useIncrementalLinking is not None and self.clrMode is not None:
+    if self.useIncrementalLinking is not None and self.clrMode is None:
       if self.useIncrementalLinking:
         args.append('/INCREMENTAL')
       else:
         args.append('/INCREMENTAL:NO')
-      
+
     if dll:
       args.append('/DLL')
       args.extend(self.moduleFlags)
@@ -816,7 +816,7 @@ class MsvcCompiler(Compiler):
       self.engine.raiseError(
         "Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n"
         )
-    
+
     if self.embedManifest:
       if not self.__mtExe:
         self.engine.raiseError(

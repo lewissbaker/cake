@@ -872,7 +872,10 @@ class Configuration(object):
             self.engine.logger.outputInfo("Building with %s - %s\n" % (self.path, variant))
           elif variant is not currentVariant:
             self.engine.logger.outputInfo("Building with %s\n" % str(variant))
-          self.engine.logger.outputInfo("Executing %s\n" % script.path)
+          self.engine.logger.outputDebug(
+            "script",
+            "Executing %s\n" % script.path,
+            )
           script.execute()
         task = self.engine.createTask(execute)
         script = Script(

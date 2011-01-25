@@ -418,11 +418,9 @@ class ProjectTool(Tool):
     compiler,
     ):
 
-    if compiler is None and output is not None:
-      try:
-        compiler = output.compiler
-      except AttributeError:
-        pass
+    # Project name defaults the base filename without extension
+    if name is None:
+      name = cake.path.baseNameWithoutExtension(target)
 
     if self.product == self.VS2010:
       target = cake.path.forceExtension(target, self._msvsProjectSuffix2010)
@@ -430,78 +428,82 @@ class ProjectTool(Tool):
     else:
       target = cake.path.forceExtension(target, self._msvsProjectSuffix)
       filters = None
+
+    @waitForAsyncResult
+    def run(output, items, compiler=compiler, intermediateDir=intermediateDir):
+      if compiler is None and output is not None:
+        try:
+          compiler = output.compiler
+        except AttributeError:
+          pass
+
+      if output is not None:
+        outputPath = output.path
+      else:
+        outputPath = target
+
+      if compiler is not None:
+        defines = compiler.getDefines()
+        includePaths = compiler.getIncludePaths()
+        forcedIncludes = compiler.getForcedIncludes()
+        forcedUsings = getPaths(getattr(compiler, "forcedUsings", []))
+      else:
+        defines = []
+        includePaths = []
+        forcedIncludes = []
+        forcedUsings = []
+
+      # TODO: Fill these out when the compiler has them.
+      compileAsManaged = ""
+      assemblyPaths = []
+
+      # Intermediate dir defaults to the output dir
+      if intermediateDir is None:
+        intermediateDir = cake.path.dirName(outputPath)
     
-    if not self.enabled:
-      return FileTarget(path=target, task=None)
+      script = Script.getCurrent()
+      configuration = script.configuration
+      configName = self._getProjectConfigName()
+      platformName = self._getProjectPlatformName()
+
+      # Construct the build args
+      targetDir = configuration.abspath(cake.path.dirName(target))
+      pythonExe = configuration.abspath(sys.executable)
+      cakeScript = configuration.abspath(sys.argv[0])
+      scriptPath = configuration.abspath(script.path)
+      keywords = script.variant.keywords
+
+      buildArgs = [
+        cake.path.relativePath(pythonExe, targetDir),
+        "-u",
+        cake.path.relativePath(cakeScript, targetDir),
+        cake.path.relativePath(scriptPath, targetDir),
+        ]
+      buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
     
-    if output is not None:
-      outputPath = output.path
-    else:
-      outputPath = target
+      try:
+        version = self._toProjectVersion[self.product]
+      except KeyError:
+        raise ValueError("Unknown product: '%d'" % self.product)
 
-    if compiler is not None:
-      defines = compiler.getDefines()
-      includePaths = compiler.getIncludePaths()
-      forcedIncludes = compiler.getForcedIncludes()
-      forcedUsings = getPaths(getattr(compiler, "forcedUsings", []))
-    else:
-      defines = []
-      includePaths = []
-      forcedIncludes = []
-      forcedUsings = []
+      project = self._projects.getProject(target, filters, name, version)
+      project.addConfiguration(_ProjectConfiguration(
+        configName,
+        platformName,
+        items,
+        buildArgs,
+        outputPath,
+        intermediateDir,
+        defines,
+        includePaths,
+        assemblyPaths,
+        forcedIncludes,
+        forcedUsings,
+        compileAsManaged,
+        ))
 
-    # TODO: Fill these out when the compiler has them.
-    compileAsManaged = ""
-    assemblyPaths = []
-
-    # Project name defaults the base filename without extension
-    if name is None:
-      name = cake.path.baseNameWithoutExtension(target)
-    
-    # Intermediate dir defaults to the output dir
-    if intermediateDir is None:
-      intermediateDir = cake.path.dirName(outputPath)
-    
-    script = Script.getCurrent()
-    configuration = script.configuration
-    configName = self._getProjectConfigName()
-    platformName = self._getProjectPlatformName()
-
-    # Construct the build args
-    targetDir = configuration.abspath(cake.path.dirName(target))
-    pythonExe = configuration.abspath(sys.executable)
-    cakeScript = configuration.abspath(sys.argv[0])
-    scriptPath = configuration.abspath(script.path)
-    keywords = script.variant.keywords
-
-    buildArgs = [
-      cake.path.relativePath(pythonExe, targetDir),
-      "-u",
-      cake.path.relativePath(cakeScript, targetDir),
-      cake.path.relativePath(scriptPath, targetDir),
-      ]
-    buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
-    
-    try:
-      version = self._toProjectVersion[self.product]
-    except KeyError:
-      raise ValueError("Unknown product: '%d'" % self.product)
-
-    project = self._projects.getProject(target, filters, name, version)
-    project.addConfiguration(_ProjectConfiguration(
-      configName,
-      platformName,
-      items,
-      buildArgs,
-      outputPath,
-      intermediateDir,
-      defines,
-      includePaths,
-      assemblyPaths,
-      forcedIncludes,
-      forcedUsings,
-      compileAsManaged,
-      ))
+    if self.enabled:
+      run(output, items)
     
     return ProjectTarget(path=target, task=None, tool=self, filters=filters)
     
@@ -563,15 +565,15 @@ class ProjectTool(Tool):
         projectExtension = self._msvsProjectSuffix2010
       else:
         projectExtension = self._msvsProjectSuffix
-        
+
       for p in projects:
         while isinstance(p, AsyncResult):
           p = p.result
           
         if not isinstance(p, self.SolutionProjectItem):
           p = self.SolutionProjectItem(p)
-  
-        projectPath = getPath(p.project) 
+
+        projectPath = getPath(p.project)
         projectPath = cake.path.forceExtension(projectPath, projectExtension)
           
         configuration.addProjectConfiguration(_SolutionProjectConfiguration(
@@ -963,11 +965,12 @@ class MsvsProjectGenerator(object):
     buildlog = os.path.join(intdir, "buildlog.html")
 
     includePaths = [self.getRelativePath(p) for p in config.includePaths]    
-    assemblyPaths = [self.getRelativePath(p) for p in config.assemblyPaths]    
+    assemblyPaths = [self.getRelativePath(p) for p in config.assemblyPaths]
+    forcedIncludes = [self.getRelativePath(p) for p in config.forcedIncludes]
 
     includePaths = ';'.join(includePaths)
     assemblyPaths = ';'.join(assemblyPaths)
-    forcedIncludes = ';'.join(config.forcedIncludes)
+    forcedIncludes = ';'.join(forcedIncludes)
     forcedUsings = ';'.join(config.forcedUsings)
     compileAsManaged = config.compileAsManaged
 

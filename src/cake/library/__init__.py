@@ -138,6 +138,8 @@ class DeferredResult(AsyncResult):
   def result(self):
     return self.task.result
 
+_undefined = object()
+
 class ScriptResult(AsyncResult):
   """A placeholder that can be used to reference a result of another
   script that may not be available yet.
@@ -145,12 +147,13 @@ class ScriptResult(AsyncResult):
   The result will be available when the task has completed successfully.
   """
   
-  __slots__ = ['__execute', '__script', '__name']
+  __slots__ = ['__execute', '__script', '__name', '__default']
   
-  def __init__(self, execute, name):
+  def __init__(self, execute, name, default=_undefined):
     self.__execute = execute
     self.__script = None
     self.__name = name
+    self.__default = default
     
   @property
   def script(self):
@@ -171,7 +174,14 @@ class ScriptResult(AsyncResult):
   @property
   def result(self):
     assert self.task.completed
-    return self.__script.getResult(self.__name)
+    try:
+      return self.__script.getResult(self.__name)
+    except KeyError:
+      default = self.__default
+      if default is not _undefined:
+        return default
+      else:
+        raise
 
 def waitForAsyncResult(func):
   """Decorator to be used with functions that need to

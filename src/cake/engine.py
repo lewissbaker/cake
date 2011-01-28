@@ -389,7 +389,7 @@ class Engine(object):
         exceptionString = ''.join(traceback.format_exception_only(e.__class__, e))
         message = 'Unhandled Task Exception:\n%s%s' % (tracebackString, exceptionString)
         if not self.logger.debugEnabled("stack"):
-          message += "Pass '-d stack' if you require a more complete stack trace.\n"    
+          message += "Pass '--debug=stack' if you require a more complete stack trace.\n"
         self.logger.outputError(message)
         self.errors.append(message)
         raise

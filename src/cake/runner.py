@@ -380,6 +380,22 @@ def run(args=None, cwd=None):
     time.sleep(0.1)
   
   endTime = datetime.datetime.utcnow()
-  engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
+  engine.logger.outputInfo(
+    "Build took %s.\n" % _formatTimeDelta(endTime - startTime)
+    )
   
   return engine.errorCount
+
+def _formatTimeDelta(t):
+  """Return a string representation of the time to millisecond precision."""
+  
+  hours = t.seconds // 3600
+  minutes = (t.seconds / 60) % 60
+  seconds = t.seconds % 60
+  milliseconds = t.microseconds // 1000
+
+  if t.days:
+    return "%i days, %i:%02i:%02i.%03i" % (
+      t.days, hours, minutes, seconds, milliseconds)
+  else:
+    return "%i:%02i:%02i.%03i" % (hours, minutes, seconds, milliseconds)

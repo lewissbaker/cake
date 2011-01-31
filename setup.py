@@ -14,14 +14,10 @@ def run():
   import ez_setup
   ez_setup.use_setuptools()
   
-  import os.path
-  sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-  import cake
   from setuptools import setup, find_packages
   setup(
     name='Cake',
-    version=cake.__version__,
+    version='1.0dev',
     author="Lewis Baker, Stuart McMahon.",
     url="http://sourceforge.net/projects/cake-build",
     description="A build system written in Python.",

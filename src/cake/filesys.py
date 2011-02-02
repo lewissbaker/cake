@@ -12,6 +12,8 @@ import time
 import fnmatch
 import re
 
+import cake.path
+
 def toUtc(timestamp):
   """Convert a timestamp from local time-zone to UTC.
   """

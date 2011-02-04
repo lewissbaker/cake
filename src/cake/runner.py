@@ -55,12 +55,61 @@ def _overrideOpen():
   """
   if hasattr(os, "O_NOINHERIT"):
     import __builtin__
-  
-    old_open = __builtin__.open
-    def new_open(filename, mode="r", *args, **kwargs):
-      if "N" not in mode:
-        mode += "N"
-      return old_open(filename, mode, *args, **kwargs)
+
+    if platform.python_compiler().startswith("MSC v.1310"):
+      # MSVC 7.1 doesn't support the 'N' flag being passed to fopen.
+      # It is ignored. So we need to manually interpret mode string
+      # and call onto os.open().
+
+      _basicFlags = {
+        'r': os.O_RDONLY,
+        'w': os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        'a': os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+        }
+
+      _otherFlags = {
+        '+': os.O_RDWR, # Also clears os.O_RDONLY and os.O_WRONLY
+        't': os.O_TEXT,
+        'b': os.O_BINARY,
+        'N': os.O_NOINHERIT,
+        'D': os.O_TEMPORARY,
+        'T': os.O_SHORT_LIVED,
+        'S': os.O_SEQUENTIAL,
+        'R': os.O_RANDOM,
+        ' ': 0,
+        ',': 0,
+        'U': 0,
+        }
+      
+      def new_open(filename, mode="r", bufsize=0):
+        try:
+          flags = _basicFlags[mode[0]]
+        except LookupError:
+          raise ValueError("mode must start with 'r', 'w' or 'a'")
+
+        for c in mode[1:]:
+          try:
+            flags |= _otherFlags[c]
+          except KeyError:
+            raise ValueError("unknown flag '%s' in mode" % c)
+
+        if flags & os.O_RDWR:
+          flags &= ~(os.O_RDONLY | os.O_WRONLY)
+          
+        if flags & os.O_BINARY and flags & os.O_TEXT:
+          raise ValueError("Cannot specify both 't' and 'b' in mode")
+        if flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
+          raise ValueError("Cannot specify both 'S' and 'R' in mode")
+
+        fd = os.open(filename, flags)
+        return os.fdopen(fd,  mode, bufsize)
+    else:
+      # Simpler version for platforms that have fopen() that understands 'N'
+      old_open = __builtin__.open
+      def new_open(filename, mode="r", *args, **kwargs):
+        if "N" not in mode:
+          mode += "N"
+        return old_open(filename, mode, *args, **kwargs)
     __builtin__.open = new_open
   
     old_os_open = os.open

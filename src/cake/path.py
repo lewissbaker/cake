@@ -7,7 +7,7 @@
 
 import os
 import os.path
-import platform
+import cake.system
 
 def dirName(path):
   """Get the directory part of the path.
@@ -236,7 +236,7 @@ def relativePath(child, parent):
   childList = child.split(os.path.sep)
   parentList = parent.split(os.path.sep)
   
-  if platform.system() == "Windows":
+  if cake.system.isWindows():
     if _isUnc(child) or _isUnc(parent):
       return child # Not even attempting to make unc paths relative
     if _hasDrive(child) or _hasDrive(parent): 
@@ -254,7 +254,7 @@ def relativePath(child, parent):
     return os.curdir
   return join(*relList)
   
-if platform.system() == "Windows":
+if cake.system.isWindows():
   try:
     import win32file
     def _fileSystemBaseName(path, stem, leaf):

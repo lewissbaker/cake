@@ -10,9 +10,19 @@ import os.path
 import platform as platty
 
 _platform = platty.system()
-_isWindows = _platform.lower().startswith('windows')
-_isCygwin = _platform.lower().startswith('cygwin')
-_isDarwin = _platform.lower().startswith('darwin')
+
+# Some builds of Python can have platform.system() -> "Windows"
+# while others have platform.system() -> "Microsoft".
+# Make them all use "Windows" here.
+_platformLower = _platform.lower()
+if _platformLower.startswith('microsoft'):
+  _platform, _platformLower = "Windows", "windows"
+  
+_isWindows = _platformLower.startswith('windows')
+_isCygwin = _platformLower.startswith('cygwin')
+_isDarwin = _platformLower.startswith('darwin')
+_isLinux = _platformLower.startswith('linux')
+del _platformLower
 
 if _isWindows or _isCygwin:
   try:
@@ -52,6 +62,11 @@ def isCygwin():
   """Returns True if the current platform is Cygwin.
   """
   return _isCygwin
+
+def isLinux():
+  """Returns True if the current platform is Linux.
+  """
+  return _isLinux
 
 def isDarwin():
   """Returns True if the current platform is Darwin.

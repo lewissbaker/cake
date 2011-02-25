@@ -299,7 +299,7 @@ def run(args=None, cwd=None):
   if options.outputVersion:
     cakeVersion = cake.__version__
     cakePath = cake.path.dirName(cake.__file__)
-    sys.stdout.write("Cake %s\n" % cake.__version__)
+    sys.stdout.write("Cake %s [%s]\n" % (cake.__version__, cakePath))
     sys.stdout.write("Python %s\n" % sys.version)
     return 1
 
@@ -329,7 +329,10 @@ def run(args=None, cwd=None):
         scriptDirName = script
       else:
         scriptDirName = os.path.dirname(script)
+        
       argsFileName = engine.searchUpForFile(scriptDirName, "args.cake")
+      if argsFileName:
+        break
 
   # Run the args.cake
   if argsFileName is not None:
@@ -348,7 +351,7 @@ def run(args=None, cwd=None):
     action="help",
     help="Show this help message and exit.",
     )
-  engine.options, args = parser.parse_args(args)
+  options, args = parser.parse_args(args)
 
   # Set components to debug
   for c in options.debugComponents:
@@ -357,8 +360,10 @@ def run(args=None, cwd=None):
   # Set quiet mode    
   logger.quiet = options.quiet;
 
-  # Find keyword arguments  
+  # Find keyword arguments and re-evaluate the script paths in light
+  # of the reparsed args. Want it to error-out if the 
   keywords = {}
+  scripts = []
   for arg in args:
     if '=' in arg:
       keyword, value = arg.split('=', 1)
@@ -366,10 +371,19 @@ def run(args=None, cwd=None):
       if len(value) == 1:
         value = value[0]
       keywords[keyword] = value
-  
+    else:
+      path = arg
+      if not os.path.isabs(path):
+        path = os.path.join(cwd, path)
+      scripts.append(os.path.abspath(arg))
+
+  if not scripts:
+    scripts.append(cwd)
+
   threadPool = cake.threadpool.ThreadPool(options.jobs)
   cake.task.setThreadPool(threadPool)
 
+  engine.options = options
   engine.forceBuild = options.forceBuild
   engine.maximumErrorCount = options.maximumErrorCount
  

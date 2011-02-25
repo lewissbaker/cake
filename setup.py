@@ -24,6 +24,7 @@ def run():
     license="MIT",
     py_modules=['cakemain'],
     package_dir={'' : 'src'},
+    package_data={'cake': ['config.cake']},
     packages=find_packages('src', exclude=['*.test', '*.test.*']),
     entry_points={
       'console_scripts': [

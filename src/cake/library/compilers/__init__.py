@@ -642,6 +642,7 @@ class Compiler(Tool):
     self.libraryPaths = []
     self.libraries = []
     self.modules = []
+    self.objectPrerequisites = []
     self.__binPaths = binPaths
 
   @property
@@ -833,6 +834,22 @@ class Compiler(Tool):
     """
     return self.forcedIncludes
   
+  def addObjectPrerequisites(self, prerequisites):
+    """Add a prerequisite that must complete before building object files.
+    
+    Use this for defining prerequisites such as generated headers that are
+    required to be built before attempting to compile C/C++ source files.
+    
+    Cake is not able to determine such dependencies on generated headers
+    automatically and so adding a prerequisite is required to ensure
+    correct compilation order.
+    
+    @param prerequisites: A Task/FileTarget/AsyncResult or sequence of these.
+    The object file will not be built before all of the tasks associated with
+    these have completed successfully.
+    """
+    self.objectPrerequisites.append(prerequisites)
+  
   def addLibrary(self, name):
     """Add a library to the list of libraries to link with.
     
@@ -985,8 +1002,7 @@ class Compiler(Tool):
         object = cake.path.stripExtension(target) + self.pchObjectSuffix
       
       if self.enabled:
-        prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
-        prerequisiteTasks.extend(getTasks(prerequisites))
+        prerequisiteTasks = getTasks(prerequisites)
 
         sourceTask = getTask(source)
         if sourceTask is not None:
@@ -1009,7 +1025,13 @@ class Compiler(Tool):
         object=object,
         )
       
-    return run(target, source, header, flatten(prerequisites))
+    allPrerequisites = flatten([
+      prerequisites,
+      self.objectPrerequisites,
+      self._getObjectPrerequisiteTasks(),
+      ])
+      
+    return run(target, source, header, allPrerequisites)
 
   def object(self, target, source, pch=None, prerequisites=[],
              forceExtension=True, **kwargs):
@@ -1056,9 +1078,8 @@ class Compiler(Tool):
         
       if self.enabled:
 
-        prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
-        prerequisiteTasks.extend(getTasks(prerequisites))
-        
+        prerequisiteTasks = getTasks(prerequisites)
+
         sourceTask = getTask(source)
         if sourceTask is not None:
           prerequisiteTasks.append(sourceTask)
@@ -1082,7 +1103,13 @@ class Compiler(Tool):
         compiler=self,
         )
       
-    return run(target, source, pch, flatten(prerequisites))
+    allPrerequisites = flatten([
+      prerequisites,
+      self.objectPrerequisites,
+      self._getObjectPrerequisiteTasks(),
+      ])
+      
+    return run(target, source, pch, allPrerequisites)
     
   @memoise
   def _getObjectPrerequisiteTasks(self):

@@ -602,10 +602,8 @@ class Script(object):
     self._results = {}
     if parent is None:
       self.root = self
-      self._included = {self.path : self}
     else:
       self.root = parent.root
-      self._included = parent._included
 
   @staticmethod
   def getCurrent():
@@ -651,35 +649,6 @@ class Script(object):
     else:
       return cake.path.join(d, *args)
 
-  def include(self, path):
-    """Include another script for execution within this script's context.
-    
-    A script will only be included once within a given context.
-    
-    @param path: The path of the file to include.
-    @type path: string
-    """
-    path = os.path.normpath(path)
-    
-    normalisedPath = os.path.normcase(self.configuration.abspath(path))
-
-    # TODO: Normalise paths so that including the same script by absolute path
-    # and by relative path still obeys include-guards.
-    
-    if normalisedPath in self._included:
-      return
-      
-    includedScript = Script(
-      path=path,
-      variant=self.variant,
-      engine=self.engine,
-      configuration=self.configuration,
-      task=self.task,
-      parent=self,
-      )
-    self._included[normalisedPath] = includedScript
-    includedScript.execute()
-    
   def execute(self):
     """Execute this script.
     """

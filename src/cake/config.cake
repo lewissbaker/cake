@@ -46,11 +46,14 @@ if cake.system.isWindows():
   # MinGW Compiler
   try:
     from cake.library.compilers.msvc import findMsvcCompiler
-    msvc = variant.tools["msvc"] = findMsvcCompiler(configuration=configuration)
-    variant.tools["compiler"] = msvc
+    msvc = findMsvcCompiler(configuration=configuration)
     msvc.addDefine("WIN32")
     if msvc.architecture in ["x64", "ia64"]:
       msvc.addDefine("WIN64")
+    if msvc.architecture != hostArchitecture:
+      variant = variant.clone(architecture=msvc.architecture)
+    variant.tools["msvc"] = msvc
+    variant.tools["compiler"] = msvc
   except CompilerNotFoundError:
     pass
 configuration.addVariant(variant)

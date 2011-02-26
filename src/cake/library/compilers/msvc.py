@@ -171,8 +171,8 @@ def findMsvcCompiler(
   @raise CompilerNotFoundError: When a valid compiler or Windows SDK
   could not be found.
   """
-  # Valid architectures
-  architectures = ['x86', 'x64', 'amd64', 'ia64']
+  
+  validArchitectures = ['x86', 'x64', 'amd64', 'ia64']
 
   # Valid versions - prefer later versions over earlier ones
   versions = [
@@ -191,16 +191,19 @@ def findMsvcCompiler(
 
   # Determine host architecture
   hostArchitecture = cake.system.architecture().lower()
-  if hostArchitecture not in architectures:
+  if hostArchitecture not in validArchitectures:
     raise ValueError("Unknown host architecture '%s'." % hostArchitecture)
 
   # Default architecture is hostArchitecture
   if architecture is None:
-    architecture = hostArchitecture
+    architectures = [hostArchitecture]
+    if hostArchitecture in ('x64', 'amd64'):
+      architectures.append('x86')
   else:
     architecture = architecture.lower()
-    if architecture not in architectures:
+    if architecture not in validArchitectures:
       raise ValueError("Unknown architecture '%s'." % architecture)
+    architectures = [architecture]
 
   if version is not None:
     # Validate version
@@ -209,13 +212,14 @@ def findMsvcCompiler(
     # Only check for this version
     versions = [version]
 
-  for v in versions:
-    for e in editions:
-      try:
-        return _createMsvcCompiler(configuration, v, e, architecture, hostArchitecture)
-      except WindowsError:
-        # Try the next version/edition
-        pass
+  for a in architectures:
+    for v in versions:
+      for e in editions:
+        try:
+          return _createMsvcCompiler(configuration, v, e, a, hostArchitecture)
+        except WindowsError:
+          # Try the next version/edition
+          pass
   else:
     raise CompilerNotFoundError(
       "Could not find Microsoft Visual Studio C++ compiler."

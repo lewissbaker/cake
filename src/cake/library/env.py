@@ -9,6 +9,11 @@ import cake.path
 
 from cake.library import Tool
 
+def _coerceToList(value):
+  if isinstance(value, list):
+    return value
+  return [value]
+
 class Environment(Tool):
   """
   Tool that provides a dictionary of key/value pairs
@@ -67,7 +72,12 @@ class Environment(Tool):
         ART_PATH="C:/art",
         )
     """
-    self.__environment.update(kwargs)
+    self.vars.update(kwargs)
+  
+  def setDefault(self, key, default=None):
+    """Set a value only if it doesn't already exist.
+    """    
+    return self.vars.setdefault(key, default)
     
   def delete(self, *arguments):    
     """Delete values given their keys.
@@ -131,3 +141,59 @@ class Environment(Tool):
     or default if there was no match.
     """
     return kwargs.get(self.vars[key], default)
+
+  def append(self, **kwargs):
+    """Append keyword arguments to the environment. If the key does not exist
+    the value passed in is used. If the key does exist the value is appended using
+    the '+' operator.
+
+    Example::
+      env.append(
+        CFLAGS=["/O1"],
+        MESSAGE="Added /O1 flag. ",
+        )
+    """
+    for k, v in kwargs.iteritems():
+      try:
+        old = self.vars[k]
+        if type(old) != type(v):
+          old = _coerceToList(old)
+          v = _coerceToList(v)
+        self.vars[k] = old + v
+      except KeyError:
+        self.vars[k] = v
+
+  def prepend(self, **kwargs):
+    """Prepend keyword arguments to the environment. If the key does not exist
+    the value passed in is used. If the key does exist the value is prepended using
+    the '+' operator.
+
+    Example::
+      env.prepend(
+        CFLAGS=["/O1"],
+        MESSAGE="Added /O1 flag. ",
+        )
+    """
+    for k, v in kwargs.iteritems():
+      try:
+        old = self.vars[k]
+        if type(old) != type(v):
+          old = _coerceToList(old)
+          v = _coerceToList(v)
+        self.vars[k] = v + old
+      except KeyError:
+        self.vars[k] = v
+
+  def replace(self, **kwargs):
+    """Replace key/values in the environment with keyword arguments. 
+
+    This function is identical to the set() function.
+    
+    Example::
+      env.set(
+        CODE_PATH="C:/code",
+        ART_PATH="C:/art",
+        )
+    """
+    self.vars.update(kwargs)
+      

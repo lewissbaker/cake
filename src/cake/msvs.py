@@ -5,6 +5,11 @@
 @license: Licensed under the MIT license.
 """
 import _winreg
+import platform
+
+_read32BitRegistry = _winreg.KEY_READ
+if platform.architecture()[0] == '64bit':
+  _read32BitRegistry = _read32BitRegistry | _winreg.KEY_WOW64_32KEY
 
 def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS install directory.
@@ -20,7 +25,7 @@ def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s" % version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
   try:
     return str(_winreg.QueryValueEx(key, "InstallDir")[0])
   finally:
@@ -40,7 +45,7 @@ def getMsvsProductDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VS" % version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
   try:
     return str(_winreg.QueryValueEx(key, "ProductDir")[0])
   finally:
@@ -60,7 +65,7 @@ def getMsvcProductDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVC is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VC" % version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
   try:
     return str(_winreg.QueryValueEx(key, "ProductDir")[0])
   finally:
@@ -75,7 +80,7 @@ def getPlatformSdkDir():
   @raise WindowsError: If the Platform SDK is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\Microsoft SDKs\Windows"
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
   try:
     return str(_winreg.QueryValueEx(key, "CurrentInstallFolder")[0])
   finally:
@@ -94,7 +99,7 @@ def getDotNetFrameworkSdkDir(version='2.0'):
   """
   subKey = r"SOFTWARE\Microsoft\.NETFramework"
   valueName = "sdkInstallRootv" + version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
   try:
     return str(_winreg.QueryValueEx(key, valueName)[0])
   finally:

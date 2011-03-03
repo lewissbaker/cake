@@ -55,12 +55,61 @@ def _overrideOpen():
   """
   if hasattr(os, "O_NOINHERIT"):
     import __builtin__
-  
-    old_open = __builtin__.open
-    def new_open(filename, mode="r", *args, **kwargs):
-      if "N" not in mode:
-        mode += "N"
-      return old_open(filename, mode, *args, **kwargs)
+
+    if platform.python_compiler().startswith("MSC v.1310"):
+      # MSVC 7.1 doesn't support the 'N' flag being passed to fopen.
+      # It is ignored. So we need to manually interpret mode string
+      # and call onto os.open().
+
+      _basicFlags = {
+        'r': os.O_RDONLY,
+        'w': os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        'a': os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+        }
+
+      _otherFlags = {
+        '+': os.O_RDWR, # Also clears os.O_RDONLY and os.O_WRONLY
+        't': os.O_TEXT,
+        'b': os.O_BINARY,
+        'N': os.O_NOINHERIT,
+        'D': os.O_TEMPORARY,
+        'T': os.O_SHORT_LIVED,
+        'S': os.O_SEQUENTIAL,
+        'R': os.O_RANDOM,
+        ' ': 0,
+        ',': 0,
+        'U': 0,
+        }
+      
+      def new_open(filename, mode="r", bufsize=0):
+        try:
+          flags = _basicFlags[mode[0]]
+        except LookupError:
+          raise ValueError("mode must start with 'r', 'w' or 'a'")
+
+        for c in mode[1:]:
+          try:
+            flags |= _otherFlags[c]
+          except KeyError:
+            raise ValueError("unknown flag '%s' in mode" % c)
+
+        if flags & os.O_RDWR:
+          flags &= ~(os.O_RDONLY | os.O_WRONLY)
+          
+        if flags & os.O_BINARY and flags & os.O_TEXT:
+          raise ValueError("Cannot specify both 't' and 'b' in mode")
+        if flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
+          raise ValueError("Cannot specify both 'S' and 'R' in mode")
+
+        fd = os.open(filename, flags)
+        return os.fdopen(fd,  mode, bufsize)
+    else:
+      # Simpler version for platforms that have fopen() that understands 'N'
+      old_open = __builtin__.open
+      def new_open(filename, mode="r", *args, **kwargs):
+        if "N" not in mode:
+          mode += "N"
+        return old_open(filename, mode, *args, **kwargs)
     __builtin__.open = new_open
   
     old_os_open = os.open
@@ -180,6 +229,13 @@ def run(args=None, cwd=None):
   
   parser = MyParser(usage=usage, option_class=MyOption, add_help_option=False)
   parser.add_option(
+    "-V", "--version",
+    dest="outputVersion",
+    action="store_true",
+    help="Print the current version of Cake and exit.",
+    default=False,
+    )
+  parser.add_option(
     "--args",
     metavar="FILE",
     dest="args",
@@ -222,9 +278,32 @@ def run(args=None, cwd=None):
     help="Number of simultaneous jobs to execute.",
     default=cake.threadpool.getProcessorCount(),
     )
+  parser.add_option(
+    "-k", "--keep-going",
+    dest="maximumErrorCount",
+    action="store_const",
+    const=None,
+    help="Keep building even in the presence of errors.",
+    )
+  parser.add_option(
+    "-e", "--max-errors",
+    dest="maximumErrorCount",
+    metavar="COUNT",
+    type="int",
+    help="Halt the build after a certain number of errors.",
+    default=100,
+    )
 
   options, _args = parser.parse_args(args, showErrors=False)
 
+  if options.outputVersion:
+    cakeVersion = cake.__version__
+    cakePath = cake.path.dirName(cake.__file__)
+    sys.stdout.write("Cake %s [%s]\n" % (cake.__version__, cakePath))
+    sys.stdout.write("Python %s\n" % sys.version)
+    return 1
+
+  # Find script filenames from the arguments left
   logger = cake.logging.Logger()
   engine = cake.engine.Engine(logger, parser)
 
@@ -250,7 +329,10 @@ def run(args=None, cwd=None):
         scriptDirName = script
       else:
         scriptDirName = os.path.dirname(script)
+        
       argsFileName = engine.searchUpForFile(scriptDirName, "args.cake")
+      if argsFileName:
+        break
 
   # Run the args.cake
   if argsFileName is not None:
@@ -269,7 +351,7 @@ def run(args=None, cwd=None):
     action="help",
     help="Show this help message and exit.",
     )
-  engine.options, args = parser.parse_args(args)
+  options, args = parser.parse_args(args)
 
   # Set components to debug
   for c in options.debugComponents:
@@ -278,8 +360,10 @@ def run(args=None, cwd=None):
   # Set quiet mode    
   logger.quiet = options.quiet;
 
-  # Find keyword arguments  
+  # Find keyword arguments and re-evaluate the script paths in light
+  # of the reparsed args. Want it to error-out if the 
   keywords = {}
+  scripts = []
   for arg in args:
     if '=' in arg:
       keyword, value = arg.split('=', 1)
@@ -287,11 +371,21 @@ def run(args=None, cwd=None):
       if len(value) == 1:
         value = value[0]
       keywords[keyword] = value
-  
+    else:
+      path = arg
+      if not os.path.isabs(path):
+        path = os.path.join(cwd, path)
+      scripts.append(os.path.abspath(arg))
+
+  if not scripts:
+    scripts.append(cwd)
+
   threadPool = cake.threadpool.ThreadPool(options.jobs)
   cake.task.setThreadPool(threadPool)
 
+  engine.options = options
   engine.forceBuild = options.forceBuild
+  engine.maximumErrorCount = options.maximumErrorCount
  
   tasks = []
   
@@ -349,6 +443,22 @@ def run(args=None, cwd=None):
     time.sleep(0.1)
   
   endTime = datetime.datetime.utcnow()
-  engine.logger.outputInfo("Build took %s.\n" % (endTime - startTime))
+  engine.logger.outputInfo(
+    "Build took %s.\n" % _formatTimeDelta(endTime - startTime)
+    )
   
   return engine.errorCount
+
+def _formatTimeDelta(t):
+  """Return a string representation of the time to millisecond precision."""
+  
+  hours = t.seconds // 3600
+  minutes = (t.seconds / 60) % 60
+  seconds = t.seconds % 60
+  milliseconds = t.microseconds // 1000
+
+  if t.days:
+    return "%i days, %i:%02i:%02i.%03i" % (
+      t.days, hours, minutes, seconds, milliseconds)
+  else:
+    return "%i:%02i:%02i.%03i" % (hours, minutes, seconds, milliseconds)

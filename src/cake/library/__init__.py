@@ -131,12 +131,14 @@ class AsyncResult(object):
 
 class DeferredResult(AsyncResult):
   
-  def __init__(self, func):
-    self.task = Task(func)
+  def __init__(self, task):
+    self.task = task
 
   @property
   def result(self):
     return self.task.result
+
+_undefined = object()
 
 class ScriptResult(AsyncResult):
   """A placeholder that can be used to reference a result of another
@@ -145,12 +147,13 @@ class ScriptResult(AsyncResult):
   The result will be available when the task has completed successfully.
   """
   
-  __slots__ = ['__execute', '__script', '__name']
+  __slots__ = ['__execute', '__script', '__name', '__default']
   
-  def __init__(self, execute, name):
+  def __init__(self, execute, name, default=_undefined):
     self.__execute = execute
     self.__script = None
     self.__name = name
+    self.__default = default
     
   @property
   def script(self):
@@ -171,7 +174,14 @@ class ScriptResult(AsyncResult):
   @property
   def result(self):
     assert self.task.completed
-    return self.__script.getResult(self.__name)
+    try:
+      return self.__script.getResult(self.__name)
+    except KeyError:
+      default = self.__default
+      if default is not _undefined:
+        return default
+      else:
+        raise
 
 def waitForAsyncResult(func):
   """Decorator to be used with functions that need to
@@ -205,9 +215,15 @@ def waitForAsyncResult(func):
       return func(*newArgs, **newKwargs)
         
     if tasks:
-      deferred = DeferredResult(run)
-      deferred.task.startAfter(tasks)
-      return deferred
+      currentScript = Script.getCurrent()
+      if currentScript is not None:
+        engine = currentScript.engine
+        task = engine.createTask(run)
+      else:
+        task = Task(run)
+      task.startAfter(tasks)
+      
+      return DeferredResult(task)
     else:
       return run()
   
@@ -253,10 +269,19 @@ def flatten(value):
   
   if tasks:
     # Some items are AsyncResults, need to re-flatten once they're
-    # done 
-    result = DeferredResult(lambda: flatten(items))
-    result.task.startAfter(tasks)
-    return result
+    # done
+    def run():
+      return flatten(items)
+    
+    currentScript = Script.getCurrent()
+    if currentScript is not None:
+      engine = currentScript.engine
+      task = engine.createTask(run)
+    else:
+      task = Task(run)
+    task.startAfter(tasks)
+    
+    return DeferredResult(task)
   else:
     return items
 

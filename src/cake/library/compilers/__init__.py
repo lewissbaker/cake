@@ -11,7 +11,6 @@ import sys
 import weakref
 import os
 import os.path
-import binascii
 import tempfile
 import subprocess
 import zlib
@@ -27,7 +26,7 @@ import cake.hash
 from cake.engine import Script, DependencyInfo, BuildError
 from cake.library.filesys import FileSystemTool
 from cake.library import (
-  Tool, FileTarget, AsyncResult, DeferredResult,
+  Tool, FileTarget, AsyncResult,
   memoise, waitForAsyncResult, flatten,
   getPaths, getPath, getResult, getResults, getTasks, getTask,
   )
@@ -190,6 +189,8 @@ def _escapeArg(arg):
     if '"' in arg:
       arg = arg.replace('"', '\\"')
     return '"' + arg + '"'
+  elif '"' in arg:
+    return arg.replace('"', '\\"')
   else:
     return arg
 
@@ -641,6 +642,7 @@ class Compiler(Tool):
     self.libraryPaths = []
     self.libraries = []
     self.modules = []
+    self.objectPrerequisites = []
     self.__binPaths = binPaths
 
   @property
@@ -787,7 +789,7 @@ class Compiler(Tool):
     else:
       self.defines.insert(index, "%s=%s" % (name, value))
     self._clearCache()
-      
+
   def getDefines(self):
     """Get an iterator for preprocessor defines.
     
@@ -831,6 +833,22 @@ class Compiler(Tool):
     should be included.
     """
     return self.forcedIncludes
+  
+  def addObjectPrerequisites(self, prerequisites):
+    """Add a prerequisite that must complete before building object files.
+    
+    Use this for defining prerequisites such as generated headers that are
+    required to be built before attempting to compile C/C++ source files.
+    
+    Cake is not able to determine such dependencies on generated headers
+    automatically and so adding a prerequisite is required to ensure
+    correct compilation order.
+    
+    @param prerequisites: A Task/FileTarget/AsyncResult or sequence of these.
+    The object file will not be built before all of the tasks associated with
+    these have completed successfully.
+    """
+    self.objectPrerequisites.append(prerequisites)
   
   def addLibrary(self, name):
     """Add a library to the list of libraries to link with.
@@ -938,7 +956,8 @@ class Compiler(Tool):
     
     return filesysTool.copyFiles(self.modules, targetDir)    
 
-  def pch(self, target, source, header, forceExtension=True, **kwargs):
+  def pch(self, target, source, header, prerequisites=[],
+          forceExtension=True, **kwargs):
     """Compile an individual header to a pch file.
     
     @param target: Path to the target pch file.
@@ -947,6 +966,10 @@ class Compiler(Tool):
     @param header: Path to the header as it would be included
     by other source files.
     @type header: string.
+
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building this pch.
+    @type prerequisites: list of Task or FileTarget
     
     @param forceExtension: If true then the target path will have
     the default pch file extension appended if it doesn't already
@@ -963,12 +986,13 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
       
-    return compiler._pch(target, source, header, forceExtension)
+    return compiler._pch(target, source, header, prerequisites, forceExtension)
 
-  def _pch(self, target, source, header, forceExtension=True):
+  def _pch(self, target, source, header, prerequisites=[],
+           forceExtension=True):
     
     @waitForAsyncResult
-    def run(target, source, header):
+    def run(target, source, header, prerequisites):
       if forceExtension:
         target = cake.path.forceExtension(target, self.pchSuffix)
       
@@ -978,12 +1002,18 @@ class Compiler(Tool):
         object = cake.path.stripExtension(target) + self.pchObjectSuffix
       
       if self.enabled:
+        prerequisiteTasks = getTasks(prerequisites)
+
         sourceTask = getTask(source)
+        if sourceTask is not None:
+          prerequisiteTasks.append(sourceTask)
+        
         pchTask = self.engine.createTask(
           lambda t=target, s=source, h=header, o=object, c=self:
             c.buildPch(t, getPath(s), h, o)
           )
-        pchTask.startAfter(sourceTask, threadPool=self.engine.scriptThreadPool)
+        pchTask.startAfter(prerequisiteTasks,
+                           threadPool=self.engine.scriptThreadPool)
       else:
         pchTask = None
       
@@ -995,9 +1025,16 @@ class Compiler(Tool):
         object=object,
         )
       
-    return run(target, source, header)
+    allPrerequisites = flatten([
+      prerequisites,
+      self.objectPrerequisites,
+      self._getObjectPrerequisiteTasks(),
+      ])
+      
+    return run(target, source, header, allPrerequisites)
 
-  def object(self, target, source, pch=None, forceExtension=True, **kwargs):
+  def object(self, target, source, pch=None, prerequisites=[],
+             forceExtension=True, **kwargs):
     """Compile an individual source to an object file.
     
     @param target: Path of the target object file.
@@ -1009,6 +1046,10 @@ class Compiler(Tool):
     @param pch: A precompiled header file to use. This file can be built
     with the pch() function.
     @type pch: L{PchTarget}
+
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building this object.
+    @type prerequisites: list of Task or FileTarget
     
     @param forceExtension: If true then the target path will have
     the default object file extension appended if it doesn't already
@@ -1025,19 +1066,20 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
       
-    return compiler._object(target, source, pch, forceExtension)
+    return compiler._object(target, source, pch, prerequisites, forceExtension)
     
-  def _object(self, target, source, pch=None, forceExtension=True, shared=False):
+  def _object(self, target, source, pch=None, prerequisites=[],
+              forceExtension=True, shared=False):
     
     @waitForAsyncResult
-    def run(target, source, pch):
+    def run(target, source, pch, prerequisites):
       if forceExtension:
         target = cake.path.forceExtension(target, self.objectSuffix)
         
       if self.enabled:
-      
-        prerequisiteTasks = list(self._getObjectPrerequisiteTasks())
-        
+
+        prerequisiteTasks = getTasks(prerequisites)
+
         sourceTask = getTask(source)
         if sourceTask is not None:
           prerequisiteTasks.append(sourceTask)
@@ -1050,7 +1092,8 @@ class Compiler(Tool):
           lambda t=target, s=source, p=pch, h=shared, c=self:
             c.buildObject(t, getPath(s), getResult(p), h)
           )
-        objectTask.startAfter(prerequisiteTasks, threadPool=self.engine.scriptThreadPool)
+        objectTask.startAfter(prerequisiteTasks,
+                              threadPool=self.engine.scriptThreadPool)
       else:
         objectTask = None
       
@@ -1060,7 +1103,13 @@ class Compiler(Tool):
         compiler=self,
         )
       
-    return run(target, source, pch)
+    allPrerequisites = flatten([
+      prerequisites,
+      self.objectPrerequisites,
+      self._getObjectPrerequisiteTasks(),
+      ])
+      
+    return run(target, source, pch, allPrerequisites)
     
   @memoise
   def _getObjectPrerequisiteTasks(self):
@@ -1069,7 +1118,7 @@ class Compiler(Tool):
     """
     return getTasks(self.forcedIncludes)
     
-  def objects(self, targetDir, sources, pch=None, **kwargs):
+  def objects(self, targetDir, sources, pch=None, prerequisites=[], **kwargs):
     """Build a collection of objects to a target directory.
     
     @param targetDir: Path to the target directory where the built objects
@@ -1082,6 +1131,10 @@ class Compiler(Tool):
     @param pch: A precompiled header file to use. This file can be built
     with the pch() function.
     @type pch: L{PchTarget}
+
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building these objects.
+    @type prerequisites: list of Task or FileTarget
     
     @return: A list of FileTarget objects, one for each object being
     built.
@@ -1091,18 +1144,20 @@ class Compiler(Tool):
       setattr(compiler, k, v)
     
     @waitForAsyncResult
-    def run(sources):
+    def run(sources, prerequisites):
       results = []
       for source in sources:
         sourcePath = getPath(source)
         sourceName = cake.path.baseNameWithoutExtension(sourcePath)
         targetPath = cake.path.join(targetDir, sourceName)
-        results.append(compiler._object(targetPath, source, pch=pch))
+        results.append(compiler._object(targetPath, source,
+                                        pch=pch, prerequisites=prerequisites))
       return results
 
-    return run(flatten(sources))
+    return run(flatten(sources), flatten(prerequisites))
 
-  def sharedObjects(self, targetDir, sources, pch=None, **kwargs):
+  def sharedObjects(self, targetDir, sources, pch=None, prerequisites=[],
+                    **kwargs):
     """Build a collection of objects used by a shared library/module to a target directory.
 
     @param targetDir: Path to the target directory where the built objects
@@ -1116,6 +1171,10 @@ class Compiler(Tool):
     with the pch() function.
     @type pch: L{PchTarget}
 
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building these objects.
+    @type prerequisites: list of Task or FileTarget
+    
     @return: A list of FileTarget objects, one for each object being
     built.
     """
@@ -1124,7 +1183,7 @@ class Compiler(Tool):
       setattr(compiler, k, v)
 
     @waitForAsyncResult
-    def run(sources):
+    def run(sources, prerequisites):
       results = []
       for source in sources:
         sourcePath = getPath(source)
@@ -1134,11 +1193,12 @@ class Compiler(Tool):
           targetPath,
           source,
           pch=pch,
+          prerequisites=prerequisites,
           shared=True
           ))
       return results
     
-    return run(flatten(sources))
+    return run(flatten(sources), flatten(prerequisites))
     
   def library(self, target, sources, forceExtension=True, **kwargs):
     """Build a library from a collection of objects.
@@ -1638,8 +1698,6 @@ class Compiler(Tool):
     if object is not None:
       targets.append(object)
 
-    # If we get to here then we didn't find the object in the cache
-    # so we need to actually execute the build.
     def command():
       self.engine.logger.outputInfo("Compiling %s\n" % source)
       return compile()
@@ -1717,7 +1775,7 @@ class Compiler(Tool):
       # Find the directory that will contain all cached dependency
       # entries for this particular target object file.
       targetDigest = cake.hash.sha1(targetDigestPath.encode("utf8")).digest()
-      targetDigestStr = binascii.hexlify(targetDigest).decode("utf8")
+      targetDigestStr = cake.hash.hexlify(targetDigest)
       targetCacheDir = cake.path.join(
         self.objectCachePath,
         targetDigestStr[0],
@@ -1782,7 +1840,7 @@ class Compiler(Tool):
         # Check if the state of our files matches that of a cached
         # object file.
         cachedObjectDigest = configuration.calculateDigest(newDependencyInfo)
-        cachedObjectDigestStr = binascii.hexlify(cachedObjectDigest).decode("utf8")
+        cachedObjectDigestStr = cake.hash.hexlify(cachedObjectDigest)
         cachedObjectPath = cake.path.join(
           self.objectCachePath,
           cachedObjectDigestStr[0],
@@ -1844,13 +1902,13 @@ class Compiler(Tool):
       if useCacheForThisObject:
         try:
           objectDigest = configuration.calculateDigest(newDependencyInfo)
-          objectDigestStr = binascii.hexlify(objectDigest).decode("utf8")
+          objectDigestStr = cake.hash.hexlify(objectDigest)
           
           dependencyDigest = cake.hash.sha1()
           for dep in dependencies:
             dependencyDigest.update(dep.encode("utf8"))
           dependencyDigest = dependencyDigest.digest()
-          dependencyDigestStr = binascii.hexlify(dependencyDigest).decode("utf8")
+          dependencyDigestStr = cake.hash.hexlify(dependencyDigest)
           
           cacheDepPath = cake.path.join(
             targetCacheDir,
@@ -1941,10 +1999,10 @@ class Compiler(Tool):
       
       archive()
       
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -1956,6 +2014,10 @@ class Compiler(Tool):
   
   def getLibraryCommand(self, target, sources):
     """Get the command for constructing a library.
+    
+    @return: A tuple (build, scan) where build is the function to call to
+    build the library, scan is a function that when called returns a
+    (targets, dependencies) tuple. 
     """
     self.engine.raiseError("Don't know how to archive %s\n" % target)
   
@@ -1990,10 +2052,10 @@ class Compiler(Tool):
     
       link()
     
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2015,7 +2077,7 @@ class Compiler(Tool):
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
-    returns the list of dependencies. 
+    returns a tuple of (targets, dependencies). 
     """
     self.engine.raiseError("Don't know how to link %s\n" % target)
   
@@ -2051,10 +2113,10 @@ class Compiler(Tool):
     
       link()
     
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2076,7 +2138,7 @@ class Compiler(Tool):
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command
-    returns the list of dependencies. 
+    returns the tuple (targets, dependencies). 
     """
     self.engine.raiseError("Don't know how to link %s\n" % target)
     
@@ -2108,10 +2170,10 @@ class Compiler(Tool):
       
       compile()
       
-      dependencies = scan()
+      targets, dependencies = scan()
       
       newDependencyInfo = self.configuration.createDependencyInfo(
-        targets=[target],
+        targets=targets,
         args=args,
         dependencies=dependencies,
         )
@@ -2123,5 +2185,9 @@ class Compiler(Tool):
   
   def getResourceCommand(self, target, sources):
     """Get the command for constructing a resource.
+    
+    @return: A tuple (build, scan) where build is the function to call to
+    build the resource, scan is a function that when called returns a
+    (targets, dependencies) tuple. 
     """
     self.engine.raiseError("Don't know how to compile %s\n" % target)

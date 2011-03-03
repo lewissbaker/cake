@@ -171,8 +171,8 @@ def findMsvcCompiler(
   @raise CompilerNotFoundError: When a valid compiler or Windows SDK
   could not be found.
   """
-  # Valid architectures
-  architectures = ['x86', 'x64', 'amd64', 'ia64']
+  
+  validArchitectures = ['x86', 'x64', 'amd64', 'ia64']
 
   # Valid versions - prefer later versions over earlier ones
   versions = [
@@ -191,16 +191,19 @@ def findMsvcCompiler(
 
   # Determine host architecture
   hostArchitecture = cake.system.architecture().lower()
-  if hostArchitecture not in architectures:
+  if hostArchitecture not in validArchitectures:
     raise ValueError("Unknown host architecture '%s'." % hostArchitecture)
 
   # Default architecture is hostArchitecture
   if architecture is None:
-    architecture = hostArchitecture
+    architectures = [hostArchitecture]
+    if hostArchitecture in ('x64', 'amd64'):
+      architectures.append('x86')
   else:
     architecture = architecture.lower()
-    if architecture not in architectures:
+    if architecture not in validArchitectures:
       raise ValueError("Unknown architecture '%s'." % architecture)
+    architectures = [architecture]
 
   if version is not None:
     # Validate version
@@ -209,13 +212,14 @@ def findMsvcCompiler(
     # Only check for this version
     versions = [version]
 
-  for v in versions:
-    for e in editions:
-      try:
-        return _createMsvcCompiler(configuration, v, e, architecture, hostArchitecture)
-      except WindowsError:
-        # Try the next version/edition
-        pass
+  for a in architectures:
+    for v in versions:
+      for e in editions:
+        try:
+          return _createMsvcCompiler(configuration, v, e, a, hostArchitecture)
+        except WindowsError:
+          # Try the next version/edition
+          pass
   else:
     raise CompilerNotFoundError(
       "Could not find Microsoft Visual Studio C++ compiler."
@@ -698,7 +702,7 @@ class MsvcCompiler(Compiler):
     @makeCommand("lib-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by lib.exe
-      return [self.__libExe] + sources
+      return [target], [self.__libExe] + sources
 
     return archive, scan
 
@@ -711,12 +715,14 @@ class MsvcCompiler(Compiler):
     #if self.errorReport:
     #  args.append('/ERRORREPORT:%s' % self.errorReport.upper())
       
-    if self.useIncrementalLinking is not None:
+    # Trying to combine /incremental with /clrimagetype gives a linker
+    # warning LNK4075: ingoring '/INCREMENTAL'
+    if self.useIncrementalLinking is not None and self.clrMode is None:
       if self.useIncrementalLinking:
         args.append('/INCREMENTAL')
       else:
         args.append('/INCREMENTAL:NO')
-      
+
     if dll:
       args.append('/DLL')
       args.extend(self.moduleFlags)
@@ -750,9 +756,6 @@ class MsvcCompiler(Compiler):
     if self.optimisation == self.FULL_OPTIMISATION:
       # Link-time code generation (global optimisation)
       args.append('/LTCG:NOSTATUS')
-    
-    if self.outputMapFile:
-      args.append('/MAP')
     
     if self.clrMode is not None:
       if self.clrMode == "pure":
@@ -817,7 +820,7 @@ class MsvcCompiler(Compiler):
       self.engine.raiseError(
         "Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n"
         )
-    
+
     if self.embedManifest:
       if not self.__mtExe:
         self.engine.raiseError(
@@ -847,6 +850,10 @@ class MsvcCompiler(Compiler):
       else:
         args.append('/MANIFESTFILE:' + embeddedManifest)
     
+    if self.outputMapFile:
+      mapFile = cake.path.stripExtension(target) + '.map'
+      args.append('/MAP:' + mapFile)
+    
     args.append('/OUT:' + target)
     args.extend(sources)
     args.extend(objects)
@@ -860,7 +867,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      if self.importLibrary:
+      if dll and self.importLibrary is not None:
         importLibrary = self.configuration.abspath(self.importLibrary)
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)
@@ -987,7 +994,32 @@ class MsvcCompiler(Compiler):
         
     @makeCommand("link-scan")
     def scan():
-      return [self.__linkExe] + sources + objects + self._scanForLibraries(libraries)
+      targets = [target]
+      if dll and self.importLibrary is not None:
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        exportFile = cake.path.stripExtension(importLibrary) + '.exp'
+        targets.append(importLibrary)
+        targets.append(exportFile)
+      if self.outputMapFile:
+        targets.append(mapFile)
+      if self.debugSymbols:
+        if self.pdbFile is not None:
+          targets.append(self.pdbFile)
+        if self.strippedPdbFile is not None:
+          targets.append(self.strippedPdbFile)
+      if not self.embedManifest:
+        # If we are linking with static runtimes there may be no manifest
+        # output, in which case we don't need to flag it as a target.
+        manifestFile = target + '.manifest'
+        absManifestFile = self.configuration.abspath(manifestFile)
+        if cake.filesys.isFile(absManifestFile):
+          targets.append(manifestFile)
+        
+      dependencies = [self.__linkExe]
+      dependencies += sources
+      dependencies += objects
+      dependencies += self._scanForLibraries(libraries)
+      return targets, dependencies
     
     if self.embedManifest:
       if self.useIncrementalLinking:
@@ -1018,6 +1050,6 @@ class MsvcCompiler(Compiler):
     @makeCommand("rc-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by rc.exe
-      return [self.__rcExe, source]
+      return [target], [self.__rcExe, source]
 
     return compile, scan

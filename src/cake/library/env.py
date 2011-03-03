@@ -49,6 +49,13 @@ class Environment(Tool):
     """
     del self.vars[key]
 
+  def __contains__(self, key):
+    """Test if an environment variable is defined.
+
+    @param key: The key of the environment variable to test.
+    """
+    return key in self.vars
+
   def get(self, key, default=None):
     """Return an environment variable or default value if not found.
     

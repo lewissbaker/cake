@@ -1,5 +1,10 @@
 """Cake Build System.
 
+@var __version__: Version string for Cake. Useful for printing to screen.
+
+@var __version_tuple__: Version tuple for Cake. Useful for comparing
+whether one version is newer than another.
+
 @see: Cake Build System (http://sourceforge.net/projects/cake-build)
 @copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
 @license: Licensed under the MIT license.
@@ -8,12 +13,17 @@
 import threading
 import sys
 
-__version_info__ = (0, 9, 0)
-"""Current version number tuple.
-
-The number uses semantic versioning (see U{http://semver.org}).
-"""
-__version__ = '.'.join(str(v) for v in __version_info__)
+# Define some version strings based on info in the setup.py
+# __version__ 
+try:
+  import pkg_resources
+  _pkg = pkg_resources.require("Cake")[0]
+  __version__ = _pkg.version
+  __version_tuple__ = _pkg.parsed_version
+  del _pkg
+except Exception:
+  __version__ = 'unknown'
+  __version_tuple__ = ()
 
 # We want the 'cake.tools' module to have thread-local contents so that
 # Cake scripts can get access to their tools using standard python import

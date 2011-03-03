@@ -1,5 +1,7 @@
 *.pyc
 *.cakec
+*.dep
 .pydevproject
 /examples/build/
 /examples/cache/
+*~

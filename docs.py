@@ -14,7 +14,7 @@ def run():
   sys.argv += [
     "--verbose",
     "--name=Cake Build System",
-    "--url=http://cake-build.sf.net/",
+    "--url=http://cake-build.sourceforge.net/",
     "--inheritance=listed",
     "--css=white",
     "--html",

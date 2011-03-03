@@ -14,6 +14,29 @@ class FileSystemTool(Tool):
   """Tool that provides file system related utilities. 
   """
 
+  def findFiles(self, path, recursive=True, pattern=None, patternRe=None):
+    """Find files matching a particular pattern or regex.
+    
+    @param path: The path of the directory to search under.
+    @param recursive: Whether or not to search recursively.
+    @param pattern: A glob-style file-name pattern. eg. '*.txt'
+    @param patternRe: A regular expression
+    
+    @return: A sequence of paths of files.
+    """
+    absPath = self.configuration.abspath(path)
+    files = cake.filesys.findFiles(
+      path=absPath,
+      recursive=recursive,
+      pattern=pattern,
+      patternRe=patternRe,
+      )
+
+    join = cake.path.join
+    
+    for filePath in files:
+      yield join(path, filePath)
+
   def copyFile(self, source, target):
     """Copy a file from one location to another.
     

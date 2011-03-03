@@ -101,6 +101,7 @@ class Engine(object):
   
   forceBuild = False
   defaultConfigScriptName = "config.cake"
+  maximumErrorCount = None
   
   def __init__(self, logger, parser):
     """Default Constructor.
@@ -213,7 +214,7 @@ class Engine(object):
     if configuration is None:
       configuration = Configuration(path=path, engine=self)
       script = Script(
-        path=path,
+        path=cake.path.baseName(path),
         configuration=configuration,
         variant=None,
         engine=self,
@@ -350,9 +351,25 @@ class Engine(object):
     if func is None:
       return cake.task.Task()
     
+    # Save the script that created the task so that the task
+    # inherits that same script when executed.
+    currentScript = Script.getCurrent()
+    
     def _wrapper():
+      if self.maximumErrorCount and self.errorCount >= self.maximumErrorCount:
+        # TODO: Output some sort of message saying the build is being terminated
+        # because of too many errors. But only output it once. Perhaps just set
+        # a flag and check that in the runner.
+        raise BuildError()
+      
       try:
-        return func()
+        # Restore the old script
+        oldScript = Script.getCurrent()
+        Script._current.value = currentScript
+        try:
+          return func()
+        finally:
+          Script._current.value = oldScript
       except BuildError:
         # Assume build errors have already been reported
         raise
@@ -372,7 +389,7 @@ class Engine(object):
         exceptionString = ''.join(traceback.format_exception_only(e.__class__, e))
         message = 'Unhandled Task Exception:\n%s%s' % (tracebackString, exceptionString)
         if not self.logger.debugEnabled("stack"):
-          message += "Pass '-d stack' if you require a more complete stack trace.\n"    
+          message += "Pass '--debug=stack' if you require a more complete stack trace.\n"
         self.logger.outputError(message)
         self.errors.append(message)
         raise
@@ -381,7 +398,7 @@ class Engine(object):
 
     # Set a traceback for the parent script task
     if self.logger.debugEnabled("stack"):    
-      if Script.getCurrent() is not None:
+      if currentScript is not None:
         task.traceback = traceback.extract_stack()[:-1]
 
     return task
@@ -577,7 +594,7 @@ class Script(object):
     @param parent: The parent script or None if this is the root script. 
     """
     self.path = path
-    self.dir = cake.path.dirName(path)
+    self.dir = cake.path.dirName(path) or '.'
     self.configuration = configuration
     self.variant = variant
     self.engine = engine
@@ -628,7 +645,11 @@ class Script(object):
   def cwd(self, *args):
     """Return the path prefixed with the current script's directory.
     """
-    return cake.path.join(self.dir, *args)
+    d = self.dir
+    if d == '.' and args:
+      return cake.path.join(*args)
+    else:
+      return cake.path.join(d, *args)
 
   def include(self, path):
     """Include another script for execution within this script's context.
@@ -638,7 +659,14 @@ class Script(object):
     @param path: The path of the file to include.
     @type path: string
     """
-    if path in self._included:
+    path = os.path.normpath(path)
+    
+    normalisedPath = os.path.normcase(self.configuration.abspath(path))
+
+    # TODO: Normalise paths so that including the same script by absolute path
+    # and by relative path still obeys include-guards.
+    
+    if normalisedPath in self._included:
       return
       
     includedScript = Script(
@@ -649,7 +677,7 @@ class Script(object):
       task=self.task,
       parent=self,
       )
-    self._included[path] = includedScript
+    self._included[normalisedPath] = includedScript
     includedScript.execute()
     
   def execute(self):
@@ -844,7 +872,10 @@ class Configuration(object):
             self.engine.logger.outputInfo("Building with %s - %s\n" % (self.path, variant))
           elif variant is not currentVariant:
             self.engine.logger.outputInfo("Building with %s\n" % str(variant))
-          self.engine.logger.outputInfo("Executing %s\n" % script.path)
+          self.engine.logger.outputDebug(
+            "script",
+            "Executing %s\n" % script.path,
+            )
           script.execute()
         task = self.engine.createTask(execute)
         script = Script(

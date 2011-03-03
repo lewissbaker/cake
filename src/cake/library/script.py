@@ -38,11 +38,11 @@ class ScriptTool(Tool):
     """
     Script.getCurrent().setResult(**kwargs)
   
-  def getResult(self, script, name):
+  def getResult(self, script, name, *args, **kwargs):
     """Get a placeholder value that will yield the result of another
     script once that other script has finished executing.
     """
-    return self.get(script).getResult(name)
+    return self.get(script).getResult(name, *args, **kwargs)
   
   def get(self, script, keywords={}, useContext=None, configScript=None, configScriptName=None):
     """Get another script to use in referencing targets.
@@ -232,11 +232,14 @@ class ScriptProxy(object):
     """
     return self.__execute()
   
-  def getResult(self, name):
+  def getResult(self, name, *args, **kwargs):
     """Get a placeholder for the result defined by this script when it is
     executed.
     
     The script will be executed if the result is ever required.
-    """
-    return ScriptResult(self.__execute, name)
 
+    @param name: The name of the script result to retrieve.
+    @param default: If supplied then the default value to return in case
+    the script does not define that result.
+    """
+    return ScriptResult(self.__execute, name, *args, **kwargs)

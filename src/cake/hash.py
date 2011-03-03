@@ -5,6 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
+import binascii
+
 try:
   import hashlib
   def sha1(*args, **kwargs):
@@ -18,3 +20,17 @@ except ImportError:
   import md5 as md5lib
   def md5(*args, **kwargs):
     return md5lib.new(*args, **kwargs) 
+
+def hexlify(digest):
+  """Get the hex-string representation of a digest.
+
+  @param digest: A series of bytes comprising the digest.
+  eg. A SHA-1 digest will be 20 bytes.
+  @type digest: str/bytes
+
+  @return: A string containing the hexadecimal string representation of the
+  digest.
+  @rtype: unicode
+  """
+  return binascii.hexlify(digest).decode("utf8")
+

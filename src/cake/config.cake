@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Default configuration used if none is passed passed on the command line or
+# Default configuration used if none is passed on the command line or
 # found by searching up from the working directory.
 #-------------------------------------------------------------------------------
 from cake.engine import Script, Variant
@@ -26,8 +26,11 @@ variant.tools["shell"] = ShellTool(configuration=configuration)
 variant.tools["filesys"] = FileSystemTool(configuration=configuration)
 variant.tools["zipping"] = ZipTool(configuration=configuration)
 variant.tools["dummy"] = DummyCompiler(configuration=configuration)
+
+# Dummy Compiler is the default compiler
 variant.tools["compiler"] = variant.tools["dummy"]
-# GCC Compiler
+
+# Prefer GCC Compiler over previous compilers
 try:
   from cake.library.compilers.gcc import findGccCompiler
   gcc = variant.tools["gcc"] = findGccCompiler(configuration=configuration)
@@ -35,15 +38,16 @@ try:
   gcc.addLibrary("stdc++")
 except CompilerNotFoundError:
   pass
+
 if cake.system.isWindows():
-  # MSVC Compiler
+  # Prefer MinGW Compiler over previous compilers
   try:
     from cake.library.compilers.gcc import findMinGWCompiler
     mingw = findMinGWCompiler(configuration=configuration)
     variant.tools["compiler"] = mingw
   except CompilerNotFoundError:
     pass
-  # MinGW Compiler
+  # Prefer MSVC Compiler over previous compilers
   try:
     from cake.library.compilers.msvc import findMsvcCompiler
     msvc = findMsvcCompiler(configuration=configuration)

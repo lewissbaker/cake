@@ -16,7 +16,9 @@ import traceback
 import atexit
 import collections
 
-if platform.system() == 'Windows':
+import cake.system
+
+if cake.system.isWindows():
   try:
     import win32api
     def getProcessorCount():

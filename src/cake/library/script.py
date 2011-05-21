@@ -164,6 +164,7 @@ class ScriptTool(Tool):
       engine=currentScript.engine,
       configuration=currentScript.configuration,
       task=currentScript.task,
+      tools=currentScript.tools,
       parent=currentScript,
       )
     self._included[normalisedPath] = includedScript

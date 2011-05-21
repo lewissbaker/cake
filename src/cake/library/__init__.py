@@ -183,6 +183,43 @@ class ScriptResult(AsyncResult):
       else:
         raise
 
+def _findAsyncResults(value):
+  """Return a sequence of AsyncResult objects found in the specified value.
+
+  Recursively searches builtin types 'list', 'tuple' and 'dict'.
+  """
+  if isinstance(value, AsyncResult):
+    yield value
+  elif isinstance(value, (list, tuple)):
+    for item in value:
+      for result in _findAsyncResults(item):
+        yield result
+  elif isinstance(value, dict):
+    for k, v in value.iteritems():
+      for result in _findAsyncResults(k):
+        yield result
+      for result in _findAsyncResults(v):
+        yield result
+
+def _resolveAsyncResults(value):
+  """Return the equivalent value with all AsyncResults resolved with their
+  actual results.
+
+  Caller must ensure that all AsyncResult values have completed before calling this.
+  """
+  while isinstance(value, AsyncResult):
+    assert value.task.completed
+    value = value.result
+
+  if isinstance(value, (tuple, list)):
+    return type(value)(_resolveAsyncResults(x) for x in value)
+  elif isinstance(value, dict):
+    return type(value)(
+      (_resolveAsyncResults(k), _resolveAsyncResults(v)) for k, v in value.iteritems()
+      )
+  else:
+    return value
+
 def waitForAsyncResult(func):
   """Decorator to be used with functions that need to
   wait for its argument values to become available before
@@ -197,35 +234,46 @@ def waitForAsyncResult(func):
   whose result is the return value of the function
   """
   def call(*args, **kwargs):
-    tasks = []
-    for arg in args:
-      if isinstance(arg, AsyncResult):
-        task = arg.task
-        if not task.completed:
-          tasks.append(task)
-    for arg in kwargs.itervalues():
-      if isinstance(arg, AsyncResult):
-        task = arg.task
-        if not task.completed:
-          tasks.append(task)
+
+    asyncResults = list(_findAsyncResults(args))
+    asyncResults.extend(_findAsyncResults(kwargs))
+
+    if not asyncResults:
+      return func(*args, **kwargs)
+
+    currentScript = Script.getCurrent()
+    if currentScript is not None:
+      engine = currentScript.engine
+      createTask = engine.createTask
+    else:
+      createTask = Task
+
+    def onAsyncResultReady(asyncResult):
+      """Called when an AsyncResult is ready.
+
+      Recurse on the result to see if it contains any nested AsyncResult objects.
+      If so then the task for this callback will only complete after those nested
+      AsyncResult values are available.
+      """
+      for result in _findAsyncResults(asyncResult.result):
+        waitTask = createTask(lambda r=result: onAsyncResultReady(r))
+        waitTask.startAfter(result.task)
+
+    waitTasks = []
+    for asyncResult in asyncResults:
+      waitTask = createTask(lambda r=asyncResult: onAsyncResultReady(r))
+      waitTask.startAfter(asyncResult.task)
+      waitTasks.append(waitTask)
 
     def run():
-      newArgs = tuple(getResult(x) for x in args)
-      newKwargs = dict((k, getResult(v)) for k, v in kwargs.iteritems())
+      newArgs = _resolveAsyncResults(args)
+      newKwargs = _resolveAsyncResults(kwargs)
       return func(*newArgs, **newKwargs)
-        
-    if tasks:
-      currentScript = Script.getCurrent()
-      if currentScript is not None:
-        engine = currentScript.engine
-        task = engine.createTask(run)
-      else:
-        task = Task(run)
-      task.startAfter(tasks)
-      
-      return DeferredResult(task)
-    else:
-      return run()
+    
+    runTask = createTask(run)
+    runTask.startAfter(waitTasks)
+
+    return DeferredResult(runTask)
   
   return call
 
@@ -241,49 +289,15 @@ def flatten(value):
   """
   sequenceTypes = (list, tuple)
   
-  assert not isinstance(value, AsyncResult)
-  
-  if not isinstance(value, sequenceTypes):
-    return value
-  
-  items = []
-  tasks = []
-  
-  def processItem(item):
-    if isinstance(item, AsyncResult):
-      task = item.task
-      if task.completed:
-        item = getResult(item)
-      else:
-        tasks.append(task)
-    assert not isinstance(item, sequenceTypes)
-    items.append(item)
-  
-  for item in value:
-    item = flatten(item)
-    if isinstance(item, sequenceTypes):
-      for subItem in item:
-        processItem(subItem)
+  def _flatten(value):
+    if isinstance(value, sequenceTypes):
+      for item in value:
+        for x in _flatten(item):
+          yield x
     else:
-      processItem(item)
-  
-  if tasks:
-    # Some items are AsyncResults, need to re-flatten once they're
-    # done
-    def run():
-      return flatten(items)
-    
-    currentScript = Script.getCurrent()
-    if currentScript is not None:
-      engine = currentScript.engine
-      task = engine.createTask(run)
-    else:
-      task = Task(run)
-    task.startAfter(tasks)
-    
-    return DeferredResult(task)
-  else:
-    return items
+      yield value
+
+  return list(_flatten(value))
 
 def getTask(value):
   """Get the task that builds this file.

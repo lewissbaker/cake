@@ -9,10 +9,44 @@ import sys
 import threading
 
 _threadPool = None
+_threadPoolLock = threading.Lock()
 
 def setThreadPool(threadPool):
-  global _threadPool
-  _threadPool = threadPool
+  """Set the default thread pool to use for executing new tasks.
+
+  @param threadPool: The new default thread pool.
+
+  @return: The previous default thread pool. This is intially None.
+  """
+
+  global _threadPool, _threadPoolLock
+
+  _threadPoolLock.acquire()
+  try:
+    oldThreadPool = _threadPool
+    _threadPool = threadPool
+  finally:
+    _threadPoolLock.release()
+
+  return oldThreadPool
+
+def getDefaultThreadPool():
+  """Get the current default thread pool for new tasks.
+
+  If no default thread pool exists then one will be created automatically.
+  """
+
+  global _threadPool, _threadPoolLock
+  if _threadPool is None:
+    import cake.threadpool
+    processorCount = cake.threadpool.getProcessorCount()
+    _threadPoolLock.acquire()
+    try:
+      if _threadPool is None:
+        _threadPool = cake.threadpool.ThreadPool(numWorkers=processorCount)
+    finally:
+      _threadPoolLock.release()
+  return _threadPool
   
 class TaskError(Exception):
   """An exception type raised by the L{Task} class.
@@ -153,7 +187,7 @@ class Task(object):
     """
     otherTasks = _makeTasks(other)
     if threadPool is None:
-      threadPool = _threadPool
+      threadPool = getDefaultThreadPool()
     
     self._lock.acquire()
     try:

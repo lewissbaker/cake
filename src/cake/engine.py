@@ -694,7 +694,7 @@ class Script(object):
     old = Script.getCurrent()
     Script._current.value = self
     try:
-      exec byteCode in {}
+      exec byteCode in {'__file__': absPath}
     finally:
       Script._current.value = old
 

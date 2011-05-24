@@ -367,10 +367,9 @@ def run(args=None, cwd=None):
   for arg in args:
     if '=' in arg:
       keyword, value = arg.split('=', 1)
-      value = value.split(',')
-      if len(value) == 1:
-        value = value[0]
-      keywords[keyword] = value
+      existingValues = keywords.setdefault(keyword, [])
+      if value:
+        existingValues.extend(value.split(','))
     else:
       path = arg
       if not os.path.isabs(path):

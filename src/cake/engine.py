@@ -219,6 +219,7 @@ class Engine(object):
         variant=None,
         engine=self,
         task=None,
+        tools=None,
         parent=None,
         )
       script.execute()
@@ -582,7 +583,7 @@ class Script(object):
   
   _current = threading.local()
   
-  def __init__(self, path, configuration, variant, engine, task, parent=None):
+  def __init__(self, path, configuration, variant, engine, task, tools, parent=None):
     """Constructor.
     
     @param path: The path to the script file.
@@ -591,6 +592,7 @@ class Script(object):
     @param engine: The engine instance.
     @param task: A task that should complete when all tasks within
     the script have completed.
+    @param tools: The tools dictionary to use as cake.tools for this script.
     @param parent: The parent script or None if this is the root script. 
     """
     self.path = path
@@ -599,13 +601,12 @@ class Script(object):
     self.variant = variant
     self.engine = engine
     self.task = task
+    self.tools = tools
     self._results = {}
     if parent is None:
       self.root = self
-      self._included = {self.path : self}
     else:
       self.root = parent.root
-      self._included = parent._included
 
   @staticmethod
   def getCurrent():
@@ -651,35 +652,6 @@ class Script(object):
     else:
       return cake.path.join(d, *args)
 
-  def include(self, path):
-    """Include another script for execution within this script's context.
-    
-    A script will only be included once within a given context.
-    
-    @param path: The path of the file to include.
-    @type path: string
-    """
-    path = os.path.normpath(path)
-    
-    normalisedPath = os.path.normcase(self.configuration.abspath(path))
-
-    # TODO: Normalise paths so that including the same script by absolute path
-    # and by relative path still obeys include-guards.
-    
-    if normalisedPath in self._included:
-      return
-      
-    includedScript = Script(
-      path=path,
-      variant=self.variant,
-      engine=self.engine,
-      configuration=self.configuration,
-      task=self.task,
-      parent=self,
-      )
-    self._included[normalisedPath] = includedScript
-    includedScript.execute()
-    
   def execute(self):
     """Execute this script.
     """
@@ -864,10 +836,11 @@ class Configuration(object):
       if script is not None:
         task = script.task
       else:
+
         def execute():
-          cake.tools.__dict__.clear()
           for name, tool in variant.tools.items():
-            setattr(cake.tools, name, tool.clone())
+            tools[name] = tool.clone()
+
           if self is not currentConfiguration:
             self.engine.logger.outputInfo("Building with %s - %s\n" % (self.path, variant))
           elif variant is not currentVariant:
@@ -878,11 +851,13 @@ class Configuration(object):
             )
           script.execute()
         task = self.engine.createTask(execute)
+        tools = {}
         script = Script(
           path=path,
           configuration=self,
           variant=variant,
           task=task,
+          tools=tools,
           engine=self.engine,
           )
         self._executed[key] = script

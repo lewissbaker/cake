@@ -161,8 +161,9 @@ def findMsvcCompiler(
   
   @param version: The specific version to find. If version is None the
   latest version is found instead. 
-  @param architecture: The machine architecture to compile for. If
-  architecture is None then the current architecture is used.
+  @param architecture: The machine architecture to compile for. If it's
+  None an architecture that is a closest match to the host architecture
+  is used.
   
   @return: A newly created MSVC compiler.
   @rtype: L{MsvcCompiler}

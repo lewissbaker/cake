@@ -5,12 +5,18 @@
 @license: Licensed under the MIT license.
 """
 
+import os.path
+
 from cake.engine import Script
 from cake.library import Tool, ScriptResult, FileTarget, getPaths, getTasks
 
 class ScriptTool(Tool):
   """Tool that provides utilities for performing Script operations.
   """
+  
+  def __init__(self, *args, **kwargs):
+    Tool.__init__(self, *args, **kwargs)
+    self._included = {}
   
   @property
   def path(self):
@@ -127,12 +133,42 @@ class ScriptTool(Tool):
     @param scripts: A path or sequence of paths of scripts to include.
     @type scripts: string or sequence of string
     """
-    include = Script.getCurrent().include
+
+    
+    include = self._include
     if isinstance(scripts, basestring):
       include(scripts)
     else:
       for path in scripts:
         include(path)
+
+  def _include(self, path):
+    """Include another script for execution within this script's context.
+    
+    A script will only be included once within a given context.
+    
+    @param path: The path of the file to include.
+    @type path: string
+    """
+    path = os.path.normpath(path)
+    
+    normalisedPath = os.path.normcase(self.configuration.abspath(path))
+
+    if normalisedPath in self._included:
+      return
+      
+    currentScript = Script.getCurrent()
+    includedScript = Script(
+      path=path,
+      variant=currentScript.variant,
+      engine=currentScript.engine,
+      configuration=currentScript.configuration,
+      task=currentScript.task,
+      tools=currentScript.tools,
+      parent=currentScript,
+      )
+    self._included[normalisedPath] = includedScript
+    includedScript.execute()
     
   def execute(self, scripts, **keywords):
     """Execute another script as a background task.

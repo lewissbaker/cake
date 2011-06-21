@@ -17,7 +17,7 @@ def run():
   from setuptools import setup, find_packages
   setup(
     name='Cake',
-    version='1.0dev',
+    version='0.9.5',
     author="Lewis Baker, Stuart McMahon.",
     url="http://sourceforge.net/projects/cake-build",
     description="A build system written in Python.",

@@ -1,28 +1,15 @@
 """Cake Build System.
 
-@var __version__: Version string for Cake. Useful for printing to screen.
-
-@var __version_tuple__: Version tuple for Cake. Useful for comparing
-whether one version is newer than another.
-
 @see: Cake Build System (http://sourceforge.net/projects/cake-build)
 @copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
 @license: Licensed under the MIT license.
 """
 
 import sys
+import os.path
 
-# Define some version strings based on info in the setup.py
-# __version__ 
-try:
-  import pkg_resources
-  _pkg = pkg_resources.require("Cake")[0]
-  __version__ = _pkg.version
-  __version_tuple__ = _pkg.parsed_version
-  del _pkg
-except Exception:
-  __version__ = 'unknown'
-  __version_tuple__ = ()
+# Pull in the version strings defined in version.py
+execfile(os.path.join(os.path.dirname(__file__), 'version.py'))
 
 # We want the 'cake.tools' module to have contents based on the current
 # thread's Script.

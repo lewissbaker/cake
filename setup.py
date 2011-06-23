@@ -14,10 +14,15 @@ def run():
   import ez_setup
   ez_setup.use_setuptools()
   
+  # Grab the __version__ defined in version.py
+  import os.path
+  cakevars = {}
+  execfile(os.path.join(os.path.dirname(__file__), 'src', 'cake', 'version.py'), {}, cakevars)
+  
   from setuptools import setup, find_packages
   setup(
     name='Cake',
-    version='0.9.5',
+    version=cakevars["__version__"],
     author="Lewis Baker, Stuart McMahon.",
     url="http://sourceforge.net/projects/cake-build",
     description="A build system written in Python.",

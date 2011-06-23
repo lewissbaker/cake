@@ -2,6 +2,8 @@
 *.cakec
 *.dep
 .pydevproject
+/build/
+/dist/
 /examples/build/
 /examples/cache/
 *~

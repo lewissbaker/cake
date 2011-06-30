@@ -27,15 +27,10 @@ def run():
     url="http://sourceforge.net/projects/cake-build",
     description="A build system written in Python.",
     license="MIT",
-    py_modules=['cakemain'],
-    package_dir={'' : 'src'},
-    package_data={'cake': ['config.cake']},
+    scripts=['src/cakemain.py', 'win32/executable/Release/cake.exe'],
+    package_dir={'cake' : 'src/cake'},
+    package_data={'cake' : ['config.cake']},
     packages=find_packages('src', exclude=['*.test', '*.test.*']),
-    entry_points={
-      'console_scripts': [
-        'cake = cakemain:run',
-        ],
-      }
     )
   return 0
 

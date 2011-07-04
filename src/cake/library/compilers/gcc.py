@@ -176,6 +176,8 @@ def findGccCompiler(configuration, platform=None):
 
 class GccCompiler(Compiler):
 
+  _name = 'gcc'
+
   def __init__(
     self,
     configuration,

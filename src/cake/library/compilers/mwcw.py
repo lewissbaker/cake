@@ -19,6 +19,7 @@ class MwcwCompiler(Compiler):
   libraryPrefixSuffixes = [('', '.a')]
   programSuffix = '.elf'
   pchSuffix = '.mch'
+  _name = 'mwcw'
 
   def __init__(
     self,

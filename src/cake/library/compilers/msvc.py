@@ -356,6 +356,7 @@ class MsvcCompiler(Compiler):
   pchObjectSuffix = '.obj'
   manifestSuffix = '.embed.manifest'
   resourceSuffix = '.res'
+  _name = 'msvc'
   
   def __init__(
     self,

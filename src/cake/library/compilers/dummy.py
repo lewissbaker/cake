@@ -19,6 +19,7 @@ class DummyCompiler(Compiler):
   modulePrefixSuffixes = [('', '.dll')]
   programSuffix = '.exe'
   pchSuffix = '.pch'
+  _name = 'dummy'
   
   def __init__(self, configuration):
     Compiler.__init__(self, configuration)

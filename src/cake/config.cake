@@ -13,29 +13,19 @@ from cake.library.compilers import CompilerNotFoundError
 from cake.library.compilers.dummy import DummyCompiler
 import cake.system
 
-hostPlatform = cake.system.platform().lower()
-hostArchitecture = cake.system.architecture().lower()
+platform = cake.system.platform().lower()
+architecture = cake.system.architecture().lower()
 
 configuration = Script.getCurrent().configuration
 
-variant = Variant(platform=hostPlatform, architecture=hostArchitecture)
-variant.tools["script"] = ScriptTool(configuration=configuration)
-variant.tools["logging"] = LoggingTool(configuration=configuration)
-variant.tools["variant"] = VariantTool(configuration=configuration)
-variant.tools["shell"] = ShellTool(configuration=configuration)
-variant.tools["filesys"] = FileSystemTool(configuration=configuration)
-variant.tools["zipping"] = ZipTool(configuration=configuration)
-variant.tools["dummy"] = DummyCompiler(configuration=configuration)
-
 # Dummy Compiler is the default compiler
-variant.tools["compiler"] = variant.tools["dummy"]
+compiler = DummyCompiler(configuration=configuration)
 
 # Prefer GCC Compiler over previous compilers
 try:
   from cake.library.compilers.gcc import findGccCompiler
-  gcc = variant.tools["gcc"] = findGccCompiler(configuration=configuration)
-  variant.tools["compiler"] = gcc
-  gcc.addLibrary("stdc++")
+  compiler = findGccCompiler(configuration=configuration)
+  compiler.addLibrary("stdc++")
 except CompilerNotFoundError:
   pass
 
@@ -43,21 +33,28 @@ if cake.system.isWindows():
   # Prefer MinGW Compiler over previous compilers
   try:
     from cake.library.compilers.gcc import findMinGWCompiler
-    mingw = findMinGWCompiler(configuration=configuration)
-    variant.tools["compiler"] = mingw
+    compiler = findMinGWCompiler(configuration=configuration)
   except CompilerNotFoundError:
     pass
   # Prefer MSVC Compiler over previous compilers
   try:
     from cake.library.compilers.msvc import findMsvcCompiler
-    msvc = findMsvcCompiler(configuration=configuration)
-    msvc.addDefine("WIN32")
-    if msvc.architecture in ["x64", "ia64"]:
-      msvc.addDefine("WIN64")
-    if msvc.architecture != hostArchitecture:
-      variant = variant.clone(architecture=msvc.architecture)
-    variant.tools["msvc"] = msvc
-    variant.tools["compiler"] = msvc
+    compiler = findMsvcCompiler(configuration=configuration)
+    compiler.addDefine("WIN32")
+    if compiler.architecture in ["x64", "ia64"]:
+      compiler.addDefine("WIN64")
+    # Get the compilers architecture in case we only have eg. an
+    # x64 MSVC compiler installed on an x86 machine
+    architecture = compiler.architecture
   except CompilerNotFoundError:
     pass
+
+variant = Variant(platform=platform, architecture=architecture, compiler=compiler.name)
+variant.tools["script"] = ScriptTool(configuration=configuration)
+variant.tools["logging"] = LoggingTool(configuration=configuration)
+variant.tools["variant"] = VariantTool(configuration=configuration)
+variant.tools["shell"] = ShellTool(configuration=configuration)
+variant.tools["filesys"] = FileSystemTool(configuration=configuration)
+variant.tools["zipping"] = ZipTool(configuration=configuration)
+variant.tools["compiler"] = compiler
 configuration.addVariant(variant)

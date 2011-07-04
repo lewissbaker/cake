@@ -623,7 +623,10 @@ class Compiler(Tool):
 
   @type: string or None
   """
-    
+  
+  # The name of this compiler
+  _name = 'unknown'
+
   # Map of engine to map of library path to list of object paths
   __libraryObjects = weakref.WeakKeyDictionary()
   
@@ -644,6 +647,12 @@ class Compiler(Tool):
     self.modules = []
     self.objectPrerequisites = []
     self.__binPaths = binPaths
+
+  @property
+  def name(self):
+    """Get the name of the compiler, eg. 'gcc' or 'msvc'.
+    """
+    return self._name
 
   @property
   def libraryPrefix(self):

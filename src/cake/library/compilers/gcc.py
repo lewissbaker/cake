@@ -578,7 +578,11 @@ class MacGccCompiler(GccCompiler):
       
     args.extend(sources)
     args.extend(objects)
-    args.extend('-l' + l for l in libraries)    
+    for lib in libraries:
+      if os.path.sep in lib or os.path.altsep and os.path.altsep in lib:
+        args.append(lib)
+      else:
+        args.append('-l' + lib)
     args.extend(['-o', target])
     
     if dll and self.installName is not None:
@@ -590,11 +594,15 @@ class MacGccCompiler(GccCompiler):
 
     @makeCommand(args)
     def link():
-      if dll and self.importLibrary:
-        importLibrary = self.configuration.abspath(self.importLibrary)
-        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)      
 
+      if dll and self.importLibrary:
+        # Since the target .dylib is also the import library, copy it to the
+        # .a 'importLibrary' filename the user expects
+        importLibrary = self.configuration.abspath(self.importLibrary)
+        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
+        cake.filesys.copyFile(target, importLibrary)
+        
     @makeCommand("link-scan")
     def scan():
       # TODO: Add dependencies on DLLs used by gcc.exe

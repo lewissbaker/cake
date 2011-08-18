@@ -5,7 +5,7 @@
 # Note that this example will only work on Windows with an MSVC compiler
 # installed.
 #-------------------------------------------------------------------------------
-from cake.tools import script, msvc
+from cake.tools import script, compiler
 
 script.include(script.cwd("../assembly/use.cake"))
 
@@ -13,19 +13,19 @@ sources = script.cwd([
   "main.cpp",
   ])
 
-msvc.clrMode = 'safe'
+compiler.clrMode = 'safe'
 
-objects = msvc.objects(
+objects = compiler.objects(
   targetDir=script.cwd("../../build/cppdotnet/program"),
   sources=sources,
   language='c++/cli',
   )
 
-msvc.program(
+compiler.program(
   target=script.cwd("../../build/cppdotnet/program/main"),
   sources=objects,
   )
 
-msvc.copyModulesTo(
+compiler.copyModulesTo(
   targetDir=script.cwd("../../build/cppdotnet/program"),
   )

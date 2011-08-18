@@ -1,21 +1,21 @@
 #-------------------------------------------------------------------------------
 # Script used to build the .NET assembly.
 #-------------------------------------------------------------------------------
-from cake.tools import script, msvc
+from cake.tools import script, compiler
 
 sources = script.cwd([
   "point.cpp",
   ])
 
-msvc.clrMode = 'safe' 
+compiler.clrMode = 'safe' 
 
-objects = msvc.objects(
+objects = compiler.objects(
   targetDir=script.cwd("../../build/cppdotnet/assembly"),
   sources=sources,
   language='c++/cli',
   )
 
-module = msvc.module(
+module = compiler.module(
   target=script.cwd("../../build/cppdotnet/assembly/point"),
   sources=objects,
   )

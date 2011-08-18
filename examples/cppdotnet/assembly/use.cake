@@ -1,9 +1,9 @@
 #-------------------------------------------------------------------------------
 # Script that can be included to use the .NET assembly.
 #-------------------------------------------------------------------------------
-from cake.tools import script, msvc
+from cake.tools import script, compiler
 
-msvc.addIncludePath(script.cwd())
+compiler.addIncludePath(script.cwd())
 module = script.getResult(script.cwd("build.cake"), "module")
-msvc.addForcedUsing(module)
-msvc.addModule(module)
+compiler.addForcedUsing(module)
+compiler.addModule(module)

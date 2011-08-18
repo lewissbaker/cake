@@ -12,7 +12,7 @@ def makeFile(target, contents):
     absTarget = configuration.abspath(target)
     logging.outputInfo("Creating %s\n" % target)
     cake.filesys.makeDirs(cake.path.dirName(absTarget))
-    f = open(absTarget, 'wb')
+    f = open(absTarget, 'wt')
     try:
       f.write(contents)
     finally:

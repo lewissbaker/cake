@@ -1514,8 +1514,8 @@ class Compiler(Tool):
     stderr = None
     argsPath = None
     try:
-      stdout = tempfile.TemporaryFile()
-      stderr = tempfile.TemporaryFile()
+      stdout = tempfile.TemporaryFile(mode="w+t")
+      stderr = tempfile.TemporaryFile(mode="w+t")
       
       if allowResponseFile and self.useResponseFile:
         argsTemp, argsPath = tempfile.mkstemp(text=True)
@@ -1564,8 +1564,8 @@ class Compiler(Tool):
       stdout.seek(0)
       stderr.seek(0)
   
-      stdoutText = stdout.read().decode("latin1") 
-      stderrText = stderr.read().decode("latin1")
+      stdoutText = stdout.read() 
+      stderrText = stderr.read()
     finally:
       if stdout is not None:
         stdout.close()
@@ -1600,11 +1600,11 @@ class Compiler(Tool):
     # An example of a compiler outputting errors to stdout is Mavc's link
     # error, "LINK : fatal error LNK1104: cannot open file '<filename>'".
     text = text.replace("\r\n", "\n")
-    self.engine.logger.outputError(text.encode("latin1"))
+    self.engine.logger.outputError(text)
 
   def _outputStderr(self, text):
     text = text.replace("\r\n", "\n")
-    self.engine.logger.outputError(text.encode("latin1"))
+    self.engine.logger.outputError(text)
 
   def _getObjectsInLibrary(self, path):
     """Get a list of the paths of object files in the specified library.

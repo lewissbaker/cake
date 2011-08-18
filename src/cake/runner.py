@@ -55,11 +55,12 @@ def _overrideOpen():
   """
   if hasattr(os, "O_NOINHERIT"):
     import __builtin__
-
-    if platform.python_compiler().startswith("MSC v.1310"):
-      # MSVC 7.1 doesn't support the 'N' flag being passed to fopen.
-      # It is ignored. So we need to manually interpret mode string
-      # and call onto os.open().
+    
+    if (sys.hexversion >= 0x03000000 or
+       platform.python_compiler().startswith("MSC v.1310")):
+      # Python 3.x or Python 2.x compiled with MSVC 7.1 doesn't support the
+      # 'N' flag being passed to fopen. It is ignored. So we need to manually
+      # interpret mode string and call onto os.open().
 
       _basicFlags = {
         'r': os.O_RDONLY,
@@ -81,7 +82,7 @@ def _overrideOpen():
         'U': 0,
         }
       
-      def new_open(filename, mode="r", bufsize=0):
+      def new_open(filename, mode="r", bufsize=-1):
         try:
           flags = _basicFlags[mode[0]]
         except LookupError:

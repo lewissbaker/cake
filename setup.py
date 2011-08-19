@@ -11,15 +11,25 @@ redistributable packages.
 import sys
 
 def run():
-  import ez_setup
-  ez_setup.use_setuptools()
+  from distribute_setup import use_setuptools
+  use_setuptools()
   
   # Grab the __version__ defined in version.py
   import os.path
+  versionFilePath = os.path.join(os.path.dirname(__file__), 'src', 'cake', 'version.py')
   cakevars = {}
-  execfile(os.path.join(os.path.dirname(__file__), 'src', 'cake', 'version.py'), {}, cakevars)
+  if sys.hexversion >= 0x03000000:
+    exec(compile(open(versionFilePath).read(), versionFilePath, 'exec'), {}, cakevars)
+  else:
+    execfile(versionFilePath, {}, cakevars)
   
   from setuptools import setup, find_packages
+  
+  # Should we use Python 3.x support?
+  extra = {}
+  if sys.hexversion >= 0x03000000:
+    extra['use_2to3'] = True
+  
   setup(
     name='Cake',
     version=cakevars["__version__"],
@@ -36,7 +46,8 @@ def run():
       'console_scripts': [
         'cake = cakemain:run',
         ],
-      }	
+      },
+    **extra
     )
   return 0
 

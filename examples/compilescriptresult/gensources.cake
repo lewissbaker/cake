@@ -12,9 +12,9 @@ def makeFile(target, contents):
     absTarget = configuration.abspath(target)
     logging.outputInfo("Creating %s\n" % target)
     cake.filesys.makeDirs(cake.path.dirName(absTarget))
-    f = open(absTarget, 'wt')
+    f = open(absTarget, 'wb')
     try:
-      f.write(contents)
+      f.write(contents.encode('latin1'))
     finally:
       f.close()
   return script.run(run, targets=[target], args=[contents])[0]

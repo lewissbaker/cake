@@ -1,16 +1,16 @@
 #-------------------------------------------------------------------------------
 # This example demonstrates setting and obtaining the result of a script.
 #-------------------------------------------------------------------------------
-from cake.tools import script
+from cake.tools import script, logging
 
 library = script.getResult(script.cwd('other.cake'), 'library')
 module = script.getResult(script.cwd('other.cake'), 'module')
 
 def onLibraryDone():
-  print "library path =", library.result
+  logging.outputInfo("library path = %s\n" % library.result)
   
 def onModuleDone():
-  print "module path =", module.result
+  logging.outputInfo("module path = %s\n" % module.result)
    
 library.task.addCallback(onLibraryDone)
 module.task.addCallback(onModuleDone)

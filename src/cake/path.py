@@ -42,6 +42,21 @@ def split(path):
   """
   return os.path.split(path)
 
+def isMount(path):
+  """Query if the path is a mount point (drive root).
+  
+  @param path: The path to check.
+  @type path: string
+  
+  @return: True if the path is a mount point, otherwise False.
+  @rtype: bool
+  """ 
+  seps = [os.path.sep, os.path.altsep]
+  root, rest = os.path.splitdrive(path)
+  if root and root[0] in seps:
+    return (not rest) or (rest in seps)
+  return rest in seps
+
 def hasExtension(path):
   """Query if the last part of a path has a file extension.
   

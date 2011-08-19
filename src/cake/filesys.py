@@ -143,7 +143,7 @@ def makeDirs(path):
   @type path: string 
   """
   # Don't try to create directory at the root level, eg: 'C:\\'
-  if os.path.ismount(path):
+  if cake.path.isMount(path):
     return
   
   head, tail = os.path.split(path)

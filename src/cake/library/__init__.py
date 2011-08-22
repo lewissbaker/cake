@@ -287,7 +287,7 @@ def flatten(value):
   @return: The flattened list or if any of the items are AsyncResult values then
   an AsyncResult value that results in the flattened items.
   """
-  sequenceTypes = (list, tuple)
+  sequenceTypes = (list, tuple, set)
   
   def _flatten(value):
     if isinstance(value, sequenceTypes):

@@ -23,7 +23,6 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.engine import Script, DependencyInfo, BuildError
 from cake.library.filesys import FileSystemTool
 from cake.library import (
   Tool, FileTarget, AsyncResult,

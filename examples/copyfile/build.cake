@@ -9,3 +9,9 @@ filesys.copyFile(
   source=script.cwd("copyme.txt"),
   target=script.cwd("../build/copyfile/copiedyou.txt"),
   )
+
+# Copy a list of files to a target directory.
+filesys.copyFiles(
+  sources=script.cwd(["copyme.txt", "copymetoo.txt"]),
+  targetDir=script.cwd("../build/copyfile/copiedfiles"),
+  )

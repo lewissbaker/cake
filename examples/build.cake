@@ -7,6 +7,7 @@ script.execute(script.cwd([
   "compileprogram/build.cake",
   "compilescriptresult/build.cake",
   "copyfile/build.cake",
+  "env/build.cake",
   "pythontool/build.cake",
   "queryvariant/build.cake",
   "scriptresult/build.cake",

@@ -3,6 +3,7 @@
 # found by searching up from the working directory.
 #-------------------------------------------------------------------------------
 from cake.engine import Script, Variant
+from cake.library.env import EnvironmentTool
 from cake.library.script import ScriptTool
 from cake.library.logging import LoggingTool
 from cake.library.variant import VariantTool
@@ -50,6 +51,7 @@ if cake.system.isWindows():
     pass
 
 variant = Variant(platform=platform, architecture=architecture, compiler=compiler.name)
+variant.tools["env"] = EnvironmentTool(configuration=configuration)
 variant.tools["script"] = ScriptTool(configuration=configuration)
 variant.tools["logging"] = LoggingTool(configuration=configuration)
 variant.tools["variant"] = VariantTool(configuration=configuration)

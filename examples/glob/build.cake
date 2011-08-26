@@ -4,12 +4,7 @@
 from cake.tools import filesys, logging
 
 # Find and print the contents of the files.
-filePaths = filesys.findFiles(
-  "",
-  recursive=True,
-  pattern="findme*.txt",
-  patternRe=None,
-  )
+filePaths = filesys.glob("findme*.txt")
 
 # Paths returned are relative to the config.cake so make them absolute.
 basePath = filesys.configuration.basePath

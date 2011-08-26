@@ -5,6 +5,7 @@
 @license: Licensed under the MIT license.
 """
 
+import glob
 import cake.path
 import cake.filesys
 from cake.library import Tool, FileTarget, getPath, getTask, \
@@ -24,8 +25,9 @@ class FileSystemTool(Tool):
     
     @return: A sequence of paths of files.
     """
-    path = self.configuration.basePath(path)
-    absPath = self.configuration.abspath(path)
+    configuration = self.configuration
+    basePath = configuration.basePath(path)
+    absPath = configuration.abspath(basePath)
     files = cake.filesys.findFiles(
       path=absPath,
       recursive=recursive,
@@ -38,6 +40,31 @@ class FileSystemTool(Tool):
     for filePath in files:
       yield join(path, filePath)
 
+  def iglob(self, pathname):
+    """Find files matching a particular pattern. Results are
+    yielded as they occur.
+    
+    @param pathname: A glob-style file-name pattern. eg. '*.txt'
+    
+    @return: A sequence of paths of files.
+    """
+    configuration = self.configuration
+    basePath = configuration.basePath(pathname)
+    absPath = configuration.abspath(basePath)
+    offset = len(absPath) - len(pathname)
+    
+    for p in glob.iglob(absPath):
+      yield p[offset:]
+  
+  def glob(self, pathname):
+    """Find files matching a particular pattern.
+    
+    @param pathname: A glob-style file-name pattern. eg. '*.txt'
+    
+    @return: A list of paths of files.
+    """
+    return list(self.iglob(pathname))
+      
   def copyFile(self, source, target):
     """Copy a file from one location to another.
     

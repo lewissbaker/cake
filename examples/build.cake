@@ -3,11 +3,12 @@
 #-------------------------------------------------------------------------------
 from cake.tools import script, compiler
 
-script.execute(script.cwd([
+script.execute([
   "compileprogram/build.cake",
   "compilescriptresult/build.cake",
   "copyfile/build.cake",
   "env/build.cake",
+  "findfiles/build.cake",
   "pythontool/build.cake",
   "queryvariant/build.cake",
   "scriptresult/build.cake",
@@ -17,9 +18,9 @@ script.execute(script.cwd([
   "usemodule/main/build.cake",
   "usepch/build.cake",
   "zip/build.cake",
-  ]))
+  ])
 
 if compiler.name == "msvc":
-  script.execute(script.cwd([
+  script.execute([
     "cppdotnet/program/build.cake",
-    ]))
+    ])

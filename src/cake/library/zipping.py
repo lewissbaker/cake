@@ -183,7 +183,11 @@ class ZipTool(Tool):
 
     engine = self.engine
     configuration = self.configuration
+    basePath = configuration.basePath
     
+    targetDir = basePath(targetDir)
+    source = basePath(source)
+        
     def doIt():
       sourcePath = getPath(source)
       absTargetDir = configuration.abspath(targetDir)
@@ -278,7 +282,11 @@ class ZipTool(Tool):
 
     engine = self.engine
     configuration = self.configuration
-
+    basePath = configuration.basePath
+    
+    target = basePath(target)
+    source = basePath(source)
+    
     def doIt():
       sourceDir = getPath(source)
       absSourceDir = configuration.abspath(sourceDir)

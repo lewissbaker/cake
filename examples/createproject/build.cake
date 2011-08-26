@@ -10,8 +10,8 @@ from cake.tools import script, project
 # Build the solution. Use the 'project' result of the main programs build.cake
 # as one of the solutions project files.
 project.solution(
-  target=script.cwd("../build/createproject/project/createproject"),
+  target="../build/createproject/project/createproject",
   projects=[
-    script.getResult(script.cwd("main/build.cake"), "project"),
+    script.getResult("main/build.cake", "project"),
     ],
   )

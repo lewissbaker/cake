@@ -399,6 +399,11 @@ class ProjectTool(Tool):
     for k, v in kwargs.iteritems():
       setattr(tool, k, v)
     
+    basePath = self.configuration.basePath
+    
+    target = basePath(target)
+    intermediateDir = basePath(intermediateDir)
+    
     return tool._project(
       target,
       items,

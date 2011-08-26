@@ -9,7 +9,7 @@ def makeFile(target, contents):
   engine = script.engine
   configuration = script.configuration
   def run():
-    absTarget = configuration.abspath(target)
+    absTarget = configuration.abspath(configuration.basePath(target))
     logging.outputInfo("Creating %s\n" % target)
     cake.filesys.makeDirs(cake.path.dirName(absTarget))
     f = open(absTarget, 'wb')
@@ -22,14 +22,14 @@ def makeFile(target, contents):
 sources = []
 
 sources.append(makeFile(
-  target=script.cwd('../build/compilescriptresult/a.c'),
+  target='../build/compilescriptresult/a.c',
   contents="""
 void a()
 {
 }
   """))
 sources.append(makeFile(
-  target=script.cwd('../build/compilescriptresult/b.c'),
+  target='../build/compilescriptresult/b.c',
   contents="""
 void b()
 {
@@ -37,7 +37,7 @@ void b()
   """))
 
 mainSource = makeFile(
-  target=script.cwd('../build/compilescriptresult/main.c'),
+  target='../build/compilescriptresult/main.c',
   contents="""
 extern void a();
 extern void b();

@@ -3,8 +3,8 @@
 #-------------------------------------------------------------------------------
 from cake.tools import script, logging
 
-library = script.getResult(script.cwd('other.cake'), 'library')
-module = script.getResult(script.cwd('other.cake'), 'module')
+library = script.getResult('other.cake', 'library')
+module = script.getResult('other.cake', 'module')
 
 def onLibraryDone():
   logging.outputInfo("library path = %s\n" % library.result)

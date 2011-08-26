@@ -130,6 +130,8 @@ def _createMsvcCompiler(
   checkDirectory(platformSdkLibDir)
   
   binPaths = [msvcHostBinDir, msvsInstallDir]
+  includePaths = [msvcIncludeDir, platformSdkIncludeDir]
+  libraryPaths = [msvcLibDir, platformSdkLibDir]
 
   compiler = MsvcCompiler(
     configuration=configuration,
@@ -139,13 +141,10 @@ def _createMsvcCompiler(
     rcExe=rcExe,
     mtExe=mtExe,
     binPaths=binPaths,
+    includePaths=includePaths,
+    libraryPaths=libraryPaths,
     architecture=architecture,
     )
-
-  compiler.addIncludePath(msvcIncludeDir)
-  compiler.addLibraryPath(msvcLibDir)
-  compiler.addIncludePath(platformSdkIncludeDir)
-  compiler.addLibraryPath(platformSdkLibDir)
   
   return compiler
 
@@ -367,9 +366,17 @@ class MsvcCompiler(Compiler):
     mtExe=None,
     rcExe=None,
     binPaths=None,
+    includePaths=None,
+    libraryPaths=None,
     architecture=None,
     ):
-    Compiler.__init__(self, configuration=configuration, binPaths=binPaths)
+    Compiler.__init__(
+      self,
+      configuration=configuration,
+      binPaths=binPaths,
+      includePaths=includePaths,
+      libraryPaths=libraryPaths,
+      )
     self.__clExe = clExe
     self.__libExe = libExe
     self.__linkExe = linkExe
@@ -389,7 +396,7 @@ class MsvcCompiler(Compiler):
     @param assembly: A path or FileTarget or ScriptResult that results
     in a path or FileTarget.
     """
-    self.forcedUsings.append(assembly)
+    self.forcedUsings.append(self.configuration.basePath(assembly))
     self._clearCache()
     
   def _formatMessage(self, inputText):

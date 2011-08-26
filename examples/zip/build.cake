@@ -2,7 +2,7 @@
 # This example demonstrates how to build a zip file from a source file/directory
 # using the ZipTool.
 #-------------------------------------------------------------------------------
-from cake.tools import script, zipping
+from cake.tools import zipping
 
 # Function that determines what to include (based on source file/directory path).
 def shouldInclude(path):
@@ -16,8 +16,8 @@ def shouldExclude(path):
 # the zip. Remove any files/directories in the zip that no longer exist in the
 # source path. 
 zipping.compress(
-  target=script.cwd("../build/zip/zip.zip"),
-  source=script.cwd("zipme"),
+  target="../build/zip/zip.zip",
+  source="zipme",
   onlyNewer=True,
   removeStale=True,
   includeMatch=shouldInclude,

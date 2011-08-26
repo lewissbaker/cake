@@ -42,7 +42,12 @@ class ShellTool(Tool):
     @param removeTargets: If specified then the target files will be removed
     before running the command if they already exist.
     """
-
+    basePath = self.configuration.basePath
+    
+    targets = basePath(targets)
+    sources = basePath(sources)
+    cwd = basePath(cwd)
+    
     engine = self.engine
     env = deepCopyBuiltins(self.__env)
 
@@ -169,6 +174,10 @@ class ShellTool(Tool):
     del self.__env[key]
 
   def appendPath(self, path):
+    basePath = self.configuration.basePath
+    
+    path = basePath(path)
+
     pathEnv = self.get('PATH', None)
     if pathEnv is None:
       pathEnv = path
@@ -177,6 +186,10 @@ class ShellTool(Tool):
     self['PATH'] = pathEnv
 
   def prependPath(self, path):
+    basePath = self.configuration.basePath
+    
+    path = basePath(path)
+        
     pathEnv = self.get('PATH', None)
     if pathEnv is None:
       pathEnv = path

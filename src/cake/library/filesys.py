@@ -24,6 +24,7 @@ class FileSystemTool(Tool):
     
     @return: A sequence of paths of files.
     """
+    path = self.configuration.basePath(path)
     absPath = self.configuration.abspath(path)
     files = cake.filesys.findFiles(
       path=absPath,
@@ -52,6 +53,11 @@ class FileSystemTool(Tool):
     """
     if not isinstance(target, basestring):
       raise TypeError("target must be a string")
+    
+    basePath = self.configuration.basePath
+    
+    source = basePath(source)
+    target = basePath(target)
     
     def doCopy():
       
@@ -114,6 +120,11 @@ class FileSystemTool(Tool):
     """
     if not isinstance(targetDir, basestring):
       raise TypeError("targetDir must be a string")
+    
+    basePath = self.configuration.basePath
+    
+    sources = basePath(sources)
+    targetDir = basePath(targetDir)
     
     @waitForAsyncResult
     def run(sources):

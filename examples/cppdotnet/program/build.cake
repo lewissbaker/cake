@@ -7,25 +7,25 @@
 #-------------------------------------------------------------------------------
 from cake.tools import script, compiler
 
-script.include(script.cwd("../assembly/use.cake"))
+script.include("../assembly/use.cake")
 
-sources = script.cwd([
+sources = [
   "main.cpp",
-  ])
+  ]
 
 compiler.clrMode = 'safe'
 
 objects = compiler.objects(
-  targetDir=script.cwd("../../build/cppdotnet/program"),
+  targetDir="../../build/cppdotnet/program",
   sources=sources,
   language='c++/cli',
   )
 
 compiler.program(
-  target=script.cwd("../../build/cppdotnet/program/main"),
+  target="../../build/cppdotnet/program/main",
   sources=objects,
   )
 
 compiler.copyModulesTo(
-  targetDir=script.cwd("../../build/cppdotnet/program"),
+  targetDir="../../build/cppdotnet/program",
   )

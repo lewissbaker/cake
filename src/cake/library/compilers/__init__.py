@@ -23,7 +23,6 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
-from cake.library.filesys import FileSystemTool
 from cake.library import (
   Tool, FileTarget, AsyncResult,
   memoise, waitForAsyncResult, flatten,
@@ -629,7 +628,13 @@ class Compiler(Tool):
   # Map of engine to map of library path to list of object paths
   __libraryObjects = weakref.WeakKeyDictionary()
   
-  def __init__(self, configuration, binPaths=None):
+  def __init__(
+    self,
+    configuration,
+    binPaths=None,
+    includePaths=None,
+    libraryPaths=None,
+    ):
     super(Compiler, self).__init__(configuration)
     self.cFlags = []
     self.cppFlags = []
@@ -638,10 +643,16 @@ class Compiler(Tool):
     self.moduleFlags = []
     self.programFlags = []
     self.resourceFlags = []
-    self.includePaths = []
+    if includePaths is None:
+      self.includePaths = []
+    else:
+      self.includePaths = includePaths
     self.defines = []
     self.forcedIncludes = []
-    self.libraryPaths = []
+    if libraryPaths is None:
+      self.libraryPaths = []
+    else:
+      self.libraryPaths = libraryPaths
     self.libraries = []
     self.modules = []
     self.objectPrerequisites = []
@@ -737,7 +748,7 @@ class Compiler(Tool):
     @param path: The path to add.
     @type path: string
     """
-    self.includePaths.append(path)
+    self.includePaths.append(self.configuration.basePath(path))
     self._clearCache()
     
   def insertIncludePath(self, index, path):
@@ -751,7 +762,7 @@ class Compiler(Tool):
     @param path: The path to add.
     @type path: string
     """
-    self.includePaths.insert(index, path)
+    self.includePaths.insert(index, self.configuration.basePath(path))
     self._clearCache()
         
   def getIncludePaths(self):
@@ -817,7 +828,7 @@ class Compiler(Tool):
     to be relative to a previously defined includePath. 
     @type path: string
     """
-    self.forcedIncludes.append(path)
+    self.forcedIncludes.append(self.configuration.basePath(path))
     self._clearCache()
   
   def insertForcedInclude(self, index, path):
@@ -831,7 +842,7 @@ class Compiler(Tool):
     to be relative to a previously defined includePath. 
     @type path: string
     """
-    self.forcedIncludes.insert(index, path)
+    self.forcedIncludes.insert(index, self.configuration.basePath(path))
     self._clearCache()
     
   def getForcedIncludes(self):
@@ -901,7 +912,7 @@ class Compiler(Tool):
     @param path: The path to add.
     @type path: string
     """
-    self.libraryPaths.append(path)
+    self.libraryPaths.append(self.configuration.basePath(path))
     self._clearCache()
 
   def insertLibraryPath(self, index, path):
@@ -915,7 +926,7 @@ class Compiler(Tool):
     @param path: The path to add.
     @type path: string
     """
-    self.libraryPaths.insert(index, path)
+    self.libraryPaths.insert(index, self.configuration.basePath(path))
     self._clearCache()
       
   def getLibraryPaths(self):
@@ -926,13 +937,13 @@ class Compiler(Tool):
     """
     return reversed(self.libraryPaths)
 
-  def addModule(self, name):
+  def addModule(self, path):
     """Add a module to the list of modules to copy.
     
-    @param name: Name/path of the module to copy.
-    @type name: string
+    @param path: Path of the module to copy.
+    @type path: string
     """
-    self.modules.append(name)
+    self.modules.append(self.configuration.basePath(path))
     self._clearCache()
     
   def copyModulesTo(self, targetDir, **kwargs):
@@ -952,17 +963,65 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
       
-    return compiler._copyModulesTo(targetDir)
+    return compiler._copyModulesTo(self.configuration.basePath(targetDir))
 
   def _copyModulesTo(self, targetDir):
     
-    filesysTool = FileSystemTool(self.configuration)
-    filesysTool.enabled = self.enabled
+    def doCopy(source, target):
+      
+      abspath = self.configuration.abspath
+      engine = self.engine
+      
+      targetAbsPath = abspath(target)
+      sourceAbsPath = abspath(source) 
+      
+      if engine.forceBuild:
+        reasonToBuild = "rebuild has been forced"
+      elif not cake.filesys.isFile(targetAbsPath):
+        reasonToBuild = "it doesn't exist"
+      elif engine.getTimestamp(sourceAbsPath) > engine.getTimestamp(targetAbsPath):
+        reasonToBuild = "'%s' has been changed" % source
+      else:
+        # up-to-date
+        return
+
+      engine.logger.outputDebug(
+        "reason",
+        "Rebuilding '%s' because %s.\n" % (target, reasonToBuild),
+        )
+      engine.logger.outputInfo("Copying %s to %s\n" % (source, target))
+      
+      try:
+        cake.filesys.makeDirs(cake.path.dirName(targetAbsPath))
+        cake.filesys.copyFile(sourceAbsPath, targetAbsPath)
+      except EnvironmentError, e:
+        engine.raiseError("%s: %s\n" % (target, str(e)))
+
+      engine.notifyFileChanged(targetAbsPath)
+    
+    @waitForAsyncResult
+    def run(sources, targetDir):
+      results = []
+      
+      for source in sources:
+        sourcePath = getPath(source)
+        targetPath = os.path.join(targetDir, os.path.basename(sourcePath))
+        
+        if self.enabled:  
+          sourceTask = getTask(source)
+          copyTask = self.engine.createTask(lambda: doCopy(sourcePath, targetPath))
+          copyTask.startAfter(sourceTask)
+        else:
+          copyTask = None
+
+        results.append(FileTarget(path=targetPath, task=copyTask))
+
+      return results
     
     # TODO: Handle copying .manifest files if present for MSVC
     # built DLLs.
-    
-    return filesysTool.copyFiles(self.modules, targetDir)    
+
+    return run(self.modules, targetDir)
 
   def pch(self, target, source, header, prerequisites=[],
           forceExtension=True, **kwargs):
@@ -994,7 +1053,9 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
       
-    return compiler._pch(target, source, header, prerequisites, forceExtension)
+    basePath = self.configuration.basePath
+    
+    return compiler._pch(basePath(target), basePath(source), header, prerequisites, forceExtension)
 
   def _pch(self, target, source, header, prerequisites=[],
            forceExtension=True):
@@ -1073,8 +1134,10 @@ class Compiler(Tool):
     compiler = self.clone()
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
+
+    basePath = self.configuration.basePath
       
-    return compiler._object(target, source, pch, prerequisites, forceExtension)
+    return compiler._object(basePath(target), basePath(source), pch, prerequisites, forceExtension)
     
   def _object(self, target, source, pch=None, prerequisites=[],
               forceExtension=True, shared=False):
@@ -1152,7 +1215,7 @@ class Compiler(Tool):
       setattr(compiler, k, v)
     
     @waitForAsyncResult
-    def run(sources, prerequisites):
+    def run(targetDir, sources, prerequisites):
       results = []
       for source in sources:
         sourcePath = getPath(source)
@@ -1162,7 +1225,9 @@ class Compiler(Tool):
                                         pch=pch, prerequisites=prerequisites))
       return results
 
-    return run(flatten(sources), flatten(prerequisites))
+    basePath = self.configuration.basePath
+    
+    return run(basePath(targetDir), basePath(sources), flatten(prerequisites))
 
   def sharedObjects(self, targetDir, sources, pch=None, prerequisites=[],
                     **kwargs):
@@ -1191,7 +1256,7 @@ class Compiler(Tool):
       setattr(compiler, k, v)
 
     @waitForAsyncResult
-    def run(sources, prerequisites):
+    def run(targetDir, sources, prerequisites):
       results = []
       for source in sources:
         sourcePath = getPath(source)
@@ -1206,7 +1271,9 @@ class Compiler(Tool):
           ))
       return results
     
-    return run(flatten(sources), flatten(prerequisites))
+    basePath = self.configuration.basePath
+    
+    return run(basePath(targetDir), basePath(sources), flatten(prerequisites))
     
   def library(self, target, sources, forceExtension=True, **kwargs):
     """Build a library from a collection of objects.
@@ -1229,8 +1296,10 @@ class Compiler(Tool):
     compiler = self.clone()
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
-  
-    return compiler._library(target, sources, forceExtension)
+
+    basePath = self.configuration.basePath
+
+    return compiler._library(basePath(target), basePath(sources), forceExtension)
   
   def _library(self, target, sources, forceExtension=True):
     
@@ -1275,7 +1344,9 @@ class Compiler(Tool):
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
   
-    return compiler._module(target, sources, forceExtension)
+    basePath = self.configuration.basePath
+
+    return compiler._module(basePath(target), basePath(sources), forceExtension)
   
   def _module(self, target, sources, forceExtension=True):
     
@@ -1346,7 +1417,9 @@ class Compiler(Tool):
     for name, value in kwargs.iteritems():
       setattr(compiler, name, value)
   
-    return compiler._program(target, sources, forceExtension)
+    basePath = self.configuration.basePath
+  
+    return compiler._program(basePath(target), basePath(sources), forceExtension)
 
   def _program(self, target, sources, forceExtension=True, **kwargs):
 
@@ -1403,8 +1476,10 @@ class Compiler(Tool):
     compiler = self.clone()
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
+
+    basePath = self.configuration.basePath
   
-    return compiler._resource(target, source, forceExtension)
+    return compiler._resource(basePath(target), basePath(source), forceExtension)
   
   def _resource(self, target, source, forceExtension=True):
     
@@ -1451,7 +1526,7 @@ class Compiler(Tool):
       setattr(compiler, k, v)
     
     @waitForAsyncResult
-    def run(sources):
+    def run(targetDir, sources):
       results = []
       for source in sources:
         sourcePath = getPath(source)
@@ -1463,7 +1538,9 @@ class Compiler(Tool):
           ))
       return results
 
-    return run(flatten(sources))
+    basePath = self.configuration.basePath
+
+    return run(basePath(targetDir), basePath(sources))
 
   ###########################
   # Internal methods not part of public API

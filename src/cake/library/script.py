@@ -74,9 +74,12 @@ class ScriptTool(Tool):
     Ignored if useContext is True.
     @type configScriptName: string or None
     """
-  
     if not isinstance(script, basestring):
       raise ValueError("'script' must be a string")
+
+    basePath = self.configuration.basePath
+    
+    script = basePath(script)
   
     if useContext is None:
       useContext = configScript is None and configScriptName is None
@@ -133,7 +136,9 @@ class ScriptTool(Tool):
     @param scripts: A path or sequence of paths of scripts to include.
     @type scripts: string or sequence of string
     """
-
+    basePath = self.configuration.basePath
+    
+    scripts = basePath(scripts)
     
     include = self._include
     if isinstance(scripts, basestring):
@@ -187,6 +192,10 @@ class ScriptTool(Tool):
     complete when the script has finished executing.
     @rtype: L{Script} or C{list} of L{Script}
     """
+    basePath = self.configuration.basePath
+    
+    scripts = basePath(scripts)
+    
     script = Script.getCurrent()
     configuration = script.configuration
     variant = configuration.findVariant(keywords, baseVariant=script.variant)
@@ -209,6 +218,11 @@ class ScriptTool(Tool):
     """
     engine = self.engine
     configuration = self.configuration
+
+    basePath = configuration.basePath
+    
+    targets = basePath(targets)
+    sources = basePath(sources)
 
     sourceTasks = getTasks(sources)
 

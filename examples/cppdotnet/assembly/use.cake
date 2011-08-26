@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------------------
 from cake.tools import script, compiler
 
-compiler.addIncludePath(script.cwd())
-module = script.getResult(script.cwd("build.cake"), "module")
+compiler.addIncludePath(".")
+module = script.getResult("build.cake", "module")
 compiler.addForcedUsing(module)
 compiler.addModule(module)

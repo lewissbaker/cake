@@ -714,7 +714,20 @@ class Configuration(object):
     self._variants = {}
     self._executed = {}
     self._executedLock = threading.Lock()
+  
+  def basePath(self, path):
+    """Allows user-supplied conversion of a path passed to a Tool.
     
+    @param path: The path to convert.
+    @type path: string
+    
+    @return: The path converted via a user-supplied function. If this
+    function hasn't been overriden by a user-supplied function the path
+    is returned as is.
+    @rtype: string
+    """
+    return path
+
   def abspath(self, path):
     """Convert a path to be absolute.
     

@@ -2,22 +2,22 @@
 # This example demonstrates building a program then executing it using the shell
 # tool.
 #-------------------------------------------------------------------------------
-from cake.tools import compiler, script, shell
+from cake.tools import compiler, shell
 
 # List of sources.
-sources = script.cwd([
+sources = [
   "main.cpp",
-  ])
+  ]
 
 # Build the objects.
 objects = compiler.objects(
-  targetDir=script.cwd("../build/shell/obj"),
+  targetDir="../build/shell/obj",
   sources=sources,
   )
 
 # Build the program.
 program = compiler.program(
-  target=script.cwd("../build/shell/bin/main"),
+  target="../build/shell/bin/main",
   sources=objects,
   )
 

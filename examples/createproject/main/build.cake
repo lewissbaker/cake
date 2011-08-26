@@ -4,35 +4,35 @@
 from cake.tools import compiler, script, project
 
 # List of includes.
-includes = script.cwd([
+includes = [
   "main.h",
-  ])
+  ]
 
 # List of sources.
-sources = script.cwd([
+sources = [
   "main.cpp",
-  ])
+  ]
 
 # List of extra files.
-extras = script.cwd([
+extras = [
   "build.cake",
-  ])
+  ]
 
 # Build the objects.
 objects = compiler.objects(
-  targetDir=script.cwd("../../build/createproject/obj"),
+  targetDir="../../build/createproject/obj",
   sources=sources,
   )
 
 # Build the program.
 program = compiler.program(
-  target=script.cwd("../../build/createproject/bin/main"),
+  target="../../build/createproject/bin/main",
   sources=objects,
   )
 
 # Build the project file.
 proj = project.project(
-  target=script.cwd("../../build/createproject/project/createproject"),
+  target="../../build/createproject/project/createproject",
   name="My Project",
   items={
     "Include" : includes,

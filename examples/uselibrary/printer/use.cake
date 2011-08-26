@@ -4,7 +4,7 @@
 from cake.tools import compiler, script
 
 # Add the libraries include path.
-compiler.addIncludePath(script.cwd("include"))
+compiler.addIncludePath("include")
 
 # Add the library. All subsequent program and module builds will link with it.
-compiler.addLibrary(script.getResult(script.cwd("build.cake"), "library"))
+compiler.addLibrary(script.getResult("build.cake", "library"))

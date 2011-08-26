@@ -4,10 +4,10 @@
 from cake.tools import compiler, script
 
 # Save a reference to the build script since we use it twice.
-buildScript = script.get(script.cwd("build.cake"))
+buildScript = script.get("build.cake")
 
 # Add the modules include path.
-compiler.addIncludePath(script.cwd("include"))
+compiler.addIncludePath("include")
 
 # Add the library. All subsequent program and module builds will link with it.
 compiler.addLibrary(buildScript.getResult("library"))

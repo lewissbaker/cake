@@ -14,7 +14,8 @@ class TestTool(object):
     # Create a function that will output a dummy target file
     def run():
       logging.outputInfo("[TestTool] %s: (%s)\n" % (path, target))
-      absTarget = script.configuration.abspath(target)
+      configuration = script.configuration
+      absTarget = configuration.abspath(configuration.basePath(target))
       cake.filesys.makeDirs(cake.path.dirName(absTarget))
       open(absTarget, 'wb').close() 
 
@@ -23,5 +24,5 @@ class TestTool(object):
     return script.run(run, targets=[target], args=[path])[0]
   
 tool = TestTool()
-target = tool.build(script.cwd("../build/pythontool/target"))
+target = tool.build("../build/pythontool/target")
 target.task.addCallback(lambda: logging.outputInfo("pythontool finished\n"))

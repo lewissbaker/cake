@@ -3,20 +3,20 @@
 #-------------------------------------------------------------------------------
 from cake.tools import script, compiler
 
-sources = script.cwd([
+sources = [
   "point.cpp",
-  ])
+  ]
 
 compiler.clrMode = 'safe' 
 
 objects = compiler.objects(
-  targetDir=script.cwd("../../build/cppdotnet/assembly"),
+  targetDir="../../build/cppdotnet/assembly",
   sources=sources,
   language='c++/cli',
   )
 
 module = compiler.module(
-  target=script.cwd("../../build/cppdotnet/assembly/point"),
+  target="../../build/cppdotnet/assembly/point",
   sources=objects,
   )
 

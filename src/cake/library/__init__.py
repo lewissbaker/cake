@@ -307,10 +307,10 @@ def getTask(value):
   
   @return: 
   """
-  if isinstance(value, (FileTarget, AsyncResult)):
-    return value.task
-  elif isinstance(value, Task):
+  if isinstance(value, Task):
     return value
+  elif hasattr(value, "task") and isinstance(value.task, Task):
+    return value.task
   else:
     return None
 

@@ -184,11 +184,7 @@ def makeCommand(args):
 
 def _escapeArg(arg):
   if ' ' in arg:
-    if '"' in arg:
-      arg = arg.replace('"', '\\"')
     return '"' + arg + '"'
-  elif '"' in arg:
-    return arg.replace('"', '\\"')
   else:
     return arg
 
@@ -1397,7 +1393,7 @@ class Compiler(Tool):
 
     return run(target, flatten(sources))
 
-  def program(self, target, sources, forceExtension=True, **kwargs):
+  def program(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
     """Build an executable program.
 
     @param target: Path to the target executable.
@@ -1406,6 +1402,10 @@ class Compiler(Tool):
     @param sources: A list of source objects/libraries to be linked
     into the executable.
     @type sources: sequence of string/FileTarget
+    
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building these objects.
+    @type prerequisites: list of Task or FileTarget
     
     @param forceExtension: If True then target path will have the
     default executable extension appended if it doesn't already have
@@ -1419,12 +1419,12 @@ class Compiler(Tool):
   
     basePath = self.configuration.basePath
   
-    return compiler._program(basePath(target), basePath(sources), forceExtension)
+    return compiler._program(basePath(target), basePath(sources), prerequisites, forceExtension)
 
-  def _program(self, target, sources, forceExtension=True, **kwargs):
+  def _program(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
 
     @waitForAsyncResult
-    def run(target, sources):
+    def run(target, sources, prerequisites):
     
       if forceExtension:
         target = cake.path.forceExtension(target, self.programSuffix)
@@ -1440,6 +1440,7 @@ class Compiler(Tool):
           self.buildProgram(target, paths)
 
         tasks = getTasks(sources)
+        tasks.extend(getTasks(prerequisites))
         tasks.extend(getTasks(self.getLibraries()))
         programTask = self.engine.createTask(build)
         programTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
@@ -1453,7 +1454,7 @@ class Compiler(Tool):
         manifest=manifest,
         )
       
-    return run(target, flatten(sources))
+    return run(target, flatten(sources), flatten(prerequisites))
 
   def resource(self, target, source, forceExtension=True, **kwargs):
     """Build a resource from a collection of sources.

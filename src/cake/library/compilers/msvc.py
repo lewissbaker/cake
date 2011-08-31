@@ -1040,7 +1040,7 @@ class MsvcCompiler(Compiler):
 
   @memoise
   def _getCommonResourceArgs(self):
-    args = [self.__rcExe, '/nologo']
+    args = [self.__rcExe] # Cannot use '/nologo' due to WindowsSDK 6.0A rc.exe not supporting it.
     args.extend(self.resourceFlags)
     args.extend("/d" + define for define in self.getDefines())
     args.extend("/i" + path for path in self.getIncludePaths())

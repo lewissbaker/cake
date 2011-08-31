@@ -1123,7 +1123,7 @@ class Compiler(Tool):
     
     @return: A FileTarget containing the path of the object file
     that will be built and the task that will build it.
-    @rtype: L{FileTarget}
+    @rtype: L{ObjectTarget}
     """
      
     # Take a snapshot of the build settings at this point and use that.
@@ -1145,22 +1145,21 @@ class Compiler(Tool):
         
       if self.enabled:
 
-        prerequisiteTasks = getTasks(prerequisites)
+        tasks = getTasks(prerequisites)
 
         sourceTask = getTask(source)
         if sourceTask is not None:
-          prerequisiteTasks.append(sourceTask)
+          tasks.append(sourceTask)
         
         pchTask = getTask(pch)
         if pchTask is not None:
-          prerequisiteTasks.append(pchTask)
+          tasks.append(pchTask)
         
         objectTask = self.engine.createTask(
           lambda t=target, s=source, p=pch, h=shared, c=self:
             c.buildObject(t, getPath(s), getResult(p), h)
           )
-        objectTask.startAfter(prerequisiteTasks,
-                              threadPool=self.engine.scriptThreadPool)
+        objectTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         objectTask = None
       
@@ -1223,7 +1222,7 @@ class Compiler(Tool):
 
     basePath = self.configuration.basePath
     
-    return run(basePath(targetDir), basePath(sources), flatten(prerequisites))
+    return run(basePath(targetDir), basePath(sources), prerequisites)
 
   def sharedObjects(self, targetDir, sources, pch=None, prerequisites=[],
                     **kwargs):
@@ -1269,9 +1268,9 @@ class Compiler(Tool):
     
     basePath = self.configuration.basePath
     
-    return run(basePath(targetDir), basePath(sources), flatten(prerequisites))
+    return run(basePath(targetDir), basePath(sources), prerequisites)
     
-  def library(self, target, sources, forceExtension=True, **kwargs):
+  def library(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
     """Build a library from a collection of objects.
     
     @param target: Path of the library file to build.
@@ -1280,12 +1279,17 @@ class Compiler(Tool):
     @param sources: A list of object files to archive.
     @type sources: list of string or FileTarget
     
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building these objects.
+    @type prerequisites: list of Task or FileTarget
+     
     @param forceExtension: If True then the target path will have
     the default library extension appended to it if it not already
     present.
     
     @return: A FileTarget object representing the library that will
     be built and the task that will build it.
+    @rtype: L{LibraryTarget}
     """
 
     # Take a snapshot of the current compiler settings
@@ -1295,12 +1299,17 @@ class Compiler(Tool):
 
     basePath = self.configuration.basePath
 
-    return compiler._library(basePath(target), basePath(sources), forceExtension)
+    return compiler._library(
+      basePath(target),
+      basePath(sources),
+      prerequisites,
+      forceExtension
+      )
   
-  def _library(self, target, sources, forceExtension=True):
+  def _library(self, target, sources, prerequisites=[], forceExtension=True):
     
     @waitForAsyncResult
-    def run(target, sources):
+    def run(target, sources, prerequisites):
       if forceExtension:
         prefix, suffix = self.libraryPrefix, self.librarySuffix
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
@@ -1308,6 +1317,7 @@ class Compiler(Tool):
       if self.enabled:
     
         tasks = getTasks(sources)
+        tasks.extend(getTasks(prerequisites))
   
         def build():
           paths = getLinkPaths(sources)
@@ -1325,14 +1335,33 @@ class Compiler(Tool):
         compiler=self,
         )
       
-    return run(target, flatten(sources))
+    return run(target, flatten(sources), flatten(prerequisites))
     
-  def module(self, target, sources, forceExtension=True, **kwargs):
+  def module(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
     """Build a module/dynamic-library.
     
     Modules are executable code that can be dynamically loaded at
     runtime. On some platforms they are referred to as shared-libraries
     or dynamically-linked-libraries (DLLs).
+    
+    @param target: Path of the module file to build.
+    @type target: string
+    
+    @param sources: A list of source objects/libraries to be linked
+    into the module.
+    @type sources: sequence of string/FileTarget
+    
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building these objects.
+    @type prerequisites: list of Task or FileTarget
+     
+    @param forceExtension: If True then the target path will have
+    the default module extension appended to it if it not already
+    present.
+    
+    @return: A FileTarget object representing the module that will
+    be built and the task that will build it.   
+    @rtype: L{ModuleTarget}
     """
     
     # Take a snapshot of the current compiler settings
@@ -1342,12 +1371,12 @@ class Compiler(Tool):
   
     basePath = self.configuration.basePath
 
-    return compiler._module(basePath(target), basePath(sources), forceExtension)
+    return compiler._module(basePath(target), basePath(sources), prerequisites, forceExtension)
   
-  def _module(self, target, sources, forceExtension=True):
+  def _module(self, target, sources, prerequisites=[], forceExtension=True):
     
     @waitForAsyncResult
-    def run(target, sources):
+    def run(target, sources, prerequisites):
       if forceExtension:
         prefix, suffix = self.modulePrefixSuffixes[0]
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
@@ -1377,6 +1406,7 @@ class Compiler(Tool):
           self.buildModule(target, paths)
         
         tasks = getTasks(sources)
+        tasks.extend(getTasks(prerequisites))
         tasks.extend(getTasks(self.getLibraries()))
         moduleTask = self.engine.createTask(build)
         moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
@@ -1391,7 +1421,7 @@ class Compiler(Tool):
         manifest=manifest,
         )
 
-    return run(target, flatten(sources))
+    return run(target, flatten(sources), flatten(prerequisites))
 
   def program(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
     """Build an executable program.
@@ -1410,6 +1440,11 @@ class Compiler(Tool):
     @param forceExtension: If True then target path will have the
     default executable extension appended if it doesn't already have
     it.
+    
+    @return: A FileTarget object representing the executable that will
+    be built and the task that will build it.
+    @rtype: L{ProgramTarget}
+    
     """
     
     # Take a snapshot of the current compiler settings
@@ -1456,7 +1491,7 @@ class Compiler(Tool):
       
     return run(target, flatten(sources), flatten(prerequisites))
 
-  def resource(self, target, source, forceExtension=True, **kwargs):
+  def resource(self, target, source, prerequisites=[], forceExtension=True, **kwargs):
     """Build a resource from a collection of sources.
     
     @param target: Path of the resource file to build.
@@ -1464,6 +1499,10 @@ class Compiler(Tool):
     
     @param source: Path of the source file to compile.
     @type source: string
+
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building these objects.
+    @type prerequisites: list of Task or FileTarget
     
     @param forceExtension: If True then the target path will have
     the default resource extension appended to it if it not already
@@ -1471,6 +1510,7 @@ class Compiler(Tool):
     
     @return: A FileTarget object representing the resource that will
     be built and the task that will build it.
+    @rtype: L{ResourceTarget}
     """
 
     # Take a snapshot of the current compiler settings
@@ -1480,12 +1520,12 @@ class Compiler(Tool):
 
     basePath = self.configuration.basePath
   
-    return compiler._resource(basePath(target), basePath(source), forceExtension)
+    return compiler._resource(basePath(target), basePath(source), prerequisites, forceExtension)
   
-  def _resource(self, target, source, forceExtension=True):
+  def _resource(self, target, source, prerequisites=[], forceExtension=True):
     
     @waitForAsyncResult
-    def run(target, source):
+    def run(target, source, prerequisites):
       if forceExtension:
         target = cake.path.forceExtension(target, self.resourceSuffix)
   
@@ -1495,9 +1535,10 @@ class Compiler(Tool):
           path = getPath(source)
           self.buildResource(target, path)
   
-        task = getTask(source)      
+        tasks = [getTask(source)]    
+        tasks.extend(getTasks(prerequisites))
         resourceTask = self.engine.createTask(build)
-        resourceTask.startAfter(task, threadPool=self.engine.scriptThreadPool)
+        resourceTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         resourceTask = None
       
@@ -1507,9 +1548,9 @@ class Compiler(Tool):
         compiler=self,
         )
       
-    return run(target, source)
+    return run(target, source, flatten(prerequisites))
 
-  def resources(self, targetDir, sources, **kwargs):
+  def resources(self, targetDir, sources, prerequisites=[], **kwargs):
     """Build a collection of resources to a target directory.
     
     @param targetDir: Path to the target directory where the built resources
@@ -1519,6 +1560,10 @@ class Compiler(Tool):
     @param sources: A list of source files to compile to resource files.
     @type sources: sequence of string or FileTarget objects
     
+    @param prerequisites: An optional list of extra prerequisites that should
+    complete building before building these objects.
+    @type prerequisites: list of Task or FileTarget
+    
     @return: A list of FileTarget objects, one for each resource being
     built.
     """
@@ -1527,7 +1572,7 @@ class Compiler(Tool):
       setattr(compiler, k, v)
     
     @waitForAsyncResult
-    def run(targetDir, sources):
+    def run(targetDir, sources, prerequisites):
       results = []
       for source in sources:
         sourcePath = getPath(source)
@@ -1536,12 +1581,13 @@ class Compiler(Tool):
         results.append(compiler._resource(
           targetPath,
           source,
+          prerequisites,
           ))
       return results
 
     basePath = self.configuration.basePath
 
-    return run(basePath(targetDir), basePath(sources))
+    return run(basePath(targetDir), basePath(sources), prerequisites)
 
   ###########################
   # Internal methods not part of public API

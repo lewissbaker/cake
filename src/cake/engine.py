@@ -663,10 +663,12 @@ class Script(object):
     else:
       absPath = os.path.abspath(self.path)
     byteCode = self.engine.getByteCode(absPath)
+    scriptGlobals = {'__file__': absPath}
+    scriptGlobals.update(self.configuration.scriptGlobals)
     old = Script.getCurrent()
     Script._current.value = self
     try:
-      exec byteCode in {'__file__': absPath}
+      exec byteCode in scriptGlobals
     finally:
       Script._current.value = old
 
@@ -690,6 +692,10 @@ class Configuration(object):
   paths will be assumed to be relative to. Defaults to the directory
   of the config script but may be overridden by the config script.
   @type baseDir: string
+
+  @ivar scriptGlobals: A dictionary that will provide the initial
+  values of each scripts global variables.
+  @type scriptGlobals: dict
   """
   
   defaultBuildScriptName = 'build.cake'
@@ -711,6 +717,7 @@ class Configuration(object):
     self.path = path
     self.dir = cake.path.dirName(path)
     self.baseDir = self.dir
+    self.scriptGlobals = {}
     self._variants = {}
     self._executed = {}
     self._executedLock = threading.Lock()

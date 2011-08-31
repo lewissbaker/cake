@@ -168,6 +168,10 @@ class Task(object):
   def start(self, immediate=False, threadPool=None):
     """Start this task now.
     
+    @param immediate: If True the task is pushed ahead of any other (waiting)
+    tasks on the task queue.
+    @type immediate: bool
+        
     @raise TaskError: If this task has already been started or
     cancelled.
     """
@@ -181,6 +185,13 @@ class Task(object):
     
     @param other: The task or a list of tasks to start after.
     @type other: L{Task} or C{list}(L{Task})
+
+    @param immediate: If True the task is pushed ahead of any other (waiting)
+    tasks on the task queue.
+    @type immediate: bool
+
+    @param threadPool: An optional thread pool to start this task on.
+    @type threadPool: L{ThreadPool} or none
     
     @raise TaskError: If this task has already been started or
     cancelled.

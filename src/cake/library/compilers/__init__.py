@@ -1067,18 +1067,13 @@ class Compiler(Tool):
         object = cake.path.stripExtension(target) + self.pchObjectSuffix
       
       if self.enabled:
-        prerequisiteTasks = getTasks(prerequisites)
-
-        sourceTask = getTask(source)
-        if sourceTask is not None:
-          prerequisiteTasks.append(sourceTask)
-        
+        tasks = getTasks([source])
+        tasks.extend(getTasks(prerequisites))
         pchTask = self.engine.createTask(
           lambda t=target, s=source, h=header, o=object, c=self:
             c.buildPch(t, getPath(s), h, o)
           )
-        pchTask.startAfter(prerequisiteTasks,
-                           threadPool=self.engine.scriptThreadPool)
+        pchTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         pchTask = None
       
@@ -1144,17 +1139,9 @@ class Compiler(Tool):
         target = cake.path.forceExtension(target, self.objectSuffix)
         
       if self.enabled:
-
-        tasks = getTasks(prerequisites)
-
-        sourceTask = getTask(source)
-        if sourceTask is not None:
-          tasks.append(sourceTask)
-        
-        pchTask = getTask(pch)
-        if pchTask is not None:
-          tasks.append(pchTask)
-        
+        tasks = getTasks([source])
+        tasks.extend(getTasks([pch]))
+        tasks.extend(getTasks(prerequisites))
         objectTask = self.engine.createTask(
           lambda t=target, s=source, p=pch, h=shared, c=self:
             c.buildObject(t, getPath(s), getResult(p), h)
@@ -1315,15 +1302,13 @@ class Compiler(Tool):
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
   
       if self.enabled:
-    
-        tasks = getTasks(sources)
-        tasks.extend(getTasks(prerequisites))
-  
         def build():
           paths = getLinkPaths(sources)
           self._setObjectsInLibrary(target, paths)
           self.buildLibrary(target, paths)
         
+        tasks = getTasks(sources)
+        tasks.extend(getTasks(prerequisites))
         libraryTask = self.engine.createTask(build)
         libraryTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
@@ -1530,12 +1515,11 @@ class Compiler(Tool):
         target = cake.path.forceExtension(target, self.resourceSuffix)
   
       if self.enabled:
-   
         def build():
           path = getPath(source)
           self.buildResource(target, path)
   
-        tasks = [getTask(source)]    
+        tasks = getTasks([source])
         tasks.extend(getTasks(prerequisites))
         resourceTask = self.engine.createTask(build)
         resourceTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)

@@ -76,10 +76,8 @@ class ScriptTool(Tool):
     """
     if not isinstance(script, basestring):
       raise ValueError("'script' must be a string")
-
-    basePath = self.configuration.basePath
-    
-    script = basePath(script)
+   
+    script = self.configuration.basePath(script)
   
     if useContext is None:
       useContext = configScript is None and configScriptName is None

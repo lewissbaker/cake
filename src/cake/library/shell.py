@@ -9,7 +9,7 @@ import os
 import subprocess
 import cake.filesys
 import cake.path
-from cake.library import Tool, FileTarget, deepCopyBuiltins, getPaths, getTasks
+from cake.library import Tool, FileTarget, flatten, deepCopyBuiltins, getPaths, getTasks, waitForAsyncResult
 
 _undefined = object()
 
@@ -42,16 +42,10 @@ class ShellTool(Tool):
     @param removeTargets: If specified then the target files will be removed
     before running the command if they already exist.
     """
-    basePath = self.configuration.basePath
-    
-    targets = basePath(targets)
-    sources = basePath(sources)
-    cwd = basePath(cwd)
-    
     engine = self.engine
     env = deepCopyBuiltins(self.__env)
 
-    def spawnProcess(cwd=cwd):
+    def spawnProcess(targets, sources, cwd):
 
       sourcePaths = getPaths(sources)
       configuration = self.configuration
@@ -133,18 +127,25 @@ class ShellTool(Tool):
           )
         configuration.storeDependencyInfo(newDependencyInfo)
 
-    if self.enabled:
-      tasks = getTasks(sources)
-
-      task = engine.createTask(spawnProcess)
-      task.startAfter(tasks)
-    else:
-      task = None
-
-    if targets is None:
-      return task
-    else:
-      return [FileTarget(path=t, task=task) for t in targets]
+    @waitForAsyncResult
+    def _run(targets, sources, cwd):
+      if self.enabled:
+        tasks = getTasks(sources)
+  
+        task = engine.createTask(lambda: spawnProcess(targets, sources, cwd))
+        task.startAfter(tasks)
+      else:
+        task = None
+  
+      if targets:
+        return [FileTarget(path=t, task=task) for t in targets]
+      else:
+        return task
+    
+    basePath = self.configuration.basePath
+    flattenPath = lambda x: basePath(flatten(x))
+    
+    return _run(flattenPath(targets), flattenPath(sources), basePath(cwd))
 
   def __iter__(self):
     return iter(self.__env)

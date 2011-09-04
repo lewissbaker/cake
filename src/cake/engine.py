@@ -664,7 +664,8 @@ class Script(object):
       absPath = os.path.abspath(self.path)
     byteCode = self.engine.getByteCode(absPath)
     scriptGlobals = {'__file__': absPath}
-    scriptGlobals.update(self.configuration.scriptGlobals)
+    if self.configuration is not None:
+      scriptGlobals.update(self.configuration.scriptGlobals)
     old = Script.getCurrent()
     Script._current.value = self
     try:

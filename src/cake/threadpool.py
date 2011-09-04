@@ -87,7 +87,16 @@ class ThreadPool(object):
     # Wait for the threads to finish
     for thread in self._workers:
       thread.join()
+  
+  @property
+  def numWorkers(self):
+    """Returns the number of worker threads available to process jobs.
     
+    @return: The number of worker threads available to process jobs.
+    @rtype: int
+    """
+    return len(self._workers)
+  
   def queueJob(self, callable, front=False):
     """Queue a new job to be executed by the thread pool.
     

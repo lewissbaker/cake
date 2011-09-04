@@ -363,7 +363,7 @@ def run(args=None, cwd=None):
   logger.quiet = options.quiet;
 
   # Find keyword arguments and re-evaluate the script paths in light
-  # of the reparsed args. Want it to error-out if the 
+  # of the reparsed args. 
   keywords = {}
   scripts = []
   for arg in args:

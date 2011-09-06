@@ -219,7 +219,6 @@ class Engine(object):
         variant=None,
         engine=self,
         task=None,
-        tools=None,
         parent=None,
         )
       script.execute()
@@ -583,7 +582,7 @@ class Script(object):
   
   _current = threading.local()
   
-  def __init__(self, path, configuration, variant, engine, task, tools, parent=None):
+  def __init__(self, path, configuration, variant, engine, task, tools=None, parent=None):
     """Constructor.
     
     @param path: The path to the script file.
@@ -601,7 +600,10 @@ class Script(object):
     self.variant = variant
     self.engine = engine
     self.task = task
-    self.tools = tools
+    if tools is None:
+      self.tools = {}
+    else:
+      self.tools = tools
     self._results = {}
     if parent is None:
       self.root = self
@@ -857,6 +859,7 @@ class Configuration(object):
       if script is not None:
         task = script.task
       else:
+        tools = {}
 
         def execute():
           for name, tool in variant.tools.items():
@@ -872,7 +875,6 @@ class Configuration(object):
             )
           script.execute()
         task = self.engine.createTask(execute)
-        tools = {}
         script = Script(
           path=path,
           configuration=self,

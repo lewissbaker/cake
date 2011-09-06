@@ -342,7 +342,6 @@ def run(args=None, cwd=None):
       configuration=None,
       variant=None,
       task=None,
-      tools=None,
       engine=engine,
       )
     script.execute()

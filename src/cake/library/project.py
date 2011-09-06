@@ -340,7 +340,7 @@ class ProjectTool(Tool):
   def project(
     self,
     target,
-    items,
+    items=None,
     output=None,
     name=None,
     intermediateDir=None,
@@ -424,6 +424,9 @@ class ProjectTool(Tool):
     ):
 
     # Project name defaults the base filename without extension
+    if items is None:
+      items = []
+      
     if name is None:
       name = cake.path.baseNameWithoutExtension(target)
 
@@ -473,10 +476,17 @@ class ProjectTool(Tool):
 
       # Construct the build args
       targetDir = configuration.abspath(cake.path.dirName(target))
-      pythonExe = configuration.abspath(sys.executable)
-      cakeScript = configuration.abspath(sys.argv[0])
+      pythonExe = cake.path.absPath(sys.executable)
+      cakeScript = cake.path.absPath(sys.argv[0])
       scriptPath = configuration.abspath(script.path)
       keywords = script.variant.keywords
+      
+      # It's possible these files were passed relative to some arbitrary
+      # directory so make sure they exist.
+      if not cake.path.isFile(pythonExe):
+        raise EnvironmentError("Could not find Python executable at: '%s'" % pythonExe)
+      if not cake.path.isFile(cakeScript):
+        raise EnvironmentError("Could not find Cake script at: '%s'" % cakeScript)
 
       buildArgs = [
         cake.path.relativePath(pythonExe, targetDir),
@@ -508,6 +518,9 @@ class ProjectTool(Tool):
         ))
 
     if self.enabled:
+      if isinstance(items, list):
+        items = flatten(items)
+
       run(output, items)
     
     return ProjectTarget(path=target, task=None, tool=self, filters=filters)
@@ -693,7 +706,8 @@ def convertToProjectItems(configuration, srcfiles, projectDir):
       else:
         results.extend(subItems)
   elif isinstance(srcfiles, list):
-    for filePath in srcfiles:
+    for file in srcfiles:
+      filePath = getPath(file)
       relPath = cake.path.relativePath(abspath(filePath), abspath(projectDir))
       fileItem = ProjectFileItem(relPath)
       results.append(fileItem)

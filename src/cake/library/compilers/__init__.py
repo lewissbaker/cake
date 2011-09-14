@@ -1322,7 +1322,7 @@ class Compiler(Tool):
       
     return run(target, flatten(sources), flatten(prerequisites))
     
-  def module(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
+  def module(self, target, sources, importLibrary=None, installName=None, prerequisites=[], forceExtension=True, **kwargs):
     """Build a module/dynamic-library.
     
     Modules are executable code that can be dynamically loaded at
@@ -1335,7 +1335,15 @@ class Compiler(Tool):
     @param sources: A list of source objects/libraries to be linked
     into the module.
     @type sources: sequence of string/FileTarget
+
+    @param importLibrary: Optional path to an import library that should be
+    built. Programs can link against the import library to use the modules
+    functions. 
+    @type importLibrary: string or None
     
+    @param installName: Optional dyld install_name for a shared library.
+    @type installName: string or None
+
     @param prerequisites: An optional list of extra prerequisites that should
     complete building before building these objects.
     @type prerequisites: list of Task or FileTarget
@@ -1353,8 +1361,17 @@ class Compiler(Tool):
     compiler = self.clone()
     for k, v in kwargs.iteritems():
       setattr(compiler, k, v)
-  
+
     basePath = self.configuration.basePath
+
+    importLibrary = basePath(importLibrary)
+
+    # TODO: At some point importLibrary/installName kept as a parameter.
+    # Setting them on the Compiler instance makes it hard to find where there are used
+    # and it let's the user set them once on the compiler instance and forget about them,
+    # which may introduce build bugs. 
+    compiler.importLibrary = importLibrary
+    compiler.installName = installName
 
     return compiler._module(basePath(target), basePath(sources), prerequisites, forceExtension)
   

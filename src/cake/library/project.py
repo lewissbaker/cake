@@ -180,13 +180,23 @@ class _SolutionRegistry(object):
       self.lock.release()  
 
 class ProjectToolTarget(FileTarget):
-  
+  """A target returned by the ProjectTool.
+
+  @ivar tool: The tool instance that generated this file target.
+  @type tool: L{Tool}
+  """
   def __init__(self, path, task, tool):
     FileTarget.__init__(self, path, task)
     self.tool = tool
 
 class ProjectTarget(ProjectToolTarget):
-  
+  """A project target.
+
+  @ivar project: The project file target.
+  @type project: L{FileTarget}
+  @ivar filters: An optional file target for the associated '.filters' file.
+  @type filters: L{FileTarget}
+  """
   def __init__(self, path, task, tool, filters):
     ProjectToolTarget.__init__(self, path, task, tool)
     self.project = FileTarget(path, task)
@@ -196,7 +206,11 @@ class ProjectTarget(ProjectToolTarget):
       self.filters = FileTarget(filters, task)
 
 class SolutionTarget(ProjectToolTarget):
-  
+  """A solution target.
+
+  @ivar solution: The solution file target.
+  @type solution: L{FileTarget}
+  """
   def __init__(self, path, task, tool):
     ProjectToolTarget.__init__(self, path, task, tool)
     self.solution = FileTarget(path, task)
@@ -402,6 +416,8 @@ class ProjectTool(Tool):
     basePath = self.configuration.basePath
     
     target = basePath(target)
+    items = basePath(items)
+    output = basePath(output)
     intermediateDir = basePath(intermediateDir)
     
     return tool._project(
@@ -518,19 +534,11 @@ class ProjectTool(Tool):
         ))
 
     if self.enabled:
-      if isinstance(items, list):
-        items = flatten(items)
-
       run(output, items)
     
     return ProjectTarget(path=target, task=None, tool=self, filters=filters)
     
-  def solution(
-    self,
-    target,
-    projects,
-    **kwargs
-    ):
+  def solution(self, target, projects, **kwargs):
     """Generate a solution file.
     
     @param target: The path for the generated solution file. If this path
@@ -544,15 +552,15 @@ class ProjectTool(Tool):
     tool = self.clone()
     for k, v in kwargs.iteritems():
       setattr(tool, k, v)
+
+    basePath = self.configuration.basePath
+    
+    target = basePath(target)
+    projects = basePath(projects)
     
     return tool._solution(target, projects)
       
-  def _solution(
-    self,
-    target,
-    projects,
-    **kwargs
-    ):
+  def _solution(self, target, projects):
 
     # Obtain these now because they may rely on the value of Script.getCurrent() 
     configName = self._getSolutionConfigName()
@@ -705,9 +713,9 @@ def convertToProjectItems(configuration, srcfiles, projectDir):
         results.append(filterNode)
       else:
         results.extend(subItems)
-  elif isinstance(srcfiles, list):
-    for file in srcfiles:
-      filePath = getPath(file)
+  elif isinstance(srcfiles, (list, set, tuple)):
+    for srcfile in flatten(srcfiles):
+      filePath = getPath(srcfile)
       relPath = cake.path.relativePath(abspath(filePath), abspath(projectDir))
       fileItem = ProjectFileItem(relPath)
       results.append(fileItem)

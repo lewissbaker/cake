@@ -1209,7 +1209,7 @@ class Compiler(Tool):
 
     basePath = self.configuration.basePath
     
-    return run(basePath(targetDir), basePath(sources), prerequisites)
+    return run(basePath(targetDir), basePath(flatten(sources)), prerequisites)
 
   def sharedObjects(self, targetDir, sources, pch=None, prerequisites=[],
                     **kwargs):

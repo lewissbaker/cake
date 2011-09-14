@@ -6,10 +6,6 @@
 """
 
 import sys
-import os.path
-
-# Pull in the version strings defined in version.py
-execfile(os.path.join(os.path.dirname(__file__), 'version.py'))
 
 # We want the 'cake.tools' module to have contents based on the current
 # thread's Script.

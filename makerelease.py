@@ -1,7 +1,7 @@
 """Make release script.
 
 This script will generate the docs and supported install packages
-for the current release version (see cake.__version__).
+for the current release version (see cake.version.__version__).
 
 @see: Cake Build System (http://sourceforge.net/projects/cake-build)
 @copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.

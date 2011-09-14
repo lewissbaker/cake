@@ -16,23 +16,13 @@ def run():
   
   # Grab the __version__ defined in version.py
   import os.path
-  versionFilePath = os.path.join(os.path.dirname(__file__), 'src', 'cake', 'version.py')
-  cakevars = {}
-  if sys.hexversion >= 0x03000000:
-    exec(compile(open(versionFilePath).read(), versionFilePath, 'exec'), {}, cakevars)
-  else:
-    execfile(versionFilePath, {}, cakevars)
+  sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+  import cake.version
   
   from setuptools import setup, find_packages
-  
-  # Should we use Python 3.x support?
-  extra = {}
-  if sys.hexversion >= 0x03000000:
-    extra['use_2to3'] = True
-  
   setup(
     name='Cake',
-    version=cakevars["__version__"],
+    version=cake.version.__version__,
     author="Lewis Baker, Stuart McMahon.",
     author_email='lewisbaker@users.sourceforge.net, stuartmcmahon@users.sourceforge.net',
     url="http://sourceforge.net/projects/cake-build",
@@ -47,7 +37,7 @@ def run():
         'cake = cakemain:run',
         ],
       },
-    **extra
+    use_2to3=sys.hexversion >= 0x03000000, # Use Python 3.x support?
     )
   return 0
 

@@ -20,6 +20,7 @@ import cake.engine
 import cake.task
 import cake.path
 import cake.threadpool
+import cake.version
 
 # Make sure stat() returns floats so timestamps are consistent across
 # Python versions (2.4 used longs, 2.5+ uses floats).
@@ -230,7 +231,7 @@ def run(args=None, cwd=None):
   
   parser = MyParser(usage=usage, option_class=MyOption, add_help_option=False)
   parser.add_option(
-    "-V", "--version",
+    "-v", "--version",
     dest="outputVersion",
     action="store_true",
     help="Print the current version of Cake and exit.",
@@ -298,9 +299,9 @@ def run(args=None, cwd=None):
   options, _args = parser.parse_args(args, showErrors=False)
 
   if options.outputVersion:
-    cakeVersion = cake.__version__
+    cakeVersion = cake.version.__version__
     cakePath = cake.path.dirName(cake.__file__)
-    sys.stdout.write("Cake %s [%s]\n" % (cake.__version__, cakePath))
+    sys.stdout.write("Cake %s [%s]\n" % (cakeVersion, cakePath))
     sys.stdout.write("Python %s\n" % sys.version)
     return 1
 

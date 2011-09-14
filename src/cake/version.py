@@ -10,5 +10,5 @@ whether one version is newer than another.
 @license: Licensed under the MIT license.
 """
 
-__version_info__ = (0, 9, 6)
+__version_info__ = (0, 9, 7)
 __version__ = '.'.join(str(v) for v in __version_info__)

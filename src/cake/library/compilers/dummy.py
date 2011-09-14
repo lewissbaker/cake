@@ -105,29 +105,30 @@ class DummyCompiler(Compiler):
   def getProgramCommands(self, target, sources):
     return self._getLinkCommands(target, sources, dll=False)
   
-  def getModuleCommands(self, target, sources):
-    return self._getLinkCommands(target, sources, dll=True)
+  def getModuleCommands(self, target, sources, importLibrary, installName):
+    return self._getLinkCommands(target, sources, importLibrary, installName, dll=True)
 
-  def _getLinkCommands(self, target, sources, dll):
+  def _getLinkCommands(self, target, sources, importLibrary=None, installName=None, dll=False):
     objects, libraries = self._resolveObjects()
 
     libFlags = ['-l' + lib for lib in libraries]
     args = ['ld'] + sources + objects + libFlags + ['/o' + target]
+
+    if importLibrary:
+      importLibrary = self.configuration.abspath(importLibrary)
     
     @makeCommand(args)
     def link():
       self.engine.logger.outputDebug("run", "%s\n" % " ".join(args))
       absTarget = self.configuration.abspath(target)
       cake.filesys.writeFile(absTarget, "".encode("latin1"))
-      if dll and self.importLibrary:
-        importLibrary = self.configuration.abspath(self.importLibrary)
+      if dll and importLibrary:
         cake.filesys.writeFile(importLibrary, "".encode("latin1"))
     
     @makeCommand("dummy-scanner")
     def scan():
       targets = [target]
-      if dll and self.importLibrary is not None:
-        importLibrary = self.configuration.abspath(self.importLibrary)
+      if dll and importLibrary:
         targets.append(importLibrary)
       dependencies = list(sources)
       dependencies += objects

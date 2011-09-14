@@ -803,12 +803,15 @@ class MsvcCompiler(Compiler):
   def getProgramCommands(self, target, sources):
     return self._getLinkCommands(target, sources, dll=False)
   
-  def getModuleCommands(self, target, sources):
-    return self._getLinkCommands(target, sources, dll=True)
+  def getModuleCommands(self, target, sources, importLibrary, installName):
+    return self._getLinkCommands(target, sources, importLibrary, installName, dll=True)
 
-  def _getLinkCommands(self, target, sources, dll):
+  def _getLinkCommands(self, target, sources, importLibrary=None, installName=None, dll=False):
     
     objects, libraries = self._resolveObjects()
+    
+    if importLibrary:
+      importLibrary = self.configuration.abspath(importLibrary)
     
     absTarget = self.configuration.abspath(target)
     absTargetDir = cake.path.dirName(absTarget)
@@ -821,8 +824,8 @@ class MsvcCompiler(Compiler):
     if self.debugSymbols and self.pdbFile is None:
       args.append('/PDB:%s.pdb' % target)
     
-    if dll and self.importLibrary is not None:
-      args.append('/IMPLIB:' + self.importLibrary)
+    if dll and importLibrary:
+      args.append('/IMPLIB:' + importLibrary)
 
     if self.optimisation == self.FULL_OPTIMISATION and \
        self.useIncrementalLinking:
@@ -876,8 +879,7 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      if dll and self.importLibrary is not None:
-        importLibrary = self.configuration.abspath(self.importLibrary)
+      if dll and importLibrary:
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)
        
@@ -1004,8 +1006,7 @@ class MsvcCompiler(Compiler):
     @makeCommand("link-scan")
     def scan():
       targets = [target]
-      if dll and self.importLibrary is not None:
-        importLibrary = self.configuration.abspath(self.importLibrary)
+      if dll and importLibrary:
         exportFile = cake.path.stripExtension(importLibrary) + '.exp'
         targets.append(importLibrary)
         targets.append(exportFile)

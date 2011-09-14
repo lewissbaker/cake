@@ -313,10 +313,10 @@ class MwcwCompiler(Compiler):
   def getProgramCommands(self, target, sources):
     return self._getLinkCommands(target, sources, dll=False)
   
-  def getModuleCommands(self, target, sources):
-    return self._getLinkCommands(target, sources, dll=True)
+  def getModuleCommands(self, target, sources, importLibrary, installName):
+    return self._getLinkCommands(target, sources, importLibrary, installName, dll=True)
 
-  def _getLinkCommands(self, target, sources, dll):
+  def _getLinkCommands(self, target, sources, importLibrary=None, installName=None, dll=False):
     
     objects, libraries = self._resolveObjects()
     

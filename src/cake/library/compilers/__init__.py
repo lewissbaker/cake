@@ -534,23 +534,6 @@ class Compiler(Tool):
     MSVC: /SUBSYSTEM
   @type: string or None
   """
-  importLibrary = None
-  """Set the path to the import library.
-  
-  When set to a string path an import library for module()'s will be
-  generated at the given path.
-  When set to None no import library is generated.
-  
-  Related compiler options::
-    GCC:  --out-implib
-    MSVC: /IMPLIB
-  @type: string or None
-  """
-  installName = None
-  """Set the dyld install_name for a shared library.
-  
-  @type: string or None
-  """
   embedManifest = None
   """Embed the manifest in the executable.
   
@@ -1339,6 +1322,10 @@ class Compiler(Tool):
     @param importLibrary: Optional path to an import library that should be
     built. Programs can link against the import library to use the modules
     functions. 
+
+    Related compiler options::
+      GCC:  --out-implib
+      MSVC: /IMPLIB
     @type importLibrary: string or None
     
     @param installName: Optional dyld install_name for a shared library.
@@ -1364,35 +1351,33 @@ class Compiler(Tool):
 
     basePath = self.configuration.basePath
 
-    importLibrary = basePath(importLibrary)
-
-    # TODO: At some point importLibrary/installName kept as a parameter.
-    # Setting them on the Compiler instance makes it hard to find where there are used
-    # and it let's the user set them once on the compiler instance and forget about them,
-    # which may introduce build bugs. 
-    compiler.importLibrary = importLibrary
-    compiler.installName = installName
-
-    return compiler._module(basePath(target), basePath(sources), prerequisites, forceExtension)
+    return compiler._module(
+      basePath(target),
+      basePath(sources),
+      basePath(importLibrary),
+      installName,
+      prerequisites,
+      forceExtension,
+      )
   
-  def _module(self, target, sources, prerequisites=[], forceExtension=True):
+  def _module(self, target, sources, importLibrary=None, installName=None, prerequisites=[], forceExtension=True):
     
     @waitForAsyncResult
-    def run(target, sources, prerequisites):
+    def run(target, sources, importLibrary, installName, prerequisites):
       if forceExtension:
         prefix, suffix = self.modulePrefixSuffixes[0]
         target = cake.path.forcePrefixSuffix(target, prefix, suffix)
-        if self.importLibrary:
+        if importLibrary:
           prefix, suffix = self.libraryPrefix, self.librarySuffix
-          self.importLibrary = cake.path.forcePrefixSuffix(
-            self.importLibrary,
+          importLibrary = cake.path.forcePrefixSuffix(
+            importLibrary,
             prefix,
             suffix,
             )
-        if self.installName:
+        if installName:
           prefix, suffix = self.modulePrefixSuffixes[0]
-          self.installName = cake.path.forcePrefixSuffix(
-            self.installName,
+          installName = cake.path.forcePrefixSuffix(
+            installName,
             prefix,
             suffix,
             )
@@ -1405,7 +1390,7 @@ class Compiler(Tool):
       if self.enabled:
         def build():
           paths = getLinkPaths(sources)
-          self.buildModule(target, paths)
+          self.buildModule(target, paths, importLibrary, installName)
         
         tasks = getTasks(sources)
         tasks.extend(getTasks(prerequisites))
@@ -1419,11 +1404,11 @@ class Compiler(Tool):
         path=target,
         task=moduleTask,
         compiler=self,
-        library=self.importLibrary,
+        library=importLibrary,
         manifest=manifest,
         )
 
-    return run(target, flatten(sources), flatten(prerequisites))
+    return run(target, flatten(sources), importLibrary, installName, flatten(prerequisites))
 
   def program(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
     """Build an executable program.
@@ -2154,20 +2139,10 @@ class Compiler(Tool):
     """
     self.engine.raiseError("Don't know how to archive %s\n" % target)
   
-  def buildModule(self, target, sources):
+  def buildModule(self, target, sources, importLibrary, installName):
     """Perform the actual build of a module.
-    
-    @param target: Path of the target module file.
-    @type target: string
-    
-    @param sources: Paths of the source object files and
-    libraries to link.
-    @type sources: list of string
-    
-    @param configuration: The Configuration object to use for dependency checking
-    etc.
     """
-    link, scan = self.getModuleCommands(target, sources)
+    link, scan = self.getModuleCommands(target, sources, importLibrary, installName)
 
     args = [repr(link), repr(scan)]
     
@@ -2198,15 +2173,8 @@ class Compiler(Tool):
     moduleTask = self.engine.createTask(command)
     moduleTask.start(immediate=True)
   
-  def getModuleCommands(self, target, sources):
+  def getModuleCommands(self, target, sources, importLibrary, installName):
     """Get the commands for linking a module.
-    
-    @param target: path to the target file
-    @type target: string
-    
-    @param sources: list of the object/library file paths to link into the
-    module.
-    @type sources: list of string
     
     @return: A tuple (link, scan) representing the commands that perform
     the link and scan for dependencies respectively. The scan command

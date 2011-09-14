@@ -410,12 +410,15 @@ class GccCompiler(Compiler):
   def getProgramCommands(self, target, sources):
     return self._getLinkCommands(target, sources, dll=False)
   
-  def getModuleCommands(self, target, sources):
-    return self._getLinkCommands(target, sources, dll=True)
+  def getModuleCommands(self, target, sources, importLibrary, installName):
+    return self._getLinkCommands(target, sources, importLibrary, installName, dll=True)
 
-  def _getLinkCommands(self, target, sources, dll):
+  def _getLinkCommands(self, target, sources, importLibrary=None, installName=None, dll=False):
     
     objects, libraries = self._resolveObjects()
+
+    if importLibrary:
+      importLibrary = self.configuration.abspath(importLibrary)
 
     args = list(self._getCommonLinkArgs(dll))
     args.extend(sources)
@@ -432,8 +435,7 @@ class GccCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      if dll and self.importLibrary is not None:
-        importLibrary = self.configuration.abspath(self.importLibrary)
+      if dll and importLibrary:
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)
     
@@ -443,8 +445,7 @@ class GccCompiler(Compiler):
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
       targets = [target]
-      if dll and self.importLibrary is not None:
-        importLibrary = self.configuration.abspath(self.importLibrary)
+      if dll and importLibrary:
         targets.append(importLibrary)
       dependencies = [args[0]]
       dependencies += sources
@@ -566,9 +567,12 @@ class MacGccCompiler(GccCompiler):
  
     return args
   
-  def _getLinkCommands(self, target, sources, dll):
+  def _getLinkCommands(self, target, sources, importLibrary=None, installName=None, dll=False):
     
     objects, libraries = self._resolveObjects()
+
+    if importLibrary:
+      importLibrary = self.configuration.abspath(importLibrary)
     
     args = list(self._getCommonLinkArgs(dll))
     
@@ -585,8 +589,8 @@ class MacGccCompiler(GccCompiler):
         args.append('-l' + lib)
     args.extend(['-o', target])
     
-    if dll and self.installName is not None:
-      args.extend(["-install_name", self.installName])
+    if dll and installName:
+      args.extend(["-install_name", installName])
 
     if self.outputMapFile:
       mapFile = cake.path.stripExtension(target) + '.map'
@@ -596,10 +600,9 @@ class MacGccCompiler(GccCompiler):
     def link():
       self._runProcess(args, target)      
 
-      if dll and self.importLibrary:
+      if dll and importLibrary:
         # Since the target .dylib is also the import library, copy it to the
         # .a 'importLibrary' filename the user expects
-        importLibrary = self.configuration.abspath(self.importLibrary)
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
         cake.filesys.copyFile(target, importLibrary)
         
@@ -609,8 +612,7 @@ class MacGccCompiler(GccCompiler):
       # Also add dependencies on system libraries, perhaps
       #  by parsing the output of ',Wl,--trace'
       targets = [target]
-      if dll and self.importLibrary:
-        importLibrary = self.configuration.abspath(self.importLibrary)
+      if dll and importLibrary:
         targets.append(importLibrary)
       if self.outputMapFile:
         targets.append(mapFile)

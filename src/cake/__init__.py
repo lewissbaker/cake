@@ -21,7 +21,9 @@ class ToolsProxy(object):
   def __getattribute__(self, key):
     from cake.engine import Script
     script = Script.getCurrent()
-    if script is not None:
+    if script is None:
+      raise AttributeError("No current script.")
+    else:
       try:
         return script.tools[key]
       except KeyError:
@@ -30,7 +32,9 @@ class ToolsProxy(object):
   def __setattr__(self, key, value):
     from cake.engine import Script
     script = Script.getCurrent()
-    if script is not None:
+    if script is None:
+      raise AttributeError("No current script.")
+    else:
       script.tools[key] = value
 
 tools = ToolsProxy()

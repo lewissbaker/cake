@@ -12,7 +12,7 @@ from cake.library.filesys import FileSystemTool
 from cake.library.zipping import ZipTool
 from cake.library.compilers import CompilerNotFoundError
 from cake.library.compilers.dummy import DummyCompiler
-from cake.library import flatten, waitForAsyncResult
+from cake.library import waitForAsyncResult
 import cake.system
 import cake.path
 
@@ -22,12 +22,12 @@ architecture = cake.system.architecture().lower()
 configuration = Script.getCurrent().configuration
 
 # Override the configuration basePath() function.
-@waitForAsyncResult
 def basePath(value):
   # Note: Any initial AsyncResult's should have been expanded by now,
   # so we should know if the value should be a sequence or single value.
   from cake.tools import script, env
 
+  @waitForAsyncResult
   def _basePath(path):
     if isinstance(path, basestring):
       path = env.expand(path)
@@ -40,13 +40,16 @@ def basePath(value):
         return path # Keep absolute paths as found.
       else:
         return script.cwd(path) # Prefix relative paths with scripts dir.
+    elif isinstance(path, (list, set)): # Convert set->list in case of valid duplicates.
+      return list(_basePath(p) for p in path)
+    elif isinstance(path, tuple):
+      return tuple(_basePath(p) for p in path)
+    elif isinstance(path, dict):
+      return dict((k, _basePath(v)) for k, v in path.iteritems())
     else:
-      return path # Could be a FileTarget.
+      return path # Could be a FileTarget. Leave it as is.
   
-  if isinstance(value, (list, tuple, set)):
-    return [_basePath(p) for p in flatten(value)]
-  else:
-    return _basePath(value)
+  return _basePath(value)
       
 configuration.basePath = basePath
 

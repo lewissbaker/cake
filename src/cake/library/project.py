@@ -66,6 +66,7 @@ class _ProjectConfiguration(object):
     buildArgs,
     output,
     intermediateDir,
+    buildLog,
     defines,
     includePaths,
     assemblyPaths,
@@ -80,6 +81,7 @@ class _ProjectConfiguration(object):
     self.buildArgs = buildArgs
     self.output = output
     self.intermediateDir = intermediateDir
+    self.buildLog = buildLog
     self.defines = defines
     self.includePaths = includePaths
     self.assemblyPaths = assemblyPaths
@@ -297,6 +299,8 @@ class ProjectTool(Tool):
   _projects = _ProjectRegistry()
   _solutions = _SolutionRegistry()
   
+  _msvsBuildLogSuffix = '.html'
+  _msvsBuildLogSuffix2010 = '.log'
   _msvsProjectSuffix = '.vcproj'
   _msvsProjectSuffix2010 = '.vcxproj'
   _msvsFiltersSuffix2010 = '.filters'
@@ -358,6 +362,7 @@ class ProjectTool(Tool):
     output=None,
     name=None,
     intermediateDir=None,
+    buildLog=None,
     compiler=None,
     **kwargs
     ):
@@ -400,6 +405,10 @@ class ProjectTool(Tool):
     @param intermediateDir: The path to intermediate files. If this is
     None the directory of the first output is used instead.
     @type intermediateDir: string
+    @param buildLog: The path to the build log file that MSVS will
+    generate for each build. If this is None the name of the first output
+    is used instead.
+    @type buildLog: string
     @param compiler: A compiler tool containing the compile settings
     used for the aid of intellisense. If not supplied the compiler is
     obtained implicitly via 'ouput.compiler'.
@@ -419,6 +428,7 @@ class ProjectTool(Tool):
     items = basePath(items)
     output = basePath(output)
     intermediateDir = basePath(intermediateDir)
+    buildLog = basePath(buildLog)
     
     return tool._project(
       target,
@@ -426,17 +436,19 @@ class ProjectTool(Tool):
       output,
       name,
       intermediateDir,
+      buildLog,
       compiler,
       )
     
   def _project(
     self,
     target,
-    items,
-    output,
-    name,
-    intermediateDir,
-    compiler,
+    items=None,
+    output=None,
+    name=None,
+    intermediateDir=None,
+    buildLog=None,
+    compiler=None,
     ):
 
     # Project name defaults the base filename without extension
@@ -454,7 +466,7 @@ class ProjectTool(Tool):
       filters = None
 
     @waitForAsyncResult
-    def run(output, items, compiler=compiler, intermediateDir=intermediateDir):
+    def run(output, items, intermediateDir=intermediateDir, buildLog=buildLog, compiler=compiler):
       if compiler is None and output is not None:
         try:
           compiler = output.compiler
@@ -485,6 +497,16 @@ class ProjectTool(Tool):
       if intermediateDir is None:
         intermediateDir = cake.path.dirName(outputPath)
     
+      # Build log defaults to the output path
+      if self.product == self.VS2010:
+        if buildLog is None:
+          buildLog = cake.path.stripExtension(outputPath)
+        buildLog = cake.path.forceExtension(buildLog, self._msvsBuildLogSuffix2010)
+      else:
+        if buildLog is None:
+          buildLog = cake.path.stripExtension(outputPath) + ".buildlog"
+        buildLog = cake.path.forceExtension(buildLog, self._msvsBuildLogSuffix)
+        
       script = Script.getCurrent()
       configuration = script.configuration
       configName = self._getProjectConfigName()
@@ -525,6 +547,7 @@ class ProjectTool(Tool):
         buildArgs,
         outputPath,
         intermediateDir,
+        buildLog,
         defines,
         includePaths,
         assemblyPaths,
@@ -989,7 +1012,7 @@ class MsvsProjectGenerator(object):
     outdir = self.getRelativePath(os.path.dirname(config.output))
     intdir = self.getRelativePath(config.intermediateDir)
     runfile = self.getRelativePath(config.output)
-    buildlog = os.path.join(intdir, "buildlog.html")
+    buildlog = self.getRelativePath(config.buildLog)
 
     includePaths = [self.getRelativePath(p) for p in config.includePaths]    
     assemblyPaths = [self.getRelativePath(p) for p in config.assemblyPaths]
@@ -1418,8 +1441,7 @@ class MsBuildProjectGenerator(object):
   def _writeBuildLog(self, config):
     """Write a section that declares an individual build configuration.
     """
-    intdir = self.getRelativePath(config.intermediateDir)
-    buildLog = cake.path.join(intdir, "buildlog.log")
+    buildLog = self.getRelativePath(config.buildLog)
     
     self.file.write(_msbuildLog % {
       "name" : escapeAttr(config.name),

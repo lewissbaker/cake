@@ -30,7 +30,7 @@ else:
   def _setCreatorType(file):
     pass
       
-def loadCode(file, cfile=None, dfile=None):
+def loadCode(file, cfile=None, dfile=None, cached=True):
   """Load the code object for the specified python file.
   
   Uses the bytecode cache file if it exists and matches the timestamp of
@@ -45,6 +45,10 @@ def loadCode(file, cfile=None, dfile=None):
   @param dfile: If specified, the path of the file to show in error
   messages. Defaults to C{file}.
    
+  @param cached: True if the byte code should be cached to a separate
+  file for quicker loading next time.
+  @type cached: bool
+   
   @return: The code object resulting from compiling the python source file.
   This can be executed by the 'exec' statement/function.
   """
@@ -52,21 +56,22 @@ def loadCode(file, cfile=None, dfile=None):
     cfile = file + (__debug__ and 'c' or 'o')
 
   timestamp = None
-   
-  # Try to load the cache file if possible, don't sweat if we can't
-  try:
-    f = open(cfile, 'rb')
+  
+  if cached:
+    # Try to load the cache file if possible, don't sweat if we can't
     try:
-      if f.read(_MAGIC_LEN) == _MAGIC:
-        cacheTimestamp = struct.unpack('<I', f.read(4))[0]
-        timestamp = long(os.stat(file).st_mtime)
-        if timestamp == cacheTimestamp:
-          return marshal.load(f)
-    finally:
-      f.close()
-  except Exception:
-    # Failed to load the cache file
-    pass
+      f = open(cfile, 'rb')
+      try:
+        if f.read(_MAGIC_LEN) == _MAGIC:
+          cacheTimestamp = struct.unpack('<I', f.read(4))[0]
+          timestamp = long(os.stat(file).st_mtime)
+          if timestamp == cacheTimestamp:
+            return marshal.load(f)
+      finally:
+        f.close()
+    except Exception:
+      # Failed to load the cache file
+      pass
   
   # Load the source file
   f = open(file, 'rU')
@@ -87,20 +92,21 @@ def loadCode(file, cfile=None, dfile=None):
   # Compile the source
   codeobject = __builtin__.compile(codestring, dfile or file, 'exec')
   
-  # Try to save the cache file if possible, don't sweat if we can't
-  try:
-    f = open(cfile, 'wb')
+  if cached:
+    # Try to save the cache file if possible, don't sweat if we can't
     try:
-      f.write(_NOTMAGIC)
-      f.write(struct.pack('<I', timestamp))
-      marshal.dump(codeobject, f)
-      f.flush()
-      f.seek(0, 0)
-      f.write(_MAGIC)
-    finally:
-      f.close()
-    _setCreatorType(cfile)
-  except Exception:
-    pass
+      f = open(cfile, 'wb')
+      try:
+        f.write(_NOTMAGIC)
+        f.write(struct.pack('<I', timestamp))
+        marshal.dump(codeobject, f)
+        f.flush()
+        f.seek(0, 0)
+        f.write(_MAGIC)
+      finally:
+        f.close()
+      _setCreatorType(cfile)
+    except Exception:
+      pass
   
   return codeobject

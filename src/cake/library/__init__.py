@@ -5,8 +5,13 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script
 from cake.task import Task
+from cake.script import AsyncResult, DeferredResult, Script, ScriptResult
+
+# These classes are also exported from this module.
+AsyncResult = AsyncResult
+DeferredResult = DeferredResult
+ScriptResult = ScriptResult
 
 class ToolMetaclass(type):
   """This metaclass ensures that new instance variables can only be added to
@@ -122,66 +127,10 @@ class FileTarget(object):
     self.path = path
     self.task = task
 
-class AsyncResult(object):
-  """Base class for asynchronous results.
-  
-  @ivar task: A Task that will complete when the result is available.
-  @ivar result: The result of the asynchronous operation.
-  """ 
-
-class DeferredResult(AsyncResult):
-  
-  def __init__(self, task):
-    self.task = task
-
-  @property
-  def result(self):
-    return self.task.result
-
-_undefined = object()
-
-class ScriptResult(AsyncResult):
-  """A placeholder that can be used to reference a result of another
-  script that may not be available yet.
-  
-  The result will be available when the task has completed successfully.
-  """
-  
-  __slots__ = ['__execute', '__script', '__name', '__default']
-  
-  def __init__(self, execute, name, default=_undefined):
-    self.__execute = execute
-    self.__script = None
-    self.__name = name
-    self.__default = default
-    
-  @property
-  def script(self):
-    """The Script that will be executed.
+  def __str__(self):
+    """Return the string representation of this object.
     """
-    script = self.__script
-    if script is None:
-      script = self.__script = self.__execute()
-      assert isinstance(script, Script)
-    return script
-    
-  @property
-  def task(self):
-    """The script's task.
-    """
-    return self.script.task
-
-  @property
-  def result(self):
-    assert self.task.completed
-    try:
-      return self.__script.getResult(self.__name)
-    except KeyError:
-      default = self.__default
-      if default is not _undefined:
-        return default
-      else:
-        raise
+    return self.path
 
 def _findAsyncResults(value):
   """Return a sequence of AsyncResult objects found in the specified value.

@@ -20,12 +20,15 @@ except ImportError:
   import pickle
 
 import cake.bytecode
-import cake.tools
 import cake.task
 import cake.path
 import cake.hash
 import cake.filesys
 import cake.threadpool
+import cake.script
+
+# TODO: Refactor this until there are no more references to engine.Script.
+Script = cake.script.Script
 
 class BuildError(Exception):
   """Exception raised when a build fails.
@@ -97,6 +100,15 @@ class Engine(object):
   mainly use Python code. Threaded Python code executes under a
   notoriously slow GIL (Global Interpreter Lock). By executing most
   Python code on the same thread we can avoid the expensive GIL locking.  
+  """
+  
+  scriptCachePath = None
+  """Path to the script cache files.
+  
+  @ivar scriptCachePath: The absolute path to the directory that should store
+  script cache files. If None the script cache files will be put next to the
+  script files themselves with a different extension.
+  @type scriptCachePath: string or None
   """
   
   forceBuild = False
@@ -416,19 +428,38 @@ class Engine(object):
     self.errors.append(message)
     raise BuildError(message)
     
-  def getByteCode(self, path):
+  def getByteCode(self, path, cached=True):
     """Load a python file and return the compiled byte-code.
     
     @param path: The path of the python file to load.
     @type path: string
     
+    @param cached: True if the byte code should be cached to a separate
+    file for quicker loading next time.
+    @type cached: bool
+
     @return: A code object that can be executed with the python 'exec'
     statement.
     @rtype: C{types.CodeType}
     """
     byteCode = self._byteCodeCache.get(path, None)
     if byteCode is None:
-      byteCode = cake.bytecode.loadCode(path)
+      # Cache the code in a user-supplied directory if provided.
+      if self.scriptCachePath is not None:
+        assert cake.path.isAbs(path) # Need an absolute path to get a unique hash.
+        pathDigest = cake.hash.sha1(path.encode("utf8")).digest()
+        pathDigestStr = cake.hash.hexlify(pathDigest)
+        cacheFilePath = cake.path.join(
+          self.scriptCachePath,
+          pathDigestStr[0],
+          pathDigestStr[1],
+          pathDigestStr[2],
+          pathDigestStr
+          )
+        cake.filesys.makeDirs(cake.path.dirName(cacheFilePath))
+      else:
+        cacheFilePath = None
+      byteCode = cake.bytecode.loadCode(path, cfile=cacheFilePath, cached=cached)
       self._byteCodeCache[path] = byteCode
     return byteCode
     
@@ -575,105 +606,6 @@ class DependencyInfo(object):
     self.depPaths = None
     self.depTimestamps = None
     self.depDigests = None
-
-class Script(object):
-  """A class that represents an instance of a Cake script. 
-  """
-  
-  _current = threading.local()
-  
-  def __init__(self, path, configuration, variant, engine, task, tools=None, parent=None):
-    """Constructor.
-    
-    @param path: The path to the script file.
-    @param configuration: The configuration to build.
-    @param variant: The variant to build.
-    @param engine: The engine instance.
-    @param task: A task that should complete when all tasks within
-    the script have completed.
-    @param tools: The tools dictionary to use as cake.tools for this script.
-    @param parent: The parent script or None if this is the root script. 
-    """
-    self.path = path
-    self.dir = cake.path.dirName(path) or '.'
-    self.configuration = configuration
-    self.variant = variant
-    self.engine = engine
-    self.task = task
-    if tools is None:
-      self.tools = {}
-    else:
-      self.tools = tools
-    self._results = {}
-    if parent is None:
-      self.root = self
-    else:
-      self.root = parent.root
-
-  @staticmethod
-  def getCurrent():
-    """Get the current thread's currently executing script.
-    
-    @return: The currently executing script.
-    @rtype: L{Script}
-    """
-    return getattr(Script._current, "value", None)
-  
-  @staticmethod
-  def getCurrentRoot():
-    """Get the current thread's root script.
-    
-    This is the top-level script currently being executed.
-    A script may not be the top-level script if it is executed due
-    to inclusion from another script.
-    """
-    current = Script.getCurrent()
-    if current is not None:
-      return current.root
-    else:
-      return None
-
-  def setResult(self, **kwargs):
-    """Return a set of named values from the script execution.
-    """
-    self._results.update(kwargs)
-
-  def getResult(self, name):
-    """Get the named result from the script.
-    
-    @raise KeyError: If the value has not been returned or is not available yet.
-    """
-    return self._results[name]
-
-  def cwd(self, *args):
-    """Return the path prefixed with the current script's directory.
-    """
-    d = self.dir
-    if d == '.' and args:
-      return cake.path.join(*args)
-    else:
-      return cake.path.join(d, *args)
-
-  def execute(self):
-    """Execute this script.
-    """
-    # Use an absolute path so an absolute path is embedded in the .pyc file.
-    # This will make exceptions clickable in Eclipse, but it means copying
-    # your .pyc files may cause their embedded paths to be incorrect.
-    if self.configuration is not None:
-      absPath = self.configuration.abspath(self.path)
-    else:
-      absPath = os.path.abspath(self.path)
-    byteCode = self.engine.getByteCode(absPath)
-    scriptGlobals = {'__file__': absPath}
-    if self.configuration is not None:
-      scriptGlobals.update(self.configuration.scriptGlobals)
-    old = Script.getCurrent()
-    Script._current.value = self
-    try:
-      exec byteCode in scriptGlobals
-    finally:
-      Script._current.value = old
 
 class Configuration(object):
   """A configuration is a collection of related Variants.
@@ -856,15 +788,12 @@ class Configuration(object):
     self._executedLock.acquire()
     try:
       script = self._executed.get(key, None)
-      if script is not None:
-        task = script.task
-      else:
+      if script is None:
         tools = {}
+        for name, tool in variant.tools.items():
+          tools[name] = tool.clone()
 
         def execute():
-          for name, tool in variant.tools.items():
-            tools[name] = tool.clone()
-
           if self is not currentConfiguration:
             self.engine.logger.outputInfo("Building with %s - %s\n" % (self.path, variant))
           elif variant is not currentVariant:

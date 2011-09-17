@@ -345,7 +345,8 @@ def run(args=None, cwd=None):
       task=None,
       engine=engine,
       )
-    script.execute()
+    # Don't cache args.cake as this is where the cache dir may be set.
+    script.execute(cached=False)
 
   # Parse again, this time with user options and help/errors enabled
   parser.add_option(

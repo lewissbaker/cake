@@ -8,7 +8,7 @@
 import os.path
 
 from cake.engine import Script
-from cake.library import Tool, ScriptResult, FileTarget, getPaths, getTasks
+from cake.library import Tool, FileTarget, getPaths, getTasks
 
 class ScriptTool(Tool):
   """Tool that provides utilities for performing Script operations.
@@ -85,29 +85,25 @@ class ScriptTool(Tool):
     if useContext:
       # Use the current configuration and lookup the variant relative
       # to the current variant.
-      baseVariant = Script.getCurrent().variant 
-      def execute():
-        variant = self.configuration.findVariant(keywords, baseVariant=baseVariant)
-        return self.configuration.execute(path=script, variant=variant)
+      baseVariant = Script.getCurrent().variant
+      variant = self.configuration.findVariant(keywords, baseVariant=baseVariant)
+      return self.configuration.execute(path=script, variant=variant)
     else:
       # Re-evaluate the configuration to execute the script with.
       # Uses the keywords specified to find the variant in the variants
       # defined in that configuration.
-      def execute():
-        path = self.configuration.abspath(script)
-        if configScript is None:
-          configuration = self.engine.findConfiguration(
-            path=path,
-            configScriptName=configScriptName,
-            )
-        else:
-          configuration = self.engine.getConfiguration(
-            path=self.configuration.abspath(configScript),
-            )
-        variant = configuration.findVariant(keywords)
-        return configuration.execute(path=path, variant=variant)
-      
-    return ScriptProxy(execute)
+      path = self.configuration.abspath(script)
+      if configScript is None:
+        configuration = self.engine.findConfiguration(
+          path=path,
+          configScriptName=configScriptName,
+          )
+      else:
+        configuration = self.engine.getConfiguration(
+          path=self.configuration.abspath(configScript),
+          )
+      variant = configuration.findVariant(keywords)
+      return configuration.execute(path=path, variant=variant)
 
   def cwd(self, *args):
     """Return the path prefixed with the this script's directory.
@@ -263,31 +259,3 @@ class ScriptTool(Tool):
     else:
       return task
 
-class ScriptProxy(object):
-  """A proxy that can be used to perform actions on a particular
-  script.
-  """
- 
-  def __init__(self, execute):
-    self.__execute = execute
-
-  def execute(self):
-    """Start the execution of the script if it hasn't already been started.
-    
-    The script will complete execution at some point in the future.
-    
-    @return: The Script object that will be executed.
-    """
-    return self.__execute()
-  
-  def getResult(self, name, *args, **kwargs):
-    """Get a placeholder for the result defined by this script when it is
-    executed.
-    
-    The script will be executed if the result is ever required.
-
-    @param name: The name of the script result to retrieve.
-    @param default: If supplied then the default value to return in case
-    the script does not define that result.
-    """
-    return ScriptResult(self.__execute, name, *args, **kwargs)

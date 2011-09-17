@@ -1955,8 +1955,7 @@ class Compiler(Tool):
           # One of the dependencies didn't exist
           continue
         
-        # Check if the state of our files matches that of a cached
-        # object file.
+        # Check if the state of our files matches that of a cached object file.
         cachedObjectDigest = configuration.calculateDigest(newDependencyInfo)
         cachedObjectDigestStr = cake.hash.hexlify(cachedObjectDigest)
         cachedObjectPath = cake.path.join(

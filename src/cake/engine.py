@@ -25,10 +25,8 @@ import cake.path
 import cake.hash
 import cake.filesys
 import cake.threadpool
-import cake.script
 
-# TODO: Refactor this until there are no more references to engine.Script.
-Script = cake.script.Script
+from cake.script import Script as _Script
 
 class BuildError(Exception):
   """Exception raised when a build fails.
@@ -225,7 +223,7 @@ class Engine(object):
     configuration = self._configurations.get(path, None)
     if configuration is None:
       configuration = Configuration(path=path, engine=self)
-      script = Script(
+      script = _Script(
         path=cake.path.baseName(path),
         configuration=configuration,
         variant=None,
@@ -365,7 +363,7 @@ class Engine(object):
     
     # Save the script that created the task so that the task
     # inherits that same script when executed.
-    currentScript = Script.getCurrent()
+    currentScript = _Script.getCurrent()
     
     def _wrapper():
       if self.maximumErrorCount and self.errorCount >= self.maximumErrorCount:
@@ -376,12 +374,12 @@ class Engine(object):
       
       try:
         # Restore the old script
-        oldScript = Script.getCurrent()
-        Script._current.value = currentScript
+        oldScript = _Script.getCurrent()
+        _Script._current.value = currentScript
         try:
           return func()
         finally:
-          Script._current.value = oldScript
+          _Script._current.value = oldScript
       except BuildError:
         # Assume build errors have already been reported
         raise
@@ -777,7 +775,7 @@ class Configuration(object):
 
     key = (os.path.normcase(path), variant)
 
-    currentScript = Script.getCurrent()
+    currentScript = _Script.getCurrent()
     if currentScript:
       currentVariant = currentScript.variant
       currentConfiguration = currentScript.configuration
@@ -804,7 +802,7 @@ class Configuration(object):
             )
           script.execute()
         task = self.engine.createTask(execute)
-        script = Script(
+        script = _Script(
           path=path,
           configuration=self,
           variant=variant,

@@ -1,9 +1,10 @@
 #-------------------------------------------------------------------------------
-# This example simply shows what a more complicated config.cake may look like.
+# This example shows what a more complicated config.cake may look like.
 #
 # It it not a working example but may be used as a reference when creating a
 # more advanced build system configuration file.
 #-------------------------------------------------------------------------------
+from cake.engine import Variant
 from cake.library.script import ScriptTool
 from cake.library.filesys import FileSystemTool
 from cake.library.variant import VariantTool
@@ -13,7 +14,8 @@ from cake.library.logging import LoggingTool
 from cake.library.project import ProjectTool
 from cake.library.env import Environment
 from cake.library.compilers import CompilerNotFoundError
-from cake.engine import Script, Variant
+from cake.script import Script
+
 import cake.system
 import os
 
@@ -33,7 +35,6 @@ base.tools["script"] = ScriptTool(configuration=configuration)
 filesys = base.tools["filesys"] = FileSystemTool(configuration=configuration)
 base.tools["variant"] = VariantTool(configuration=configuration)
 shell = base.tools["shell"] = ShellTool(configuration=configuration)
-shell.update(os.environ)
 zipping = base.tools["zipping"] = ZipTool(configuration=configuration)
 base.tools["logging"] = LoggingTool(configuration=configuration)
 env = base.tools["env"] = Environment(configuration=configuration)

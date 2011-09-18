@@ -1,10 +1,11 @@
 #-------------------------------------------------------------------------------
 # Configuration to build a dummy program and provide project generation.
 #-------------------------------------------------------------------------------
-from cake.engine import Script, Variant
+from cake.engine import Variant
 from cake.library.script import ScriptTool
 from cake.library.project import ProjectTool
 from cake.library.compilers.dummy import DummyCompiler
+from cake.script import Script
 
 engine = Script.getCurrent().engine
 configuration = Script.getCurrent().configuration

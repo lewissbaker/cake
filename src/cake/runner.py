@@ -15,10 +15,11 @@ import time
 import traceback
 import platform
 
-import cake.logging
 import cake.engine
-import cake.task
+import cake.logging
 import cake.path
+import cake.script
+import cake.task
 import cake.threadpool
 import cake.version
 
@@ -338,7 +339,7 @@ def run(args=None, cwd=None):
 
   # Run the args.cake
   if argsFileName is not None:
-    script = cake.engine.Script(
+    script = cake.script.Script(
       path=argsFileName,
       configuration=None,
       variant=None,

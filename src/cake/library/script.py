@@ -7,8 +7,8 @@
 
 import os.path
 
-from cake.engine import Script
 from cake.library import Tool, FileTarget, getPaths, getTasks
+from cake.script import Script
 
 class ScriptTool(Tool):
   """Tool that provides utilities for performing Script operations.

@@ -2,7 +2,7 @@
 # Default configuration used if none is passed on the command line or
 # found by searching up from the working directory.
 #-------------------------------------------------------------------------------
-from cake.engine import Script, Variant
+from cake.engine import Variant
 from cake.library.env import EnvironmentTool
 from cake.library.script import ScriptTool
 from cake.library.logging import LoggingTool
@@ -13,6 +13,8 @@ from cake.library.zipping import ZipTool
 from cake.library.compilers import CompilerNotFoundError
 from cake.library.compilers.dummy import DummyCompiler
 from cake.library import waitForAsyncResult
+from cake.script import Script
+
 import cake.system
 import cake.path
 

@@ -18,10 +18,11 @@ except ImportError:
 import cake.path
 import cake.filesys
 import cake.hash
+
 from cake.library import (
   Tool, FileTarget, AsyncResult, waitForAsyncResult, flatten, getPath, getPaths
   )
-from cake.engine import Script
+from cake.script import Script
 
 class _Project(object):
   

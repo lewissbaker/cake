@@ -5,8 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.engine import Script
 from cake.library import Tool
+from cake.script import Script
 
 class VariantTool(Tool):
   

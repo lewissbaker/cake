@@ -15,7 +15,7 @@ import sys
 class ToolsProxy(object):
 
   def __getattribute__(self, key):
-    from cake.engine import Script
+    from cake.script import Script
     script = Script.getCurrent()
     if script is None:
       raise AttributeError("No current script.")
@@ -26,7 +26,7 @@ class ToolsProxy(object):
         raise AttributeError("No such tool '%s'" % key)
 
   def __setattr__(self, key, value):
-    from cake.engine import Script
+    from cake.script import Script
     script = Script.getCurrent()
     if script is None:
       raise AttributeError("No current script.")

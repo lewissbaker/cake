@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # Command line argument file used to add a project generation option.
 #-------------------------------------------------------------------------------
-from cake.engine import Script
+from cake.script import Script
 
 parser = Script.getCurrent().engine.parser
 

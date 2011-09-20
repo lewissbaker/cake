@@ -27,12 +27,24 @@ def _getMinGWInstallDir():
   @raise WindowsError: If MinGW is not installed. 
   """
   import _winreg
-  subKey = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MinGW"
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
-  try:
-    return str(_winreg.QueryValueEx(key, "InstallLocation")[0])
-  finally:
-    _winreg.CloseKey(key)
+  
+  possibleSubKeys = [
+    r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MinGW",
+    r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{AC2C1BDB-1E91-4F94-B99C-E716FE2E9C75}_is1",
+    ]
+  
+  # Try all known registry locations.
+  for subKey in possibleSubKeys:
+    try:
+      key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
+      try:
+        return str(_winreg.QueryValueEx(key, "InstallLocation")[0])
+      finally:
+        _winreg.CloseKey(key)
+    except WindowsError:
+      # If this is the last possibility, re-raise the exception.
+      if subKey is possibleSubKeys[-1]:
+        raise
 
 def _getGccVersion(gccExe):
   """Returns the Gcc version number given an executable.
@@ -85,7 +97,7 @@ def findMinGWCompiler(configuration):
     except EnvironmentError:
       raise CompilerNotFoundError("Could not find MinGW version.")
 
-    return WindowsGccCompiler(
+    return WindowsMinGWCompiler(
       configuration=configuration,
       arExe=arExe,
       gccExe=gccExe,
@@ -520,7 +532,11 @@ class WindowsGccCompiler(GccCompiler):
       return [target], [args[0], source]
 
     return compile, scan
-  
+
+class WindowsMinGWCompiler(WindowsGccCompiler):
+
+  _name = 'mingw'
+
 class MacGccCompiler(GccCompiler):
 
   modulePrefixSuffixes = [('lib', '.dylib')]

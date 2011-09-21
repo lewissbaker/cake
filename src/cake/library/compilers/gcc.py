@@ -537,6 +537,16 @@ class WindowsMinGWCompiler(WindowsGccCompiler):
 
   _name = 'mingw'
 
+  def _getCommonLinkArgs(self, dll):
+    args = WindowsGccCompiler._getCommonLinkArgs(self, dll)
+
+    # TODO: If this breaks try supporting the older '-mwindows' flag for older
+    # compiler versions. The flag below works for MinGW/GCC 4.5.2.
+    if self.subSystem is not None:
+      args.append('-Wl,-subsystem,' + self.subSystem.lower())
+      
+    return args
+  
 class MacGccCompiler(GccCompiler):
 
   modulePrefixSuffixes = [('lib', '.dylib')]

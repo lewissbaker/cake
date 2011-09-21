@@ -7,6 +7,7 @@
 
 import os
 import os.path
+import re
 import cake.system
 
 def absPath(path):
@@ -168,8 +169,18 @@ def expandVars(path, env):
         try:
           index = path.index('}')
           var = path[:index]
+          sliceStart = None
+          # Check for an indexed variable.
+          if var.endswith(']') and '[' in var:
+            m = re.match(r'(.+)\[(\d+)\]', var)
+            if m:
+              var = m.group(1)
+              sliceStart = int(m.group(2))
           if var in env:
-            res = res + expandVars(env[var], env)
+            subVar = expandVars(env[var], env)
+            if sliceStart is not None:
+              subVar = subVar[sliceStart]
+            res = res + subVar
           else:
             res = res + '{MISSING_SYMBOL_' + var + '}'
         except ValueError:

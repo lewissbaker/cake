@@ -12,13 +12,15 @@ try-except block is in place.
 def run():
   """Minimal run function.
   """
-  try:
-    import sys
-    import cake.runner
-    sys.exit(cake.runner.run())
-  except KeyboardInterrupt:
-    import sys
+  import signal
+  import sys
+
+  def signalHandler(signum, frame):
     sys.exit(-1)
+  signal.signal(signal.SIGINT, signalHandler)
+  
+  import cake.runner
+  sys.exit(cake.runner.run())
 
 if __name__ == '__main__':
   """Minimal main function.

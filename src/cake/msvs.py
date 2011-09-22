@@ -5,12 +5,30 @@
 @license: Licensed under the MIT license.
 """
 import _winreg
-import platform
+import cake.system
 
-_read32BitRegistry = _winreg.KEY_READ
-if platform.architecture()[0] == '64bit':
-  _read32BitRegistry = _read32BitRegistry | _winreg.KEY_WOW64_32KEY
+def queryValue(key, sub_key, name):
+  # List of access modes to try.
+  sams = [_winreg.KEY_READ]
+  
+  # Also try for a 32-bit registry key on 64-bit Windows. On 64-bit Windows
+  # the Windows SDK is usually installed in the 64-bit program files
+  # directory but the compiler is usually installed in the 32-bit program
+  # files directory.
+  if cake.system.isWindows64():
+    sams.append(_winreg.KEY_READ | _winreg.KEY_WOW64_32KEY)
 
+  for sam in sams:
+    try:
+      keyHandle = _winreg.OpenKey(key, sub_key, 0, sam)
+      try:
+        return str(_winreg.QueryValueEx(keyHandle, name)[0])
+      finally:
+        _winreg.CloseKey(keyHandle)
+    except WindowsError:
+      if sam is sams[-1]:
+        raise
+  
 def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS install directory.
   
@@ -25,11 +43,7 @@ def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s" % version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
-  try:
-    return str(_winreg.QueryValueEx(key, "InstallDir")[0])
-  finally:
-    _winreg.CloseKey(key)
+  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "InstallDir")
 
 def getMsvsProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS product directory.
@@ -45,11 +59,7 @@ def getMsvsProductDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VS" % version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
-  try:
-    return str(_winreg.QueryValueEx(key, "ProductDir")[0])
-  finally:
-    _winreg.CloseKey(key)
+  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "ProductDir")
 
 def getMsvcProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVC product directory as obtained from the registry.
@@ -65,11 +75,7 @@ def getMsvcProductDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVC is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VC" % version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
-  try:
-    return str(_winreg.QueryValueEx(key, "ProductDir")[0])
-  finally:
-    _winreg.CloseKey(key)
+  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "ProductDir")
 
 def getPlatformSdkDir():
   """Returns the Microsoft Platform SDK directory.
@@ -80,11 +86,7 @@ def getPlatformSdkDir():
   @raise WindowsError: If the Platform SDK is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\Microsoft SDKs\Windows"
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
-  try:
-    return str(_winreg.QueryValueEx(key, "CurrentInstallFolder")[0])
-  finally:
-    _winreg.CloseKey(key)
+  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "CurrentInstallFolder")
 
 def getDotNetFrameworkSdkDir(version='2.0'):
   """Looks up the path of the Microsoft .NET Framework SDK directory.
@@ -99,8 +101,4 @@ def getDotNetFrameworkSdkDir(version='2.0'):
   """
   subKey = r"SOFTWARE\Microsoft\.NETFramework"
   valueName = "sdkInstallRootv" + version
-  key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey, 0, _read32BitRegistry)
-  try:
-    return str(_winreg.QueryValueEx(key, valueName)[0])
-  finally:
-    _winreg.CloseKey(key)
+  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, valueName)

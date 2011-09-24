@@ -28,6 +28,8 @@ def _getMinGWInstallDir():
   """
   import _winreg
   
+  from cake.registry import queryValue
+  
   possibleSubKeys = [
     r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MinGW",
     r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{AC2C1BDB-1E91-4F94-B99C-E716FE2E9C75}_is1",
@@ -36,11 +38,7 @@ def _getMinGWInstallDir():
   # Try all known registry locations.
   for subKey in possibleSubKeys:
     try:
-      key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, subKey)
-      try:
-        return str(_winreg.QueryValueEx(key, "InstallLocation")[0])
-      finally:
-        _winreg.CloseKey(key)
+      return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "InstallLocation")
     except WindowsError:
       # If this is the last possibility, re-raise the exception.
       if subKey is possibleSubKeys[-1]:

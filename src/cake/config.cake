@@ -25,8 +25,6 @@ configuration = Script.getCurrent().configuration
 
 # Override the configuration basePath() function.
 def basePath(value):
-  # Note: Any initial AsyncResult's should have been expanded by now,
-  # so we should know if the value should be a sequence or single value.
   from cake.tools import script, env
 
   @waitForAsyncResult

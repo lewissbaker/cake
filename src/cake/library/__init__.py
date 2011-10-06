@@ -327,17 +327,3 @@ def cloneTools(obj):
     return type(obj)(cloneTools(i) for i in obj)
   else:
     return obj
-  
-def deepCopyBuiltins(obj):
-  """Returns a deep copy of only builtin types.
-  
-  @param obj: The given object to copy.
-  @return: A copy of the given object for builtin types, and references to
-  the same object for user-defined types.
-  """
-  if isinstance(obj, dict):
-    return dict((deepCopyBuiltins(k), deepCopyBuiltins(v)) for k, v in obj.iteritems())
-  elif isinstance(obj, (list, tuple, set)):
-    return type(obj)(deepCopyBuiltins(i) for i in obj)
-  else:
-    return obj

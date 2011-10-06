@@ -9,7 +9,7 @@ import os
 import subprocess
 import cake.filesys
 import cake.path
-from cake.library import Tool, FileTarget, flatten, deepCopyBuiltins, getPaths, getTasks, waitForAsyncResult
+from cake.library import Tool, FileTarget, flatten, getPaths, getTasks, waitForAsyncResult
 
 _undefined = object()
 
@@ -18,11 +18,11 @@ class ShellTool(Tool):
   def __init__(self, configuration, env=None):
     Tool.__init__(self, configuration)
     if env is None:
-      self.__env = dict(os.environ)
+      self._env = dict(os.environ)
     else:
-      self.__env = dict(env)
+      self._env = dict(env)
 
-  def run(self, args, targets=None, sources=[], cwd=None, removeTargets=False):
+  def run(self, args, targets=None, sources=[], cwd=None, shell=False, removeTargets=False):
     """Run a shell command to build specified targets.
 
     @param args: The command-line to run.
@@ -39,12 +39,22 @@ class ShellTool(Tool):
     @param cwd: The directory to spawn the shell command in.
     If not specified then uses the configuration.baseDir.
 
+    @param shell: Whether to run this command using the default shell,
+    eg. '/bin/sh' or 'cmd.exe'.
+
     @param removeTargets: If specified then the target files will be removed
     before running the command if they already exist.
     """
-    engine = self.engine
-    env = deepCopyBuiltins(self.__env)
+    tool = self.clone()
+    
+    basePath = self.configuration.basePath
+   
+    return tool._run(args, basePath(targets), basePath(sources), basePath(cwd), shell, removeTargets)
+  
+  def _run(self, args, targets=None, sources=[], cwd=None, shell=False, removeTargets=False):
 
+    engine = self.engine
+    
     def spawnProcess(targets, sources, cwd):
 
       sourcePaths = getPaths(sources)
@@ -104,8 +114,9 @@ class ShellTool(Tool):
         p = subprocess.Popen(
           args=args,
           executable=executable,
-          env=env,
+          env=self._env,
           stdin=subprocess.PIPE,
+          shell=shell,
           cwd=cwd,
           )
       except EnvironmentError, e:
@@ -142,37 +153,34 @@ class ShellTool(Tool):
       else:
         return task
     
-    basePath = self.configuration.basePath
-    flattenPath = lambda x: basePath(flatten(x))
-    
-    return _run(flattenPath(targets), flattenPath(sources), basePath(cwd))
+    return _run(flatten(targets), flatten(sources), cwd)
 
   def __iter__(self):
-    return iter(self.__env)
+    return iter(self._env)
 
   def keys(self):
-    return self.__env.keys()
+    return self._env.keys()
 
   def items(self):
-    return self.__env.items()
+    return self._env.items()
 
   def update(self, value):
-    return self.__env.update(value)
+    return self._env.update(value)
 
   def get(self, key, default=_undefined):
     if default is _undefined:
-      return self.__env.get(key)
+      return self._env.get(key)
     else:
-      return self.__env.get(key, default)
+      return self._env.get(key, default)
 
   def __getitem__(self, key):
-    return self.__env[key]
+    return self._env[key]
 
   def __setitem__(self, key, value):
-    self.__env[key] = value
+    self._env[key] = value
 
   def __delitem__(self, key):
-    del self.__env[key]
+    del self._env[key]
 
   def appendPath(self, path):
     basePath = self.configuration.basePath

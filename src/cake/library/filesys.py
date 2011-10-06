@@ -40,30 +40,19 @@ class FileSystemTool(Tool):
     for filePath in files:
       yield join(path, filePath)
 
-  def iglob(self, pathname):
-    """Find files matching a particular pattern. Results are
-    yielded as they occur.
+  def glob(self, pathname):
+    """Find files matching a particular pattern.
     
     @param pathname: A glob-style file-name pattern. eg. '*.txt'
     
-    @return: A sequence of paths of files.
+    @return: A list of paths to files that match the pattern.
     """
     configuration = self.configuration
     basePath = configuration.basePath(pathname)
     absPath = configuration.abspath(basePath)
     offset = len(absPath) - len(pathname)
     
-    for p in glob.iglob(absPath):
-      yield p[offset:]
-  
-  def glob(self, pathname):
-    """Find files matching a particular pattern.
-    
-    @param pathname: A glob-style file-name pattern. eg. '*.txt'
-    
-    @return: A list of paths of files.
-    """
-    return list(self.iglob(pathname))
+    return [p[offset:] for p in glob.iglob(absPath)]
       
   def copyFile(self, source, target):
     """Copy a file from one location to another.

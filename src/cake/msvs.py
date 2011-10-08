@@ -6,7 +6,7 @@
 """
 import _winreg
 
-from cake.registry import queryValue
+from cake.registry import queryString
   
 def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS install directory.
@@ -22,7 +22,7 @@ def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s" % version
-  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "InstallDir")
+  return queryString(_winreg.HKEY_LOCAL_MACHINE, subKey, "InstallDir")
 
 def getMsvsProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS product directory.
@@ -38,7 +38,7 @@ def getMsvsProductDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVS is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VS" % version
-  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "ProductDir")
+  return queryString(_winreg.HKEY_LOCAL_MACHINE, subKey, "ProductDir")
 
 def getMsvcProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVC product directory as obtained from the registry.
@@ -54,7 +54,7 @@ def getMsvcProductDir(version=r'VisualStudio\8.0'):
   @raise WindowsError: If MSVC is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\%s\Setup\VC" % version
-  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "ProductDir")
+  return queryString(_winreg.HKEY_LOCAL_MACHINE, subKey, "ProductDir")
 
 def getPlatformSdkDir():
   """Returns the Microsoft Platform SDK directory.
@@ -65,7 +65,7 @@ def getPlatformSdkDir():
   @raise WindowsError: If the Platform SDK is not installed. 
   """
   subKey = r"SOFTWARE\Microsoft\Microsoft SDKs\Windows"
-  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "CurrentInstallFolder")
+  return queryString(_winreg.HKEY_LOCAL_MACHINE, subKey, "CurrentInstallFolder")
 
 def getDotNetFrameworkSdkDir(version='2.0'):
   """Looks up the path of the Microsoft .NET Framework SDK directory.
@@ -80,4 +80,4 @@ def getDotNetFrameworkSdkDir(version='2.0'):
   """
   subKey = r"SOFTWARE\Microsoft\.NETFramework"
   valueName = "sdkInstallRootv" + version
-  return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, valueName)
+  return queryString(_winreg.HKEY_LOCAL_MACHINE, subKey, valueName)

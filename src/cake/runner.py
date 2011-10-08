@@ -8,7 +8,6 @@
 import os
 import os.path
 import sys
-import optparse
 import threading
 import datetime
 import time
@@ -22,6 +21,8 @@ import cake.script
 import cake.task
 import cake.threadpool
 import cake.version
+
+from cake.optparse import Option, OptionParser
 
 # Make sure stat() returns floats so timestamps are consistent across
 # Python versions (2.4 used longs, 2.5+ uses floats).
@@ -195,42 +196,16 @@ def run(args=None, cwd=None):
     cwd = os.path.abspath(cwd)
   else:
     cwd = os.getcwd()
-
-  class MyParser(optparse.OptionParser):
-    """Subclass OptionParser to allow us to ignore errors during the initial
-    option parsing.
-    """
-    showErrors = True
-    def parse_args(self, args=None, values=None, showErrors=True):
-      self.showErrors = showErrors;
-      try:
-        return optparse.OptionParser.parse_args(self, args, values)
-      finally:
-        self.showErrors = True;
-    def error(self, msg):
-      if self.showErrors:
-        optparse.OptionParser.error(self, msg);
-    
-  class MyOption(optparse.Option):
-    """Subclass the Option class to provide an 'extend' action.
-    """  
-    ACTIONS = optparse.Option.ACTIONS + ("extend",)
-    STORE_ACTIONS = optparse.Option.STORE_ACTIONS + ("extend",)
-    TYPED_ACTIONS = optparse.Option.TYPED_ACTIONS + ("extend",)
-    ALWAYS_TYPED_ACTIONS = optparse.Option.ALWAYS_TYPED_ACTIONS + ("extend",)
   
-    def take_action(self, action, dest, opt, value, values, parser):
-      if action == "extend":
-        lvalue = value.split(",")
-        values.ensure_value(dest, []).extend(lvalue)
-      else:
-        optparse.Option.take_action(
-          self, action, dest, opt, value, values, parser
-          )
-        
   usage = "usage: %prog [options] <cake-script>*"
+  argsCakeFlag = "--args"
   
-  parser = MyParser(usage=usage, option_class=MyOption, add_help_option=False)
+  parser = OptionParser(usage=usage, add_help_option=False)
+  parser.add_option(
+    "-h", "--help",
+    action="help",
+    help="Show this help message and exit.",
+    )
   parser.add_option(
     "-v", "--version",
     dest="outputVersion",
@@ -239,7 +214,7 @@ def run(args=None, cwd=None):
     default=False,
     )
   parser.add_option(
-    "--args",
+    argsCakeFlag,
     metavar="FILE",
     dest="args",
     help="Path to the args.cake file to use.",
@@ -296,38 +271,38 @@ def run(args=None, cwd=None):
     help="Halt the build after a certain number of errors.",
     default=100,
     )
-
-  options, _args = parser.parse_args(args, showErrors=False)
-
-  if options.outputVersion:
-    cakeVersion = cake.version.__version__
-    cakePath = cake.path.dirName(cake.__file__)
-    sys.stdout.write("Cake %s [%s]\n" % (cakeVersion, cakePath))
-    sys.stdout.write("Python %s\n" % sys.version)
-    return 1
-
-  # Find script filenames from the arguments left
-  logger = cake.logging.Logger()
-  engine = cake.engine.Engine(logger, parser)
-
-  # Find script filenames from the arguments
+  
+  # Find and remove script filenames from the arguments.
   scripts = []
+  newArgs = []
   for arg in args:
-    if not os.path.isabs(arg):
-      arg = os.path.join(cwd, arg)
-    # If it's a file or directory assume it's a script path
-    if os.path.exists(arg):
-      scripts.append(arg)
+    path = arg
+    if not os.path.isabs(path):
+      path = os.path.join(cwd, path)
+    # If it's a file or directory assume it's a script path.
+    if os.path.exists(path):
+      scripts.append(path)
+    else:
+      newArgs.append(arg)
+  args = newArgs
 
   # Default to building a script file in the working directory.    
   if not scripts:
     scripts.append(cwd)
 
-  argsFileName = options.args
-  if argsFileName is None:
-    # Try to find an args.cake by searching up from each scripts directory
+  logger = cake.logging.Logger()
+  engine = cake.engine.Engine(logger, parser, args)
+
+  # Try to find an args.cake command line option.
+  for arg in engine.args:
+    if arg.startswith(argsCakeFlag):
+      argsFileName = arg[len(argsCakeFlag):]
+      if argsFileName:
+        break
+  else:
+    # Try to find an args.cake by searching up from each scripts directory.
     for script in scripts:
-      # Script could be a file or directory name
+      # Script could be a file or directory name.
       if os.path.isdir(script):
         scriptDirName = script
       else:
@@ -336,9 +311,11 @@ def run(args=None, cwd=None):
       argsFileName = engine.searchUpForFile(scriptDirName, "args.cake")
       if argsFileName:
         break
+    else:
+      argsFileName = None # No args.cake found.
 
   # Run the args.cake
-  if argsFileName is not None:
+  if argsFileName:
     script = cake.script.Script(
       path=argsFileName,
       configuration=None,
@@ -349,25 +326,20 @@ def run(args=None, cwd=None):
     # Don't cache args.cake as this is where the cache dir may be set.
     script.execute(cached=False)
 
-  # Parse again, this time with user options and help/errors enabled
-  parser.add_option(
-    "-h", "--help",
-    action="help",
-    help="Show this help message and exit.",
-    )
-  options, args = parser.parse_args(args)
+  # Parse any remaining args (after args.cake may have modified them).
+  options, args = parser.parse_args(engine.args)
 
-  # Set components to debug
-  for c in options.debugComponents:
-    logger.enableDebug(c)
+  # Print out Cake version information if requested.
+  if options.outputVersion:
+    cakeVersion = cake.version.__version__
+    cakePath = cake.path.dirName(cake.__file__)
+    sys.stdout.write("Cake %s [%s]\n" % (cakeVersion, cakePath))
+    sys.stdout.write("Python %s\n" % sys.version)
+    return 1
 
-  # Set quiet mode    
-  logger.quiet = options.quiet;
-
-  # Find keyword arguments and re-evaluate the script paths in light
-  # of the reparsed args. 
+  # Find keyword arguments from what's left of the args. 
   keywords = {}
-  scripts = []
+  unknownArgs = []
   for arg in args:
     if '=' in arg:
       keyword, value = arg.split('=', 1)
@@ -375,20 +347,22 @@ def run(args=None, cwd=None):
       if value:
         existingValues.extend(value.split(','))
     else:
-      path = arg
-      if not os.path.isabs(path):
-        path = os.path.join(cwd, path)
-      scripts.append(os.path.abspath(arg))
+      unknownArgs.append(arg)
 
-  if not scripts:
-    scripts.append(cwd)
-
-  threadPool = cake.threadpool.ThreadPool(options.jobs)
-  cake.task.setThreadPool(threadPool)
-
+  if unknownArgs:
+    parser.error("unknown args: %s" % " ".join(unknownArgs))
+  
+  # Set components to debug.
+  for c in options.debugComponents:
+    logger.enableDebug(c)
+  logger.quiet = options.quiet
+  
   engine.options = options
   engine.forceBuild = options.forceBuild
   engine.maximumErrorCount = options.maximumErrorCount
+    
+  threadPool = cake.threadpool.ThreadPool(options.jobs)
+  cake.task.setThreadPool(threadPool)
  
   tasks = []
   

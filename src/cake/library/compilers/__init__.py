@@ -20,9 +20,11 @@ try:
 except ImportError:
   import pickle
 
-import cake.path
 import cake.filesys
 import cake.hash
+import cake.path
+import cake.system
+
 from cake.library import (
   Tool, FileTarget, AsyncResult,
   memoise, waitForAsyncResult, flatten,
@@ -270,6 +272,19 @@ class Compiler(Tool):
     MWCW: -sym dwarf-2
   @type: bool
   """
+  keepDependencyFile = False
+  """Whether to keep the compiler generated dependency file.
+  
+  If the value is set then Cake will keep the compiler generated dependency
+  file after a build. The dependency file is used by Cake to obtain a list
+  of source files an object file is dependent on. It will be located next to
+  the target object file with a '.d' extension. This switch is only relevant
+  for compilers that use a dependency file (eg. GCC/MWCW).
+  
+  Related compiler options::
+    GCC/MWCW:  -MD
+  @type: bool
+  """
   optimisation = None
   """Set the optimisation level.
   
@@ -363,8 +378,9 @@ class Compiler(Tool):
   """Output a map file.
   
   If enabled the compiler will output a map file that matches the name of
-  the executable. The map file will contain a list of symbols used in the
-  program or module and their addresses.
+  the executable with an appropriate extension (usually .map). The map file
+  will contain a list of symbols used in the program or module and their
+  addresses.
 
   Related compiler options::
     GCC:  -Map=<target>.map
@@ -558,16 +574,42 @@ class Compiler(Tool):
     GCC: -msse
   @type: bool
   """
+  cSuffixes = frozenset(['.c'])
+  """A collection of valid c file suffixes.
+  
+  @type: set of string
+  """
+  cppSuffixes = frozenset(['.C', '.cc', '.cp', '.cpp', '.CPP', '.cxx', '.c++'])
+  """A collection of valid c++ file suffixes.
+  
+  @type: set of string
+  """
+  mSuffixes = frozenset(['.m'])
+  """A collection of valid objective c file suffixes.
+  
+  @type: set of string
+  """
+  mmSuffixes = frozenset(['.M', '.mm'])
+  """A collection of valid objective c++ file suffixes.
+  
+  @type: set of string
+  """
+  sSuffixes = frozenset(['.s'])
+  """A collection of valid assembler file suffixes.
+  
+  @type: set of string
+  """
   objectSuffix = '.o'
   """The suffix to use for object files.
   
   @type: string
   """
   libraryPrefixSuffixes = [('lib', '.a')]
-  """A collection of prefixes and suffixes to use for library files.
+  """A collection of valid library file prefixes and suffixes.
   
   The first prefix and suffix in the collection will be used as the
   default prefix/suffix.
+  
   @type: list of tuple(string, string)
   """
   modulePrefixSuffixes = [('lib', '.so')]
@@ -618,6 +660,7 @@ class Compiler(Tool):
     self.cFlags = []
     self.cppFlags = []
     self.mFlags = []
+    self.mmFlags = []
     self.libraryFlags = []
     self.moduleFlags = []
     self.programFlags = []
@@ -682,6 +725,15 @@ class Compiler(Tool):
     self.mFlags.append(flag)
     self._clearCache()
 
+  def addMmFlag(self, flag):
+    """Add a flag to be used during Objective C++ compilation.
+    
+    @param flag: The flag to add.
+    @type flag: string
+    """
+    self.mmFlags.append(flag)
+    self._clearCache()
+    
   def addLibraryFlag(self, flag):
     """Add a flag to be used during library compilation.
     
@@ -1035,7 +1087,35 @@ class Compiler(Tool):
     basePath = self.configuration.basePath
     
     return compiler._pch(basePath(target), basePath(source), header, prerequisites, forceExtension)
-
+  
+  def pchMessage(self, target, source, header, cached=False):
+    """Returns the message to display when compiling a precompiled header file.
+    
+    Override this function to display a different message when compiling
+    a precompiled header file.
+    
+    @param target: Path of the target object file.
+    @type target: string
+    
+    @param source: Path of the source file.
+    @type source: string
+    
+    @param header: Path to the header as it would be included
+    by other source files.
+    @type header: string.
+    
+    @param cached: True if the target will be copied from the cache instead
+    of being compiled.
+    @type cached: bool
+    
+    @return: The message to display.
+    @rtype: string    
+    """
+    if cached:
+      return "Cached %s\n" % source
+    else:
+      return "Compiling %s\n" % source
+    
   def _pch(self, target, source, header, prerequisites=[],
            forceExtension=True):
     
@@ -1112,7 +1192,38 @@ class Compiler(Tool):
     basePath = self.configuration.basePath
       
     return compiler._object(basePath(target), basePath(source), pch, prerequisites, forceExtension)
+  
+  def objectMessage(self, target, source, pch=None, shared=False, cached=False):
+    """Returns the message to display when compiling an object file.
     
+    Override this function to display a different message when compiling
+    an object file.
+    
+    @param target: Path of the target object file.
+    @type target: string
+    
+    @param source: Path of the source file.
+    @type source: string
+    
+    @param pch: Path of a precompiled header file to use or None.
+    @type pch: string or None
+    
+    @param shared: True if this object file is being built for use in a
+    shared library/module.
+    @type shared: bool
+    
+    @param cached: True if the target will be copied from the cache instead
+    of being compiled.
+    @type cached: bool
+    
+    @return: The message to display.
+    @rtype: string    
+    """
+    if cached:
+      return "Cached %s\n" % source
+    else:
+      return "Compiling %s\n" % source
+        
   def _object(self, target, source, pch=None, prerequisites=[],
               forceExtension=True, shared=False):
     
@@ -1275,7 +1386,31 @@ class Compiler(Tool):
       prerequisites,
       forceExtension
       )
-  
+    
+  def libraryMessage(self, target, sources, cached=False):
+    """Returns the message to display when compiling a library file.
+    
+    Override this function to display a different message when compiling
+    a library file.
+    
+    @param target: Path of the target library file.
+    @type target: string
+    
+    @param sources: Paths to the source files.
+    @type sources: list(string)
+    
+    @param cached: True if the target has been copied from the cache instead
+    of being compiled.
+    @type cached: bool
+    
+    @return: The message to display.
+    @rtype: string    
+    """
+    if cached:
+      return "Cached %s\n" % target
+    else:
+      return "Archiving %s\n" % target
+      
   def _library(self, target, sources, prerequisites=[], forceExtension=True):
     
     @waitForAsyncResult
@@ -1359,7 +1494,31 @@ class Compiler(Tool):
       prerequisites,
       forceExtension,
       )
-  
+    
+  def moduleMessage(self, target, sources, cached=False):
+    """Returns the message to display when compiling a module file.
+    
+    Override this function to display a different message when compiling
+    a module file.
+    
+    @param target: Path of the target module file.
+    @type target: string
+    
+    @param sources: Paths to the source files.
+    @type sources: list(string)
+    
+    @param cached: True if the target has been copied from the cache instead
+    of being compiled.
+    @type cached: bool
+    
+    @return: The message to display.
+    @rtype: string    
+    """
+    if cached:
+      return "Cached %s\n" % target
+    else:
+      return "Linking %s\n" % target
+      
   def _module(self, target, sources, importLibrary=None, installName=None, prerequisites=[], forceExtension=True):
     
     @waitForAsyncResult
@@ -1442,7 +1601,31 @@ class Compiler(Tool):
     basePath = self.configuration.basePath
   
     return compiler._program(basePath(target), basePath(sources), prerequisites, forceExtension)
-
+  
+  def programMessage(self, target, sources, cached=False):
+    """Returns the message to display when compiling a program file.
+    
+    Override this function to display a different message when compiling
+    a program file.
+    
+    @param target: Path of the target program file.
+    @type target: string
+    
+    @param sources: Paths to the source files.
+    @type sources: list(string)
+    
+    @param cached: True if the target has been copied from the cache instead
+    of being compiled.
+    @type cached: bool
+    
+    @return: The message to display.
+    @rtype: string    
+    """
+    if cached:
+      return "Cached %s\n" % target
+    else:
+      return "Linking %s\n" % target
+    
   def _program(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
 
     @waitForAsyncResult
@@ -1509,6 +1692,30 @@ class Compiler(Tool):
   
     return compiler._resource(basePath(target), basePath(source), prerequisites, forceExtension)
   
+  def resourceMessage(self, target, source, cached=False):
+    """Returns the message to display when compiling a resource file.
+    
+    Override this function to display a different message when compiling
+    a resource file.
+    
+    @param target: Path of the target resource file.
+    @type target: string
+    
+    @param source: Path of the source file.
+    @type source: string
+    
+    @param cached: True if the target has been copied from the cache instead
+    of being compiled.
+    @type cached: bool
+    
+    @return: The message to display.
+    @rtype: string    
+    """
+    if cached:
+      return "Cached %s\n" % source
+    else:
+      return "Compiling %s\n" % source
+    
   def _resource(self, target, source, prerequisites=[], forceExtension=True):
     
     @waitForAsyncResult
@@ -1634,28 +1841,31 @@ class Compiler(Tool):
         argsFile.close()
         args = [args[0], '@' + argsPath]
       
-      executable = self.configuration.abspath(args[0])
-      args = _escapeArgs(args)
-      argsString = " ".join(args)
+      argsString = " ".join(_escapeArgs(args))
       
-      # Use the arg string on Windows to prevent the subprocess module haxoring
-      # arguments that contain quotes.
-      if cake.system.isWindows():
-        args = argsString
-
       debugString = "run: %s\n" % argsString
       if argsPath is not None:
         debugString += "contents of %s: %s\n" % (argsPath, argsFileString) 
-      
       self.engine.logger.outputDebug(
         "run",
         debugString,
         )
       
+      if cake.system.isWindows():
+        # Use shell=False to avoid command line length limits.
+        executable = self.configuration.abspath(args[0])
+        shell = False
+      else:
+        # Use shell=True to allow arguments to be escaped exactly as they
+        # would be on the command line.
+        executable = None
+        shell = True
+      
       try:
         p = subprocess.Popen(
-          args=args,
+          args=argsString,
           executable=executable,
+          shell=shell,
           cwd=self.configuration.baseDir,
           env=self._getProcessEnv(),
           stdin=subprocess.PIPE,
@@ -1664,7 +1874,7 @@ class Compiler(Tool):
           )
       except EnvironmentError, e:
         self.engine.raiseError(
-          "cake: failed to launch %s: %s\n" % (executable, str(e))
+          "cake: failed to launch %s: %s\n" % (args[0], str(e))
           )
       p.stdin.close()
   
@@ -1699,7 +1909,7 @@ class Compiler(Tool):
       processExitCode(exitCode)
     elif exitCode != 0:
       self.engine.raiseError(
-        "%s: failed with exit code %i\n" % (executable, exitCode)
+        "%s: failed with exit code %i\n" % (args[0], exitCode)
         )
   
   def _outputStdout(self, text):
@@ -1817,7 +2027,8 @@ class Compiler(Tool):
       targets.append(object)
 
     def command():
-      self.engine.logger.outputInfo("Compiling %s\n" % source)
+      message = self.pchMessage(target, source, header=header, cached=False)
+      self.engine.logger.outputInfo(message)
       return compile()
 
     compileTask = self.engine.createTask(command)
@@ -1966,7 +2177,8 @@ class Compiler(Tool):
           )
         cachedObjectPath = configuration.abspath(cachedObjectPath)
         if cake.filesys.isFile(cachedObjectPath):
-          configuration.engine.logger.outputInfo("Cached %s\n" % source)
+          message = self.objectMessage(target, source, pch=getPath(pch), shared=shared, cached=True)
+          self.engine.logger.outputInfo(message)
           try:
             _unzipFile(cachedObjectPath, configuration.abspath(target))
           except EnvironmentError:
@@ -1977,7 +2189,8 @@ class Compiler(Tool):
     # If we get to here then we didn't find the object in the cache
     # so we need to actually execute the build.
     def command():
-      self.engine.logger.outputInfo("Compiling %s\n" % source)
+      message = self.objectMessage(target, source, pch=getPath(pch), shared=shared, cached=False)
+      self.engine.logger.outputInfo(message)
       return compile()
     
     compileTask = self.engine.createTask(command)
@@ -2112,7 +2325,8 @@ class Compiler(Tool):
       )
 
     def command():
-      self.engine.logger.outputInfo("Archiving %s\n" % target)
+      message = self.libraryMessage(target, sources, cached=False)
+      self.engine.logger.outputInfo(message)
       
       archive()
       
@@ -2155,8 +2369,9 @@ class Compiler(Tool):
       )
 
     def command():
-      self.engine.logger.outputInfo("Linking %s\n" % target)
-    
+      message = self.moduleMessage(target, sources, cached=False)
+      self.engine.logger.outputInfo(message)
+      
       link()
     
       targets, dependencies = scan()
@@ -2209,8 +2424,9 @@ class Compiler(Tool):
       )
 
     def command():
-      self.engine.logger.outputInfo("Linking %s\n" % target)
-    
+      message = self.programMessage(target, sources, cached=False)
+      self.engine.logger.outputInfo(message)
+          
       link()
     
       targets, dependencies = scan()
@@ -2266,7 +2482,8 @@ class Compiler(Tool):
       )
 
     def command():
-      self.engine.logger.outputInfo("Compiling %s\n" % source)
+      message = self.resourceMessage(target, source, cached=False)
+      self.engine.logger.outputInfo(message)
       
       compile()
       

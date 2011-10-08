@@ -46,9 +46,11 @@ def _createMsvcCompiler(
   if not cake.filesys.isDir(platformSdkDir):
     platformSdkDir = getPlatformSdkDir()
 
+  msvcRootBinDir = cake.path.join(msvcProductDir, "bin")
+  
   if architecture == 'x86':
     # Root bin directory is always used for the x86 compiler
-    msvcBinDir = cake.path.join(msvcProductDir, "bin")
+    msvcBinDir = msvcRootBinDir
   else:
     msvcArchitecture = _toArchitectureDir(architecture)
     msvcHostArchitecture = _toArchitectureDir(hostArchitecture)
@@ -56,8 +58,7 @@ def _createMsvcCompiler(
     if msvcArchitecture != msvcHostArchitecture:
       # Determine the bin directory for cross-compilers
       msvcBinDir = cake.path.join(
-        msvcProductDir,
-        "bin",
+        msvcRootBinDir,
         "%s_%s" % (
           msvcHostArchitecture,
           msvcArchitecture,
@@ -66,17 +67,16 @@ def _createMsvcCompiler(
     else:
       # Determine the bin directory for 64-bit compilers
       msvcBinDir = cake.path.join(
-        msvcProductDir,
-        "bin",
+        msvcRootBinDir,
         "%s" % msvcArchitecture,
         )
-  
+
   # Find the host bin dir for exe's such as 'cvtres.exe'
   if hostArchitecture == 'x86':
-    msvcHostBinDir = cake.path.join(msvcProductDir, "bin")
+    msvcHostBinDir = msvcRootBinDir
   else:
     msvcHostArchitecture = _toArchitectureDir(hostArchitecture)
-    msvcHostBinDir = cake.path.join(msvcProductDir, "bin", msvcHostArchitecture)
+    msvcHostBinDir = cake.path.join(msvcRootBinDir, msvcHostArchitecture)
     
   msvcIncludeDir = cake.path.join(msvcProductDir, "include")
   platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
@@ -99,6 +99,7 @@ def _createMsvcCompiler(
   linkExe = cake.path.join(msvcBinDir, "link.exe")
   rcExe = cake.path.join(msvcBinDir, "rc.exe")
   mtExe = cake.path.join(msvcBinDir, "mt.exe")
+  bscExe = cake.path.join(msvcRootBinDir, "bscmake.exe")
 
   if not cake.filesys.isFile(rcExe):
     rcExe = cake.path.join(msvcProductDir, "Bin", "rc.exe")
@@ -123,6 +124,8 @@ def _createMsvcCompiler(
   checkFile(linkExe)
   checkFile(rcExe)
   checkFile(mtExe)
+  if not cake.filesys.isFile(bscExe):
+    bscExe = None # Not fatal. This just means we can't build browse info files.
 
   checkDirectory(msvcIncludeDir)
   checkDirectory(platformSdkIncludeDir)
@@ -140,6 +143,7 @@ def _createMsvcCompiler(
     linkExe=linkExe,
     rcExe=rcExe,
     mtExe=mtExe,
+    bscExe=bscExe,
     binPaths=binPaths,
     includePaths=includePaths,
     libraryPaths=libraryPaths,
@@ -319,6 +323,24 @@ class MsvcCompiler(Compiler):
     /ZI
   @type: bool
   """
+  outputBrowseInfo = None
+  """Output a .sbr file for each object file and generate a final .bsc file.
+  
+  NOT FULLY IMPLEMENTED! At the moment Cake will not rebuild the .sbr file
+  unless the associated .obj file is also out of date. Cake also won't yet
+  generate the final .bsc file using bscmake.exe. Perhaps the best way would
+  be to add a bsc(target, sources=objects) build function and require users
+  to generate the bsc file explicitly. ObjectTarget would gain a .sbr member
+  that points to the .sbr file corresponding to the .obj file.
+  
+  If enabled the compiler will output a .sbr file that matches the
+  name of each object file. During program or library builds it will use
+  these .sbr files to generate a browse info .bsc file. 
+
+  Related compiler options::
+    MSVC: /FR:<target>.sbr
+  @type: bool
+  """  
   errorReport = None
   """Set the error reporting behaviour.
   
@@ -365,6 +387,7 @@ class MsvcCompiler(Compiler):
     linkExe=None,
     mtExe=None,
     rcExe=None,
+    bscExe=None,
     binPaths=None,
     includePaths=None,
     libraryPaths=None,
@@ -382,6 +405,7 @@ class MsvcCompiler(Compiler):
     self.__linkExe = linkExe
     self.__mtExe = mtExe
     self.__rcExe = rcExe
+    self.__bscExe = bscExe
     self.__architecture = architecture
     self.__messageExpression = re.compile(r'^(\s*)(.+)\(\d+\) :', re.MULTILINE)
     self.forcedUsings = []
@@ -442,7 +466,7 @@ class MsvcCompiler(Compiler):
     return tasks
     
   @memoise
-  def _getCompileCommonArgs(self, language):
+  def _getCompileCommonArgs(self, suffix):
     args = [
       self.__clExe,
       "/nologo",
@@ -477,25 +501,29 @@ class MsvcCompiler(Compiler):
     if self.useStringPooling:
       args.append('/GF') # Eliminate duplicate strings
  
+    language = self._getLanguage(suffix)
     if language == 'c++':
       args.extend(self.cppFlags)
-
-      if self.enableRtti is not None:
-        if self.enableRtti:
-          args.append('/GR') # Enable RTTI
-        else:
-          args.append('/GR-') # Disable RTTI
-      
-      if self.enableExceptions is not None:
-        if self.enableExceptions == "SEH":
-          args.append('/EHa') # Enable SEH exceptions
-        elif self.enableExceptions:
-          args.append('/EHsc') # Enable exceptions
-        else:
-          args.append('/EHsc-') # Disable exceptions
-        
     elif language == 'c++/cli':
       args.extend(self.cppFlags)
+    elif language == 'c':
+      args.extend(self.cFlags)
+
+    if self.enableRtti is not None:
+      if self.enableRtti:
+        args.append('/GR') # Enable RTTI
+      else:
+        args.append('/GR-') # Disable RTTI
+    
+    if self.enableExceptions is not None:
+      if self.enableExceptions == "SEH":
+        args.append('/EHa') # Enable SEH exceptions
+      elif self.enableExceptions:
+        args.append('/EHsc') # Enable exceptions
+      else:
+        args.append('/EHsc-') # Disable exceptions
+
+    if self.language == 'c++/cli':
       if self.clrMode == 'safe':
         args.append('/clr:safe') # Compile to verifiable CLR code
       elif self.clrMode == 'pure':
@@ -505,10 +533,7 @@ class MsvcCompiler(Compiler):
         
       for assembly in getPaths(self.forcedUsings):
         args.append('/FU' + assembly)
-
-    else:
-      args.extend(self.cFlags)
-
+          
     if self.optimisation == self.FULL_OPTIMISATION:
       args.append('/GL') # Global optimisation
     elif self.optimisation == self.PARTIAL_OPTIMISATION:
@@ -538,6 +563,15 @@ class MsvcCompiler(Compiler):
 
     return args 
     
+  def _getLanguage(self, suffix):
+    language = self.language
+    if language is None:
+      if suffix in self.cSuffixes:
+        language = 'c'
+      elif suffix in self.cppSuffixes:
+        language = 'c++'
+    return language
+      
   @property
   @memoise
   def _needPdbFile(self):
@@ -547,25 +581,20 @@ class MsvcCompiler(Compiler):
       return True
     else:
       return False
-    
-  def _getLanguage(self, path):
-    language = self.language
-    if language is None:
-      if path[-2:].lower() == '.c':
-        language = 'c'
-      else:
-        language = 'c++'
-    return language
 
   def getPchCommands(self, target, source, header, object):
-    language = self._getLanguage(source)
+    args = list(self._getCompileCommonArgs(cake.path.extension(source)))
+    args.append('/Fo' + object)
     
-    args = list(self._getCompileCommonArgs(language))
+    if self.outputBrowseInfo:
+      args.append('/FR' + cake.path.stripExtension(target) + ".sbr")
     
-    if language == 'c':
+    if self.language == 'c':
       args.append('/Tc' + source)
-    else:
+    elif self.language in ['c++', 'c++/cli']:
       args.append('/Tp' + source)
+    else:
+      args.append(source)
 
     args.extend([
       '/Yl' + _mungePathToSymbol(target),
@@ -573,19 +602,21 @@ class MsvcCompiler(Compiler):
       '/Yc' + header,
       ])
 
-    args.append('/Fo' + object)
-
     return self._getObjectCommands(target, source, args, None)
     
   def getObjectCommands(self, target, source, pch, shared):
-    language = self._getLanguage(source)
+    args = list(self._getCompileCommonArgs(cake.path.extension(source)))
+    args.append('/Fo' + target)
 
-    args = list(self._getCompileCommonArgs(language))
+    if self.outputBrowseInfo:
+      args.append('/FR' + cake.path.stripExtension(target) + ".sbr")
     
-    if language == 'c':
+    if self.language == 'c':
       args.append('/Tc' + source)
-    else:
+    elif self.language in ['c++', 'c++/cli']:
       args.append('/Tp' + source)
+    else:
+      args.append(source)
       
     if pch is not None:
       args.extend([
@@ -596,8 +627,6 @@ class MsvcCompiler(Compiler):
       deps = [pch.path]
     else:
       deps = []
-
-    args.append('/Fo' + target)
     
     return self._getObjectCommands(target, source, args, deps)
     
@@ -670,7 +699,7 @@ class MsvcCompiler(Compiler):
     # Can only cache the object if it's debug info is not going into
     # a .pdb since multiple objects could all put their debug info
     # into the same .pdb.
-    canBeCached = pdbFile is None
+    canBeCached = pdbFile is None and not self.outputBrowseInfo
 
     if pdbFile is None:
       return compile, args, canBeCached

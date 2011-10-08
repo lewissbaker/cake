@@ -120,7 +120,7 @@ class MwcwCompiler(Compiler):
     return args
   
   @memoise
-  def _getCompileArgs(self, language):
+  def _getCompileArgs(self, suffix):
     args = [
       self.__ccExe,
       '-c',                      # Compile only
@@ -132,26 +132,23 @@ class MwcwCompiler(Compiler):
       ]
     args.extend(self._getCommonArgs())
 
-    args.append('-lang')
-    if language == 'c':
-      args.append('c99')
-    else:
-      args.append(language)
+    if self.language is not None:
+      args.extend(['-lang', self.language])
 
+    language = self._getLanguage(suffix)
     if language in ['c++', 'cplus', 'ec++']:
       args.extend(self.cppFlags)
-
-      if self.enableRtti is not None:
-        if self.enableRtti:
-          args.extend(['-RTTI', 'on'])
-        else:
-          args.extend(['-RTTI', 'off'])
     elif language in ['c', 'c99']:
       args.extend(self.cFlags)
     elif language == 'objc':
       args.extend(self.mFlags)
 
-    # Note: Exceptions are allowed for 'c' language
+    if self.enableRtti is not None:
+      if self.enableRtti:
+        args.extend(['-RTTI', 'on'])
+      else:
+        args.extend(['-RTTI', 'off'])
+    
     if self.enableExceptions is not None:
       if self.enableExceptions:
         args.extend(['-cpp_exceptions', 'on'])
@@ -199,26 +196,27 @@ class MwcwCompiler(Compiler):
       args.extend(['-include', p])
     
     return args
-
-  def _getLanguage(self, path): 
+  
+  def _getLanguage(self, suffix):
     language = self.language
-    if not language:
-      language = {
-        '.c':'c99',
-        '.m':'objc',
-        }.get(cake.path.extension(path).lower(), 'c++')
+    if language is None:
+      if suffix in self.cSuffixes:
+        language = 'c99'
+      elif suffix in self.cppSuffixes:
+        language = 'c++'
+      elif suffix in self.mSuffixes:
+        language = 'objc'
     return language
 
   def getPchCommands(self, target, source, header, object):
-    language = self._getLanguage(source)
-   
-    args = list(self._getCompileArgs(language))
+    args = list(self._getCompileArgs(cake.path.extension(source)))
     args.extend([source, '-precompile', target])
     
     def compile():
       self._runProcess(args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
+      absDependencyFile = self.configuration.abspath(dependencyFile)
       self.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
@@ -227,28 +225,30 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        self.configuration.abspath(dependencyFile),
+        absDependencyFile,
         cake.path.extension(target),
         ))
+
+      if not self.keepDependencyFile:
+        cake.filesys.remove(absDependencyFile)
+      
       return dependencies
 
     canBeCached = True
     return compile, args, canBeCached   
   
   def getObjectCommands(self, target, source, pch, shared):
-    language = self._getLanguage(source)
-   
-    args = list(self._getCompileArgs(language))
-
+    args = list(self._getCompileArgs(cake.path.extension(source)))
+    args.extend([source, '-o', target])
+    
     if pch is not None:
       args.extend(['-include', pch.path])
 
-    args.extend([source, '-o', target])
-    
     def compile():
       self._runProcess(args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
+      absDependencyFile = self.configuration.abspath(dependencyFile)
       self.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
@@ -257,11 +257,16 @@ class MwcwCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        self.configuration.abspath(dependencyFile),
+        absDependencyFile,
         cake.path.extension(target),
         ))
+      
+      if not self.keepDependencyFile:
+        cake.filesys.remove(absDependencyFile)
+      
       if pch is not None:
         dependencies.append(pch.path)
+
       return dependencies
 
     canBeCached = True

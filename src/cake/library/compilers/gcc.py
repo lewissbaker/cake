@@ -28,7 +28,7 @@ def _getMinGWInstallDir():
   """
   import _winreg
   
-  from cake.registry import queryValue
+  from cake.registry import queryString
   
   possibleSubKeys = [
     r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MinGW",
@@ -38,7 +38,7 @@ def _getMinGWInstallDir():
   # Try all known registry locations.
   for subKey in possibleSubKeys:
     try:
-      return queryValue(_winreg.HKEY_LOCAL_MACHINE, subKey, "InstallLocation")
+      return queryString(_winreg.HKEY_LOCAL_MACHINE, subKey, "InstallLocation")
     except WindowsError:
       # If this is the last possibility, re-raise the exception.
       if subKey is possibleSubKeys[-1]:
@@ -185,7 +185,7 @@ def findGccCompiler(configuration, platform=None):
     raise CompilerNotFoundError("Could not find GCC compiler, AR archiver or libtool.")
 
 class GccCompiler(Compiler):
-
+  
   _name = 'gcc'
 
   def __init__(
@@ -237,12 +237,18 @@ class GccCompiler(Compiler):
 
   def _outputStderr(self, text):
     Compiler._outputStderr(self, self._formatMessage(text))
-    
+  
   @memoise
-  def _getCompileArgs(self, language, shared):
+  def _getCompileArgs(self, suffix, shared=False, pch=False):
     args = [self._gccExe, '-c', '-MD']
 
-    args.extend(['-x', language])
+    language = self._getLanguage(suffix, pch)
+    if pch: # Pch requires '-header' so must use derived language.
+      if language is not None:
+        args.extend(['-x', language])
+    else:
+      if self.language is not None:
+        args.extend(['-x', self.language])
     
     if self.warningsAsErrors:
       args.append('-Werror')
@@ -257,18 +263,19 @@ class GccCompiler(Compiler):
 
     if language in ['c++', 'c++-header', 'c++-cpp-output']:
       args.extend(self.cppFlags)
-
-      if self.enableRtti is not None:
-        if self.enableRtti:
-          args.append('-frtti')
-        else:
-          args.append('-fno-rtti')
     elif language in ['c', 'c-header', 'cpp-output']:
       args.extend(self.cFlags)
     elif language in ['objective-c', 'objective-c-header', 'objc-cpp-output']:
       args.extend(self.mFlags)
+    elif language in ['objective-c++', 'objective-c++-header', 'objective-c++-cpp-output']:
+      args.extend(self.mmFlags)
 
-    # Note: Exceptions are allowed for 'c' language
+    if self.enableRtti is not None:
+      if self.enableRtti:
+        args.append('-frtti')
+      else:
+        args.append('-fno-rtti')
+          
     if self.enableExceptions is not None:
       if self.enableExceptions:
         args.append('-fexceptions')
@@ -304,29 +311,37 @@ class GccCompiler(Compiler):
     
     return args
 
-  def _getLanguage(self, path):
+  def _getLanguage(self, suffix, pch=False):
     language = self.language
-    if not language:
-      language = {
-        '.c':'c',
-        '.m':'objective-c',
-        }.get(cake.path.extension(path).lower(), 'c++')
+    
+    if language is None:
+      # Attempt to derive the language based on the suffix.
+      if suffix in self.cSuffixes:
+        language = 'c'
+      elif suffix in self.cppSuffixes:
+        language = 'c++'
+      elif suffix in self.mSuffixes:
+        language = 'objective-c'
+      elif suffix in self.mmSuffixes:
+        language = 'objective-c++'
+      elif suffix in self.sSuffixes:
+        language = 'assembler'
+    
+    # Pch generation requires '-header' at the end.
+    if pch and language in ['c', 'c++', 'objective-c', 'objective-c++']:
+      language += '-header'
+    
     return language
   
   def getPchCommands(self, target, source, header, object):
-    language = self._getLanguage(source)
-    
-    # Pch must be compiled as a header, eg: 'c++-header'
-    if not language.endswith('-header'):
-      language += '-header'
-
-    args = list(self._getCompileArgs(language, shared=False))
+    args = list(self._getCompileArgs(cake.path.extension(source), shared=False, pch=True))
     args.extend([source, '-o', target])
 
     def compile():
       self._runProcess(args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
+      absDependencyFile = self.configuration.abspath(dependencyFile)
       self.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
@@ -335,30 +350,33 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        self.configuration.abspath(dependencyFile),
+        absDependencyFile,
         cake.path.extension(target),
         ))
+      
+      if not self.keepDependencyFile:
+        cake.filesys.remove(absDependencyFile)
+        
       return dependencies
     
     canBeCached = True
     return compile, args, canBeCached
   
   def getObjectCommands(self, target, source, pch, shared):
-    language = self._getLanguage(source)
-    args = list(self._getCompileArgs(language, shared))
+    args = list(self._getCompileArgs(cake.path.extension(source), shared))
+    args.extend([source, '-o', target])
   
     if pch is not None:
       args.extend([
         '-Winvalid-pch',
         '-include', cake.path.stripExtension(pch.path),
         ])
-      
-    args.extend([source, '-o', target])
-    
+        
     def compile():
       self._runProcess(args, target)
 
       dependencyFile = cake.path.stripExtension(target) + '.d'
+      absDependencyFile = self.configuration.abspath(dependencyFile)
       self.engine.logger.outputDebug(
         "scan",
         "scan: %s\n" % dependencyFile,
@@ -367,11 +385,16 @@ class GccCompiler(Compiler):
       # TODO: Add dependencies on DLLs used by gcc.exe
       dependencies = [args[0]]
       dependencies.extend(parseDependencyFile(
-        self.configuration.abspath(dependencyFile),
+        absDependencyFile,
         cake.path.extension(target),
         ))
+      
+      if not self.keepDependencyFile:
+        cake.filesys.remove(absDependencyFile)
+        
       if pch is not None:
         dependencies.append(pch.path)
+        
       return dependencies
     
     canBeCached = True
@@ -603,7 +626,7 @@ class MacGccCompiler(GccCompiler):
     # Should only need this if we're linking with any shared
     # libs, but I don't know how to detect that
     args.extend(["-Wl,-rpath,@loader_path/."])
-      
+    
     args.extend(sources)
     args.extend(objects)
     for lib in libraries:

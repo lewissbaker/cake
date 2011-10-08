@@ -245,7 +245,7 @@ class ProjectTool(Tool):
   """The solution platform name.
   
   This should be set to a string that identifies the solution
-  platform, eg. 'Windows Msvc (x86) ' or 'PS3 Gcc (spu)'. 
+  platform, eg. 'Windows Msvc (x86)' or 'PS3 Gcc (spu)'. 
   """
   
   VS2002 = 0
@@ -515,8 +515,8 @@ class ProjectTool(Tool):
 
       # Construct the build args
       targetDir = configuration.abspath(cake.path.dirName(target))
-      pythonExe = cake.path.absPath(sys.executable)
-      cakeScript = cake.path.absPath(sys.argv[0])
+      pythonExe = cake.path.absPath(sys.executable, self.engine.oscwd)
+      cakeScript = cake.path.absPath(sys.argv[0], self.engine.oscwd)
       scriptPath = configuration.abspath(script.path)
       keywords = script.variant.keywords
       

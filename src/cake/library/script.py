@@ -199,7 +199,6 @@ class ScriptTool(Tool):
     else:
       return [execute(path, variant) for path in scripts]
 
-
   def run(self, func, args=None, targets=None, sources=[]):
     """Execute the specified python function as a task.
 

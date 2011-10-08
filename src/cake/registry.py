@@ -7,7 +7,27 @@
 import _winreg
 import cake.system
 
-def queryValue(key, sub_key, name):
+def queryString(key, subKey, name):
+  """Queries a string value from the Windows registry.
+  
+  On 64-bit Windows this function will first try to query the value from
+  the 64-bit registry. If the value doesn't exist there it will then try to
+  find the value in the 32-bit registry.
+  
+  @param key: The key to query, eg: _winreg.HKEY_LOCAL_MACHINE
+  @type key: string
+  
+  @param subKey: The subkey to query, eg: r"SOFTWARE\Microsoft"
+  @type subKey: string
+  
+  @param name: The name to query, eg: "InstallDir"
+  @type name: string
+  
+  @return: The value queried.
+  @rtype: string 
+
+  @raise WindowsError: If the value could not be found. 
+  """
   # List of access modes to try.
   sams = [_winreg.KEY_READ]
   
@@ -20,7 +40,7 @@ def queryValue(key, sub_key, name):
 
   for sam in sams:
     try:
-      keyHandle = _winreg.OpenKey(key, sub_key, 0, sam)
+      keyHandle = _winreg.OpenKey(key, subKey, 0, sam)
       try:
         return str(_winreg.QueryValueEx(keyHandle, name)[0])
       finally:

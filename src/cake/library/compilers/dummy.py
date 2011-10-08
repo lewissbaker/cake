@@ -25,7 +25,7 @@ class DummyCompiler(Compiler):
     Compiler.__init__(self, configuration)
 
   @memoise
-  def _getCompileArgs(self, language):
+  def _getCompileArgs(self):
     args = ['cc', '/c']
     if self.debugSymbols:
       args.append('/debug')
@@ -35,22 +35,15 @@ class DummyCompiler(Compiler):
       args.append('/rtti')
     if self.enableExceptions:
       args.append('/ex')
-    if language:
-      args.append('/lang:%s' % language)
+    if self.language:
+      args.append('/lang:%s' % self.language)
     args.extend('/I%s' % p for p in self.getIncludePaths())
     args.extend('/D%s' % d for d in self.getDefines())
     args.extend('/FI%s' % p for p in getPaths(self.getForcedIncludes()))
     return args
-
+  
   def getPchCommands(self, target, source, header, object):
-    language = self.language
-    if not language:
-      if source.lower().endswith('.c'):
-        language = 'c'
-      else:
-        language = 'c++'
-
-    compilerArgs = list(self._getCompileArgs(language))
+    compilerArgs = list(self._getCompileArgs())
     compilerArgs += ['/H' + header, source, '/o' + target]
     
     def compile():
@@ -64,14 +57,7 @@ class DummyCompiler(Compiler):
     return compile, compilerArgs, canBeCached
 
   def getObjectCommands(self, target, source, pch, shared):
-    language = self.language
-    if not language:
-      if source.lower().endswith('.c'):
-        language = 'c'
-      else:
-        language = 'c++'
-
-    compilerArgs = list(self._getCompileArgs(language))
+    compilerArgs = list(self._getCompileArgs())
     compilerArgs += [source, '/o' + target]
     
     def compile():

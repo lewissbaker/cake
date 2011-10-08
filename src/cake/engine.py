@@ -38,9 +38,15 @@ class BuildError(Exception):
 
 class Variant(object):
   """A container for build configuration information.
-
+  
   @ivar tools: The available tools for this variant.
   @type tools: dict
+  """
+
+  constructionScriptPath = None
+  """Path to the script used to construct this variant before it is used for the first time.
+  
+  @type: string or None
   """
   
   def __init__(self, **keywords):
@@ -48,11 +54,43 @@ class Variant(object):
     """
     self.keywords = keywords
     self.tools = {}
+    self._constructionLock = threading.Lock()
+    self._isConstructed = False
   
   def __repr__(self):
     keywords = ", ".join('%s=%r' % (k, v) for k, v in self.keywords.iteritems())
     return "Variant(%s)" % keywords 
   
+  def __getitem__(self, key):
+    """Return a keywords value given its key.
+    
+    @param key:  The key of the keyword variable to get.
+    @return: The value of the keyword variable.
+    """
+    return self.keywords[key]
+  
+  def _construct(self, configuration):
+    # Do an initial check without acquiring the lock (which is slow).
+    if self._isConstructed:
+      return
+    
+    self._constructionLock.acquire()
+    try:
+      # Check again in case someone else got here first.
+      if not self._isConstructed:
+        if self.constructionScriptPath is not None:
+          script = _Script(
+            path=self.constructionScriptPath,
+            configuration=configuration,
+            variant=self,
+            task=None,
+            engine=configuration.engine,
+            )
+          script.execute()
+        self._isConstructed = True
+    finally:
+      self._constructionLock.release()
+
   def matches(*args, **keywords):
     """Query if this variant matches the specified keywords.
     """
@@ -98,38 +136,64 @@ class Engine(object):
   mainly use Python code. Threaded Python code executes under a
   notoriously slow GIL (Global Interpreter Lock). By executing most
   Python code on the same thread we can avoid the expensive GIL locking.  
+  @type scriptThreadPool: L{ThreadPool}
+
+  @ivar logger: The object used to output build messages.
+  @type logger: L{Logger}
+
+  @ivar parser: The object used to parse command line arguments.
+  @type parser: L{OptionParser}
+
+  @ivar args: The command line arguments.
+  @type args: list of string
+
+  @ivar options: The options found after parsing command line arguments.
+  @type options: L{Option}
+
+  @ivar oscwd: The initial working directory when Cake was first started.
+  @type oscwd: string
   """
   
   scriptCachePath = None
   """Path to the script cache files.
   
-  @ivar scriptCachePath: The absolute path to the directory that should store
+  The absolute path to the directory that should store
   script cache files. If None the script cache files will be put next to the
-  script files themselves with a different extension.
-  @type scriptCachePath: string or None
+  script files themselves with a different extension (usually .cakec).
+  @type: string or None
+  """
+  dependencyInfoPath = None
+  """Path to store dependency info files.
+  
+  The absolute path to the directory that should store
+  dependency info files. If None the dependency info files will be put next to the
+  target files themselves with a different extension (usually .dep).
+  @type: string or None
   """
   
   forceBuild = False
   defaultConfigScriptName = "config.cake"
   maximumErrorCount = None
   
-  def __init__(self, logger, parser):
+  def __init__(self, logger, parser, args):
     """Default Constructor.
     """
     self._byteCodeCache = {}
     self._timestampCache = {}
     self._digestCache = {}
     self._dependencyInfoCache = {}
-    self.logger = logger
-    self.parser = parser
-    self.options = None
-    self.buildSuccessCallbacks = []
-    self.buildFailureCallbacks = []
     self._searchUpCache = {}
     self._configurations = {}
     self.scriptThreadPool = cake.threadpool.ThreadPool(1)
     self.errors = []
     self.warnings = []
+    self.logger = logger
+    self.parser = parser
+    self.args = args
+    self.options = None
+    self.oscwd = os.getcwd() # Save original cwd in case someone changes it.
+    self.buildSuccessCallbacks = []
+    self.buildFailureCallbacks = []
 
   @property
   def errorCount(self):
@@ -300,12 +364,13 @@ class Engine(object):
       
     if not tasks:
       if keywords:
+        args = " ".join("%s=%s" % (k, ",".join(v)) for k, v in keywords.items())
         self.raiseError(
-          "No build variants found in %s that match the keywords.\n" % configuration.path
+          "No build variants found in '%s' that match the keywords '%s'.\n" % (configuration.path, args)
           )
       else:
         self.raiseError(
-          "No build variants found in %s.\n" % configuration.path
+          "No build variants found in '%s'.\n" % configuration.path
           )
     elif len(tasks) > 1:
       task = self.createTask()
@@ -546,16 +611,10 @@ class Engine(object):
     """
     dependencyInfo = self._dependencyInfoCache.get(target, None)
     if dependencyInfo is None:
-      depPath = target + '.dep'
+      depPath = self.getDependencyInfoPath(target)
       
-      # Read entire file at once otherwise thread-switching will kill
-      # performance
-      f = open(depPath, 'rb')
-      try:
-        dependencyString = f.read()
-      finally:
-        f.close()
-        
+      # Read entire file at once otherwise thread-switching will kill performance.
+      dependencyString = cake.filesys.readFile(depPath)
       dependencyInfo = pickle.loads(dependencyString) 
       
       # Check that the dependency info is valid  
@@ -565,6 +624,25 @@ class Engine(object):
       self._dependencyInfoCache[target] = dependencyInfo
       
     return dependencyInfo
+  
+  def getDependencyInfoPath(self, target):
+    """Get the path of a dependency info file given it's associated target.
+    """
+    # We need an absolute path to generate a unique hash.
+    assert cake.path.isAbs(target)
+    if self.dependencyInfoPath is not None:
+      pathDigest = cake.hash.sha1(target.encode("utf8")).digest()
+      pathDigestStr = cake.hash.hexlify(pathDigest)
+      return cake.path.join(
+        self.dependencyInfoPath,
+        pathDigestStr[0],
+        pathDigestStr[1],
+        pathDigestStr[2],
+        pathDigestStr[3],
+        pathDigestStr
+        )      
+    else:
+      return target + '.dep'
     
   def storeDependencyInfo(self, target, dependencyInfo):
     """Store dependency info for the specified target.
@@ -575,10 +653,10 @@ class Engine(object):
     @param dependencyInfo: The dependency info object to store.
     @type dependencyInfo: L{DependencyInfo}
     """
-    depPath = target + '.dep'
+    depPath = self.getDependencyInfoPath(target)
 
     dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
-    
+ 
     cake.filesys.writeFile(depPath, dependencyString)
       
     self._dependencyInfoCache[target] = dependencyInfo
@@ -782,6 +860,9 @@ class Configuration(object):
     else:
       currentVariant = None
       currentConfiguration = None
+    
+    # Make sure the variant is constructed and ready for use.  
+    variant._construct(self)
     
     self._executedLock.acquire()
     try:

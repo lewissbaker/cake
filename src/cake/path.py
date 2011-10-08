@@ -10,16 +10,28 @@ import os.path
 import re
 import cake.system
 
-def absPath(path):
+def absPath(path, cwd=None):
   """Return a normalised absolute path of the given path.
 
   @param path: The path to normalise and make absolute.
   @type path: string
   
+  @param cwd: Optional current working directory to prepend
+  if the path is not absolute. If not provided this defaults
+  to os.getcwd().
+  @type cwd: string or None
+
   @return: The normalised, absolute path.
   @rtype: string
   """
-  return os.path.abspath(path)
+  if not os.path.isabs(path):
+    if cwd is None:
+      if isinstance(path, unicode):
+        cwd = os.getcwdu()
+      else:
+        cwd = os.getcwd()
+    path = os.path.join(cwd, path)
+  return os.path.normpath(path)
 
 def addPrefix(path, prefix):
   """Prefix the baseName part of a path and return the result.

@@ -218,7 +218,7 @@ class HelpFormatter:
         self.short_first = short_first
         self.default_tag = "%default"
         self.option_strings = {}
-        self._short_opt_fmt = "%s %s"
+        self._short_opt_fmt = "%s%s" # STU: Removed space since we don't support it.
         self._long_opt_fmt = "%s=%s"
 
     def set_parser(self, parser):
@@ -485,6 +485,7 @@ class Option:
                "store_false",
                "append",
                "append_const",
+               "extend",
                "count",
                "callback",
                "help",
@@ -499,18 +500,21 @@ class Option:
                      "store_false",
                      "append",
                      "append_const",
+                     "extend",
                      "count")
 
     # The set of actions for which it makes sense to supply a value
     # type, ie. which may consume an argument from the command line.
     TYPED_ACTIONS = ("store",
                      "append",
+                     "extend",
                      "callback")
 
     # The set of actions which *require* a value type, ie. that
     # always consume an argument from the command line.
     ALWAYS_TYPED_ACTIONS = ("store",
-                            "append")
+                            "append",
+                            "extend")
 
     # The set of actions which take a 'const' attribute.
     CONST_ACTIONS = ("store_const",
@@ -800,6 +804,9 @@ class Option:
             values.ensure_value(dest, []).append(value)
         elif action == "append_const":
             values.ensure_value(dest, []).append(self.const)
+        elif action == "extend":
+            lvalue = value.split(",")
+            values.ensure_value(dest, []).extend(lvalue)
         elif action == "count":
             setattr(values, dest, values.ensure_value(dest, 0) + 1)
         elif action == "callback":
@@ -1492,6 +1499,10 @@ class OptionParser (OptionContainer):
         opt = self._match_long_opt(opt)
         option = self._long_opt[opt]
         if option.takes_value():
+            # STU: Forcing options to take an explicit value so there's no grey area
+            # between options and arguments.
+            if not had_explicit_value:
+                self.error(_("%s option requires an explicit argument") % opt)
             nargs = option.nargs
             if len(rargs) < nargs:
                 if nargs == 1:
@@ -1530,6 +1541,10 @@ class OptionParser (OptionContainer):
                 if i < len(arg):
                     rargs.insert(0, arg[i:])
                     stop = True
+                else:
+                    # STU: Forcing options to take an explicit value so there's no grey area
+                    # between options and arguments.
+                    self.error(_("%s option requires an explicit argument") % opt)
 
                 nargs = option.nargs
                 if len(rargs) < nargs:

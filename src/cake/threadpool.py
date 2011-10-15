@@ -52,8 +52,6 @@ class ThreadPool(object):
     for i in xrange(50):
       pool.queueJob(lambda i=i: someFunction(i))
   """
-  _EXIT_JOB = "exit job"
-    
   def __init__(self, numWorkers):
     """Initialise the thread pool.
     
@@ -63,15 +61,16 @@ class ThreadPool(object):
     self._jobQueue = collections.deque()
     self._workers = []
     self._wakeCondition = threading.Condition(threading.Lock())
+    self._finished = False
 
-    # Create the worker threads
+    # Create the worker threads.
     for _ in xrange(numWorkers):
       worker = threading.Thread(target=self._runThread)
       worker.daemon = True
       worker.start()
       self._workers.append(worker)
     
-    # Make sure the threads are joined before program exit
+    # Make sure the threads are joined before program exit.
     atexit.register(self._shutdown)
     
   def _shutdown(self):
@@ -80,11 +79,18 @@ class ThreadPool(object):
     On shutdown we complete any currently executing jobs then exit. Jobs
     waiting on the queue may not be executed.
     """
-    # Submit the exit job directly to the back of the queue
-    for _ in xrange(len(self._workers)):
-      self.queueJob(self._EXIT_JOB, True)
+    # Signal that we've finished.
+    self._finished = True
     
-    # Wait for the threads to finish
+    # Clear the queue and wake any waiting threads.
+    self._wakeCondition.acquire()
+    try:
+      self._jobQueue.clear()
+      self._wakeCondition.notifyAll()
+    finally:      
+      self._wakeCondition.release()      
+      
+    # Wait for the threads to finish.
     for thread in self._workers:
       thread.join()
   
@@ -110,77 +116,33 @@ class ThreadPool(object):
     """
     self._wakeCondition.acquire()
     try:
-      wasEmpty = len(self._jobQueue) == 0
-      if front:
-        self._jobQueue.appendleft(callable)
-      else:
-        self._jobQueue.append(callable)
-      if wasEmpty:
-        self._wakeCondition.notifyAll()
+      if not self._finished: # Don't add jobs if we've shutdown.
+        wasEmpty = len(self._jobQueue) == 0
+        if front:
+          self._jobQueue.appendleft(callable)
+        else:
+          self._jobQueue.append(callable)
+        if wasEmpty:
+          self._wakeCondition.notifyAll()
     finally:      
       self._wakeCondition.release()
       
   def _runThread(self):
     """Process jobs continuously until dismissed.
     """
-    while True:
+    while not self._finished:
       self._wakeCondition.acquire()
       try:
         try:
           job = self._jobQueue.popleft()
         except IndexError:
-          self._wakeCondition.wait()
+          self._wakeCondition.wait() # No more jobs. Sleep until another is pushed.
           continue
       finally:
         self._wakeCondition.release()
-      
-      if job is self._EXIT_JOB:
-        break
             
       try:
         job()
       except Exception:
         sys.stderr.write("Uncaught Exception:\n")
         sys.stderr.write(traceback.format_exc())
-
-class DummyThreadPool(object):
-  """A class like ThreadPool that performs all operations in
-  the one thread.
-  """
-  
-  def __init__(self):
-    self._queue = []
-    self._quit = False
-  
-  def queueJob(self, callable, front=False):
-    """Add a job to the queue.
-    
-    @param callable: A job to queue up. Must be callable with
-    no arguments.
-    @param front: If true then the job is put on the front of
-    the queue, otherwise it is put on the end of the queue.
-    """
-    if front:
-      self._queue.insert(0, callable)
-    else:
-      self._queue.append(callable)
-
-  def run(self):
-    """Start processing jobs in the queue one at a time
-    in the calling thread until either no jobs are left
-    or someone calls quit().
-    """
-    while self._queue and not self._quit:
-      job = self._queue.pop(0)
-      try:
-        job()
-      except Exception:
-        sys.stderr.write("Uncaught Exception:\n")
-        sys.stderr.write(traceback.format_exc())
-        
-    self._quit = False
-    
-  def quit(self):
-    """Causes the call to run() to quit processing jobs and return.
-    """
-    self._quit = True

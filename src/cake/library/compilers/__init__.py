@@ -1040,7 +1040,7 @@ class Compiler(Tool):
         
         if self.enabled:  
           sourceTask = getTask(source)
-          copyTask = self.engine.createTask(lambda: doCopy(sourcePath, targetPath))
+          copyTask = self.engine.createTask(lambda s=sourcePath, t=targetPath: doCopy(s, t))
           copyTask.startAfter(sourceTask)
         else:
           copyTask = None

@@ -143,7 +143,7 @@ class ShellTool(Tool):
       if self.enabled:
         tasks = getTasks(sources)
   
-        task = engine.createTask(lambda: spawnProcess(targets, sources, cwd))
+        task = engine.createTask(lambda t=targets, s=sources, c=cwd: spawnProcess(t, s, c))
         task.startAfter(tasks)
       else:
         task = None

@@ -20,7 +20,7 @@ def _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer):
     return "rebuild has been forced"
   
   if not onlyNewer:
-    return "onlyNewer is set to False" # Always rebuild
+    return "onlyNewer is False" # Always rebuild
 
   try:
     mtime = os.stat(absTargetFile).st_mtime
@@ -85,7 +85,7 @@ def _shouldCompress(
     return None, "rebuild has been forced"
   
   if not onlyNewer:
-    return None, "onlyNewer is set to False" # Always rebuild
+    return None, "onlyNewer is False" # Always rebuild
   
   absSourcePath = configuration.abspath(sourcePath)
   absTargetPath = configuration.abspath(targetPath)

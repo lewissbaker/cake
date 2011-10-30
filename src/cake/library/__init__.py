@@ -112,13 +112,33 @@ class Tool(object):
     new.__dict__ = cloneTools(self.__dict__)
     return new
 
+class DirectoryTarget(object):
+  """A class returned by tools that produce a directory result.
+  
+  @ivar path: The path to the target directory.
+  @type path: string
+  @ivar task: A task that completes when the target directory has been written. 
+  @type task: L{Task}
+  """
+  
+  def __init__(self, path, task):
+    """Construct a DirectoryTarget from a path and task.
+    """
+    self.path = path
+    self.task = task
+
+  def __str__(self):
+    """Return the string representation of this object.
+    """
+    return self.path
+
 class FileTarget(object):
   """A class returned by tools that produce a file result.
   
   @ivar path: The path to the target file.
   @type path: string
   @ivar task: A task that completes when the target file has been written. 
-  @type task: L{FileTarget}
+  @type task: L{Task}
   """
   
   def __init__(self, path, task):
@@ -131,7 +151,7 @@ class FileTarget(object):
     """Return the string representation of this object.
     """
     return self.path
-
+  
 def _findAsyncResults(value):
   """Return a sequence of AsyncResult objects found in the specified value.
 

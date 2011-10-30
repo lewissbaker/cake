@@ -150,30 +150,28 @@ class ZipTool(Tool):
     onlyNewer=True,
     removeStale=False,
     includeMatch=None,
-    excludeMatch=None,
     ):
     """Extract all files in a Zip to the specified path.
   
     @param targetDir: The directory to extract files to.
     @type targetDir: string
+    
     @param source: Path to the zip file to extract files from.
     @type source: string
+    
     @param onlyNewer: Only extract files that are newer than those in
     the target directory.
     @type onlyNewer: bool
+    
     @param removeStale: Remove files and directories in the target
     directory that no longer exist in the zip.
     @type removeStale: bool 
+    
     @param includeMatch: A callable used to decide whether to include
     certain files in the extraction. This could be a python callable that
     returns True to include the file or False to exclude it, or a regular
     expression function such as re.compile().match or re.match.
     @type includeMatch: any callable 
-    @param excludeMatch: A callable used to decide whether to exclude certain
-    files from being extracted. This could be a python callable that
-    returns True to exclude the file or False to include it, or a regular
-    expression function such as re.compile().match or re.match.
-    @type excludeMatch: any callable 
     
     @return: A task that will complete when the extraction has finished.
     @rtype: L{Task} 
@@ -196,18 +194,7 @@ class ZipTool(Tool):
         zipInfos = file.infolist()
         
         if includeMatch is not None:
-          newZipInfos = []
-          for zipInfo in zipInfos:
-            if includeMatch(zipInfo.filename):
-              newZipInfos.append(zipInfo)
-          zipInfos = newZipInfos
-
-        if excludeMatch is not None:
-          newZipInfos = []
-          for zipInfo in zipInfos:
-            if not excludeMatch(zipInfo.filename):
-              newZipInfos.append(zipInfo)
-          zipInfos = newZipInfos
+          zipInfos = [z for z in zipInfos if includeMatch(z.filename)]
         
         if removeStale:
           zipFiles = set()
@@ -215,9 +202,8 @@ class ZipTool(Tool):
             zipFiles.add(os.path.normcase(os.path.normpath(zipInfo.filename)))
           
           searchDir = os.path.normpath(absTargetDir)
-          firstChar = len(searchDir) + 1
-          for absPath in cake.filesys.walkTree(searchDir):
-            path = absPath[firstChar:] # Strip the search dir name
+          for path in cake.filesys.walkTree(searchDir):
+            absPath = os.path.join(searchDir, path)
             if os.path.normcase(path) not in zipFiles:
               engine.logger.outputInfo(
                 "Deleting %s\n" % os.path.join(targetDir, path),
@@ -249,30 +235,28 @@ class ZipTool(Tool):
     onlyNewer=True,
     removeStale=True,
     includeMatch=None,
-    excludeMatch=None,
     ):
     """Compress a source file/directory to the specified zip target path.
   
     @param target: Path to the zip file to add files to.
     @type target: string
+    
     @param source: Path to the source file or directory to add.
     @type source: string
+    
     @param onlyNewer: Only add files that are newer than those in
     the zip file. Otherwise all files are re-added every time.
     @type onlyNewer: bool
+    
     @param removeStale: Remove files and directories in the zip
     file that no longer exist in the source directory.
     @type removeStale: bool 
+    
     @param includeMatch: A callable used to decide whether to include
     certain files in the zip file. This could be a python callable that
     returns True to include the file or False to exclude it, or a regular
     expression function such as re.compile().match or re.match.
     @type includeMatch: any callable 
-    @param excludeMatch: A callable used to decide whether to exclude certain
-    files from the zip file. This could be a python callable that
-    returns True to exclude the file or False to include it, or a regular
-    expression function such as re.compile().match or re.match.
-    @type excludeMatch: any callable 
     
     @return: A task that will complete when the compression has finished.
     @rtype: L{Task} 
@@ -292,7 +276,7 @@ class ZipTool(Tool):
       absSourceDir = configuration.abspath(sourceDir)
 
       # Build a list of files/dirs to zip
-      toZip = cake.zipping.findFilesToCompress(absSourceDir, includeMatch, excludeMatch)
+      toZip = cake.zipping.findFilesToCompress(absSourceDir, includeMatch)
 
       # Figure out if we need to rebuild/append 
       toAppend, reasonToBuild = _shouldCompress(

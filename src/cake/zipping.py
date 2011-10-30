@@ -22,7 +22,7 @@ def isDirectoryInfo(zipInfo):
   """
   return (zipInfo.external_attr & 0x00000010L) != 0L # FILE_ATTRIBUTE_DIRECTORY
 
-def findFilesToCompress(sourcePath, includeMatch=None, excludeMatch=None):
+def findFilesToCompress(sourcePath, includeMatch=None):
   """Return a dictionary of files in a given directory.
   
   @param sourcePath: The path to the file or directory to compress.
@@ -30,20 +30,13 @@ def findFilesToCompress(sourcePath, includeMatch=None, excludeMatch=None):
   @param includeMatch: A function that returns True when a path should
   be included in the zip.
   @type includeMatch: any callable
-  @param excludeMatch: A function that returns True when a path should
-  be excluded from the zip.
-  @type excludeMatch: any callable
   """
   toZip = {}
   if os.path.isdir(sourcePath):
     # Remove any trailing slash
     searchDir = os.path.normpath(sourcePath)
-    firstChar = len(searchDir) + 1
     for path in cake.filesys.walkTree(searchDir):
-      path = path[firstChar:] # Strip the search dir name
       if includeMatch is not None and not includeMatch(path):
-        continue
-      if excludeMatch is not None and excludeMatch(path):
         continue
       toZip[os.path.normcase(path)] = path
   else:

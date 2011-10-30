@@ -9,8 +9,6 @@ import shutil
 import os
 import os.path
 import time
-import fnmatch
-import re
 
 import cake.path
 
@@ -28,7 +26,7 @@ def exists(path):
   @return: True if a file or directory exists, otherwise False.
   @rtype: bool
   """
-  return os.path.exists(path)
+  return cake.path.exists(path)
 
 def isFile(path):
   """Check if a file exists at the path.
@@ -39,7 +37,7 @@ def isFile(path):
   @return: True if the file exists, otherwise False.
   @rtype: bool
   """
-  return os.path.isfile(path)
+  return cake.path.isFile(path)
 
 def isDir(path):
   """Check if a directory exists at the path.
@@ -50,7 +48,7 @@ def isDir(path):
   @return: True if the directory exists, otherwise False.
   @rtype: bool
   """
-  return os.path.isdir(path)
+  return cake.path.isDir(path)
 
 def remove(path):
   """Remove a file.
@@ -161,61 +159,35 @@ def makeDirs(path):
     if not os.path.isdir(path):
       raise
 
-def walkTree(path):
-  """Recursively walk a directory tree.
-  """
-  for dirPath, dirNames, fileNames in os.walk(path):
-    for name in dirNames:
-      yield os.path.join(dirPath, name)
-      
-    for name in fileNames:
-      yield os.path.join(dirPath, name)
-
-def findFiles(path, recursive=True, pattern=None, patternRe=None):
-  """Find files matching a particular pattern or regex.
+def walkTree(path, recursive=True):
+  """Walk a directory for file and directory names.
 
   @param path: The path of the directory to search under.
-  @param recursive: Whether or not to search recursively.
-  @param pattern: A glob-style file-name pattern. eg. '*.txt'
-  @param patternRe: A regular expression
+  @param recursive: Whether or not to recursively walk through
+  sub-directories.
 
-  @return: A sequence of paths relative to the specified directory path.
+  @return: A sequence of file and directory paths relative
+  to the specified directory path.
   """
-  if pattern is not None and patternRe is not None:
-    raise ValueError("Cannot search by both pattern and patternRe")
-
-  if pattern is not None:
-    def match(name):
-      return fnmatch.fnmatch(name, pattern)
-  elif patternRe is not None:
-    if isinstance(patternRe, basestring):
-      patternRe = re.compile(patternRe)
-    def match(name):
-      return patternRe.match(name) is not None
-  else:
-    def match(name):
-      return True
-
   if recursive:
-
+    firstChar = len(path) + 1
     for dirPath, dirNames, fileNames in os.walk(path):
-      # Make dirPath relative to path
-      if dirPath != path:
-        dirPath = cake.path.relativePath(dirPath, path)
-      else:
-        dirPath = ""
+      dirPath = dirPath[firstChar:] # Make dirPath relative to path
       
-      for name in fileNames:
-        if match(name):
-          if dirPath:
-            yield os.path.join(dirPath, name)
-          else:
-            yield name
+      for name in dirNames:
+        if dirPath:
+          yield os.path.join(dirPath, name)
+        else:
+          yield name
 
+      for name in fileNames:
+        if dirPath:
+          yield os.path.join(dirPath, name)
+        else:
+          yield name
   else:
     for name in os.listdir(path):
-      if match(name):
-        yield name
+      yield name
           
 def readFile(path):
   """Read data from a file as safely as possible.

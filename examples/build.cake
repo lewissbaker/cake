@@ -6,6 +6,7 @@ from cake.tools import script, compiler
 script.execute([
   "compileprogram/build.cake",
   "compilescriptresult/build.cake",
+  "copydirectory/build.cake",
   "copyfile/build.cake",
   "env/build.cake",
   "findfiles/build.cake",

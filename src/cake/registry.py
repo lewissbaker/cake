@@ -5,7 +5,11 @@
 @license: Licensed under the MIT license.
 """
 import _winreg
+import sys
+
 import cake.system
+
+_shownWow64Warning = False
 
 def queryString(key, subKey, name):
   """Queries a string value from the Windows registry.
@@ -36,7 +40,17 @@ def queryString(key, subKey, name):
   # directory but the compiler is usually installed in the 32-bit program
   # files directory.
   if cake.system.isWindows64():
-    sams.append(_winreg.KEY_READ | _winreg.KEY_WOW64_32KEY)
+    if hasattr(_winreg, "KEY_WOW64_32KEY"):
+      sams.append(_winreg.KEY_READ | _winreg.KEY_WOW64_32KEY)
+    else:
+      global _shownWow64Warning
+      if not _shownWow64Warning:
+        _shownWow64Warning = True
+        sys.stderr.write(
+          "warning: _winreg module does not have access key KEY_WOW64_32KEY. "
+          "It may not be possible to find all compiler and SDK install "
+          "locations automatically.\n"
+          )
 
   for sam in sams:
     try:

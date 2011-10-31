@@ -6,9 +6,19 @@ from cake.tools import filesys, logging
 import cake.path
 import fnmatch
 
+basePath = filesys.configuration.basePath
+absPath = filesys.configuration.abspath
+
+# Paths returned are relative to the search directory so make them absolute.
+def fullPath(path):
+  return absPath(basePath(cake.path.join("tofind", path)))
+
 # Function that determines what to include (based on source file/directory path).
 def shouldInclude(path):
-  return fnmatch.fnmatch(path, "findme*.txt")
+  if cake.path.isFile(fullPath(path)):
+    return fnmatch.fnmatch(cake.path.baseName(path), "findme*.txt")
+  else:
+    return False # Don't include directories.
 
 # Find and print the contents of the files.
 filePaths = filesys.findFiles(
@@ -18,14 +28,9 @@ filePaths = filesys.findFiles(
   )
 
 # Paths returned are relative to the config.cake so make them absolute.
-basePath = filesys.configuration.basePath
-absPath = filesys.configuration.abspath
-
-for p in filePaths:
-  path = absPath(basePath(cake.path.join("tofind", p)))
-  if cake.path.isFile(path): # Only print files, not directories.
-    f = open(path, "rt")
-    try:
-      logging.outputInfo("The contents of file '%s' are '%s'.\n" % (p, f.read()))
-    finally:
-      f.close()
+for path in filePaths:
+  f = open(fullPath(path), "rt")
+  try:
+    logging.outputInfo("The contents of file '%s' are '%s'.\n" % (path, f.read()))
+  finally:
+    f.close()

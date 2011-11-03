@@ -35,9 +35,7 @@ def findFilesToCompress(sourcePath, includeMatch=None):
   if os.path.isdir(sourcePath):
     # Remove any trailing slash
     searchDir = os.path.normpath(sourcePath)
-    for path in cake.filesys.walkTree(searchDir):
-      if includeMatch is not None and not includeMatch(path):
-        continue
+    for path in cake.filesys.walkTree(searchDir, includeMatch=includeMatch):
       toZip[os.path.normcase(path)] = path
   else:
     toZip[os.path.normcase(path)] = path

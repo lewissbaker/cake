@@ -18,7 +18,7 @@ def shouldInclude(path):
   if cake.path.isFile(fullPath(path)):
     return fnmatch.fnmatch(cake.path.baseName(path), "findme*.txt")
   else:
-    return False # Don't include directories.
+    return True # Include/recurse all directories.
 
 # Find and print the contents of the files.
 filePaths = filesys.findFiles(
@@ -29,8 +29,10 @@ filePaths = filesys.findFiles(
 
 # Paths returned are relative to the config.cake so make them absolute.
 for path in filePaths:
-  f = open(fullPath(path), "rt")
-  try:
-    logging.outputInfo("The contents of file '%s' are '%s'.\n" % (path, f.read()))
-  finally:
-    f.close()
+  path = fullPath(path)
+  if cake.path.isFile(path):
+    f = open(path, "rt")
+    try:
+      logging.outputInfo("The contents of file '%s' are '%s'.\n" % (path, f.read()))
+    finally:
+      f.close()

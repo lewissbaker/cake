@@ -159,12 +159,21 @@ def makeDirs(path):
     if not os.path.isdir(path):
       raise
 
-def walkTree(path, recursive=True):
+def walkTree(path, recursive=True, includeMatch=None):
   """Walk a directory for file and directory names.
 
   @param path: The path of the directory to search under.
+  @type path: string
+   
   @param recursive: Whether or not to recursively walk through
   sub-directories.
+  @type recursive: bool
+
+  @param includeMatch: A callable used to decide whether to include
+  certain files in the result. This could be a python callable that
+  returns True to include the file or False to exclude it, or a regular
+  expression function such as re.compile().match or re.match.
+  @type includeMatch: any callable 
 
   @return: A sequence of file and directory paths relative
   to the specified directory path.
@@ -173,21 +182,23 @@ def walkTree(path, recursive=True):
     firstChar = len(path) + 1
     for dirPath, dirNames, fileNames in os.walk(path):
       dirPath = dirPath[firstChar:] # Make dirPath relative to path
-      
+
+      newDirNames = []
       for name in dirNames:
-        if dirPath:
-          yield os.path.join(dirPath, name)
-        else:
-          yield name
+        path = os.path.join(dirPath, name)
+        if includeMatch is None or includeMatch(path):
+          newDirNames.append(name)
+          yield path
+      dirNames[:] = newDirNames # Modify dirNames so we don't recurse into excluded directories.
 
       for name in fileNames:
-        if dirPath:
-          yield os.path.join(dirPath, name)
-        else:
-          yield name
+        path = os.path.join(dirPath, name)
+        if includeMatch is None or includeMatch(path):
+          yield path
   else:
     for name in os.listdir(path):
-      yield name
+      if includeMatch is None or includeMatch(name):
+        yield name
           
 def readFile(path):
   """Read data from a file as safely as possible.

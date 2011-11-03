@@ -37,12 +37,11 @@ class FileSystemTool(Tool):
     basePath = configuration.basePath(path)
     absPath = configuration.abspath(basePath)
     
-    for filePath in cake.filesys.walkTree(
+    return cake.filesys.walkTree(
       path=absPath,
       recursive=recursive,
-      ):
-      if includeMatch is None or includeMatch(filePath):
-        yield filePath
+      includeMatch=includeMatch,
+      )
 
   def glob(self, pathname):
     """Find files matching a particular pattern.
@@ -242,10 +241,11 @@ class FileSystemTool(Tool):
     
     @waitForAsyncResult
     def run(sourceDir):
-      sources = set(cake.filesys.walkTree(path=abspath(sourceDir), recursive=recursive))
-      
-      if includeMatch is not None:
-        sources = [s for s in sources if includeMatch(s)]
+      sources = set(cake.filesys.walkTree(
+        path=abspath(sourceDir),
+        recursive=recursive,
+        includeMatch=includeMatch,
+        ))
         
       if removeStale:
         targets = set(cake.filesys.walkTree(path=abspath(targetDir), recursive=recursive))

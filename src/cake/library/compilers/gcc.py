@@ -604,7 +604,7 @@ class MacGccCompiler(GccCompiler):
     else:
       args.extend(self.programFlags)
     
-    args.extend('-L' + p for p in reversed(self.libraryPaths))
+    args.extend('-L' + p for p in self.getLibraryPaths())
  
     if dll:
       args.append('-shared')

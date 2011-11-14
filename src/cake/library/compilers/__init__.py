@@ -802,7 +802,7 @@ class Compiler(Tool):
     The iterator will return include paths in the order they
     should be searched. 
     """
-    return reversed(self.includePaths)
+    return self.includePaths
 
   def addDefine(self, name, value=None):
     """Add a define to the preprocessor command-line.
@@ -932,7 +932,7 @@ class Compiler(Tool):
     The iterator will return libraries in the order they
     should be searched.
     """
-    return reversed(self.libraries)
+    return self.libraries
   
   def addLibraryPath(self, path):
     """Add a path to the list of library search paths.
@@ -966,7 +966,7 @@ class Compiler(Tool):
     The iterator will return library paths in the order they
     should be searched.
     """
-    return reversed(self.libraryPaths)
+    return self.libraryPaths
 
   def addModule(self, path):
     """Add a module to the list of modules to copy.

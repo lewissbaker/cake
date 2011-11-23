@@ -36,6 +36,11 @@ class BuildError(Exception):
   """
   pass
 
+class DependencyInfoError(Exception):
+  """Exception raised when a dependency info file fails to load.
+  """
+  pass
+
 class Variant(object):
   """A container for build configuration information.
   
@@ -607,19 +612,37 @@ class Engine(object):
     @return: A DependencyInfo object for the target.
     @rtype: L{DependencyInfo}
     
-    @raise EnvironmentError: if the dependency info could not be retrieved.
+    @raise DependencyInfoError: if the dependency info could not be retrieved.
     """
     dependencyInfo = self._dependencyInfoCache.get(target, None)
     if dependencyInfo is None:
       depPath = self.getDependencyInfoPath(target)
       
       # Read entire file at once otherwise thread-switching will kill performance.
-      dependencyString = cake.filesys.readFile(depPath)
-      dependencyInfo = pickle.loads(dependencyString) 
+      try:
+        fileContents = cake.filesys.readFile(depPath)
+      except EnvironmentError:
+        raise DependencyInfoError("doesn't exist")
+      
+      # Split magic signature from the pickled dependency info.
+      magicLength = len(DependencyInfo.MAGIC)
+      dependencyString = fileContents[:-magicLength]
+      dependencyMagic = fileContents[-magicLength:]
+      
+      if dependencyMagic != DependencyInfo.MAGIC:
+        raise DependencyInfoError("has an invalid signature")
+
+      try:      
+        dependencyInfo = pickle.loads(dependencyString)
+      except:
+        raise DependencyInfoError("could not be understood")
       
       # Check that the dependency info is valid  
       if not isinstance(dependencyInfo, DependencyInfo):
-        raise EnvironmentError("invalid dependency file")
+        raise DependencyInfoError("has an invalid instance")
+
+      if dependencyInfo.version != DependencyInfo.VERSION:
+        raise DependencyInfoError("version has changed")
 
       self._dependencyInfoCache[target] = dependencyInfo
       
@@ -657,7 +680,7 @@ class Engine(object):
 
     dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
  
-    cake.filesys.writeFile(depPath, dependencyString)
+    cake.filesys.writeFile(depPath, dependencyString + DependencyInfo.MAGIC)
       
     self._dependencyInfoCache[target] = dependencyInfo
   
@@ -673,7 +696,19 @@ class DependencyInfo(object):
   """
   
   VERSION = 3
-  """The most recent DependencyInfo version."""
+  """The most recent DependencyInfo version.
+
+  @type: int
+  """
+  
+  MAGIC = "CKDP"
+  """A magic value stored in dependency files to ensure they are valid.
+  
+  This value is written to the end of the dependency file. If the power goes
+  off or the computer stops while the dependency file is being written it will
+  be regarded as invalid unless this value has been written.
+  @type: string
+  """
   
   def __init__(self, targets, args):
     self.version = self.VERSION
@@ -960,13 +995,8 @@ class Configuration(object):
     absTargetPath = abspath(targetPath)
     try:
       dependencyInfo = self.engine.getDependencyInfo(absTargetPath)
-    except EnvironmentError:
-      return None, "'" + targetPath + ".dep' doesn't exist"
-    except Exception:
-      return None, "'" + targetPath + ".dep' can't be understood"
-
-    if dependencyInfo.version != DependencyInfo.VERSION:
-      return None, "'" + targetPath + ".dep' version has changed"
+    except DependencyInfoError, e:
+      return None, "'" + targetPath + ".dep' " + str(e)
 
     if self.engine.forceBuild:
       return dependencyInfo, "rebuild has been forced"

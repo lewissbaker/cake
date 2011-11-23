@@ -80,10 +80,7 @@ def _shouldCompress(
   onlyNewer,
   removeStale,
   ):
-  
-  if configuration.engine.forceBuild:
-    return None, "rebuild has been forced"
-  
+
   if not onlyNewer:
     return None, "onlyNewer is False" # Always rebuild
   
@@ -278,17 +275,22 @@ class ZipTool(Tool):
       # Build a list of files/dirs to zip
       toZip = cake.zipping.findFilesToCompress(absSourceDir, includeMatch)
 
-      # Figure out if we need to rebuild/append 
-      toAppend, reasonToBuild = _shouldCompress(
-        configuration,
-        sourceDir,
-        target,
-        toZip,
-        onlyNewer,
-        removeStale,
-        )
+      # Check for an existing dependency info file
+      buildArgs = []
+      toAppend = None
+      _, reasonToBuild = configuration.checkDependencyInfo(target, buildArgs)
       if reasonToBuild is None:
-        return # Target is up to date
+        # Figure out if we need to rebuild/append
+        toAppend, reasonToBuild = _shouldCompress(
+          configuration,
+          sourceDir,
+          target,
+          toZip,
+          onlyNewer,
+          removeStale,
+          )
+        if reasonToBuild is None:
+          return # Target is up to date
 
       engine.logger.outputDebug(
         "reason",
@@ -296,11 +298,10 @@ class ZipTool(Tool):
         )
       
       absTargetPath = configuration.abspath(target)
-      absTargetTmpPath = absTargetPath + ".tmp"
       if toAppend is None:
         # Recreate zip
-        cake.filesys.makeDirs(os.path.dirname(absTargetTmpPath))
-        f = open(absTargetTmpPath, "wb")
+        cake.filesys.makeDirs(os.path.dirname(absTargetPath))
+        f = open(absTargetPath, "wb")
         try:
           zipFile = zipfile.ZipFile(f, "w")
           for originalPath in toZip.itervalues():
@@ -311,11 +312,9 @@ class ZipTool(Tool):
           zipFile.close()
         finally:
           f.close()
-        cake.filesys.renameFile(absTargetTmpPath, absTargetPath)
       else:
         # Append to existing zip
-        cake.filesys.renameFile(absTargetPath, absTargetTmpPath)
-        f = open(absTargetTmpPath, "r+b")
+        f = open(absTargetPath, "r+b")
         try:
           zipFile = zipfile.ZipFile(f, "a")
           for originalPath in toAppend:
@@ -326,7 +325,14 @@ class ZipTool(Tool):
           zipFile.close()
         finally:
           f.close()
-        cake.filesys.renameFile(absTargetTmpPath, absTargetPath)
+
+      # Now that the zip has been written successfully, save the new dependency file 
+      newDependencyInfo = configuration.createDependencyInfo(
+        targets=[target],
+        args=buildArgs,
+        dependencies=[],
+        )
+      configuration.storeDependencyInfo(newDependencyInfo)
 
     if self.enabled:
       sourceTask = getTask(source)

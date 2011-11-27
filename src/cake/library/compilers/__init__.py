@@ -13,7 +13,6 @@ import os
 import os.path
 import tempfile
 import subprocess
-import zlib
 import itertools
 try:
   import cPickle as pickle
@@ -24,7 +23,9 @@ import cake.filesys
 import cake.hash
 import cake.path
 import cake.system
+import cake.zipping
 
+from cake.gnu import parseDependencyFile
 from cake.library import (
   Tool, FileTarget, AsyncResult,
   memoise, waitForAsyncResult, flatten,
@@ -192,22 +193,6 @@ def _escapeArg(arg):
 
 def _escapeArgs(args):
   return [_escapeArg(arg) for arg in args]
-
-def _zipFile(source, target):
-  data = cake.filesys.readFile(source)
-  try:
-    data = zlib.compress(data, 1)
-  except zlib.error, e:
-    raise EnvironmentError(str(e))
-  cake.filesys.writeFile(target, data)
-
-def _unzipFile(source, target):
-  data = cake.filesys.readFile(source)
-  try:
-    data = zlib.decompress(data)
-  except zlib.error, e:
-    raise EnvironmentError(str(e))
-  cake.filesys.writeFile(target, data)
 
 class Compiler(Tool):
   """Base class for C/C++ compiler tools.
@@ -1785,6 +1770,29 @@ class Compiler(Tool):
   ###########################
   # Internal methods not part of public API
   
+  def _generateDependencyFile(self, target):
+    if self.keepDependencyFile:
+      depPath = cake.path.stripExtension(target) + '.d'
+      depPath = self.configuration.abspath(depPath)
+    else:
+      fd, depPath = tempfile.mkstemp(prefix='CakeGccDep')
+      os.close(fd)
+    return depPath
+
+  def _getObjectsInLibrary(self, path):
+    """Get a list of the paths of object files in the specified library.
+    
+    @param path: Path of the library previously built by a call to library().
+    
+    @return: A tuple of the paths of objects in the library.
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = self.__libraryObjects.get(self.configuration, None)
+    if libraryObjects:
+      return libraryObjects.get(path, None)
+    else:
+      return None
+        
   @memoise
   def _getProcessEnv(self):
     temp = os.environ.get('TMP', os.environ.get('TEMP', os.getcwd()))
@@ -1812,6 +1820,45 @@ class Compiler(Tool):
       
     return env
 
+  def _outputStderr(self, text):
+    text = text.replace("\r\n", "\n")
+    self.engine.logger.outputError(text)
+        
+  def _outputStdout(self, text):
+    # Output stdout to stderr as well. Some compilers will output errors
+    # to stdout, and all unexpected output should be treated as an error,
+    # or handled/output by client code.
+    # An example of a compiler outputting errors to stdout is Msvc's link
+    # error, "LINK : fatal error LNK1104: cannot open file '<filename>'".
+    text = text.replace("\r\n", "\n")
+    self.engine.logger.outputError(text)
+      
+  def _resolveObjects(self):
+    """Resolve the list of library names to object file paths.
+    
+    @return: A tuple containing a list of paths to resolved objects,
+    followed by a list of unresolved libraries.
+    @rtype: tuple of (list of string, list of string)
+    """
+    objects = []
+    libraries = getLibraryPaths(self.getLibraries())
+
+    if not self.linkObjectsInLibrary:
+      return objects, libraries
+
+    paths = self._scanForLibraries(libraries, True)
+    newLibraries = []
+      
+    for i, path in enumerate(paths):
+      if path is not None:
+        objectsInLib = self._getObjectsInLibrary(path)
+        if objectsInLib is not None:
+          objects.extend(objectsInLib)
+          continue
+      newLibraries.append(libraries[i])
+        
+    return objects, newLibraries
+  
   def _runProcess(
     self,
     args,
@@ -1911,72 +1958,34 @@ class Compiler(Tool):
       self.engine.raiseError(
         "%s: failed with exit code %i\n" % (args[0], exitCode)
         )
+      
+    # TODO: Return DLL's/EXE's used by gcc.exe or MSVC as well.
+    return [args[0]]
   
-  def _outputStdout(self, text):
-    # Output stdout to stderr as well. Some compilers will output errors
-    # to stdout, and all unexpected output should be treated as an error,
-    # or handled/output by client code.
-    # An example of a compiler outputting errors to stdout is Mavc's link
-    # error, "LINK : fatal error LNK1104: cannot open file '<filename>'".
-    text = text.replace("\r\n", "\n")
-    self.engine.logger.outputError(text)
-
-  def _outputStderr(self, text):
-    text = text.replace("\r\n", "\n")
-    self.engine.logger.outputError(text)
-
-  def _getObjectsInLibrary(self, path):
-    """Get a list of the paths of object files in the specified library.
-    
-    @param path: Path of the library previously built by a call to library().
-    
-    @return: A tuple of the paths of objects in the library.
-    """
-    path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = self.__libraryObjects.get(self.configuration, None)
-    if libraryObjects:
-      return libraryObjects.get(path, None)
-    else:
-      return None
-
-  def _setObjectsInLibrary(self, path, objectPaths):
-    """Set the list of paths of object files in the specified library.
-    
-    @param path: Path of the library previously built by a call to library().
-    @type path: string
-    
-    @param objectPaths: A list of the objects built by a call to library().
-    @type objectPaths: list of strings
-    """
-    path = os.path.normcase(os.path.normpath(path))
-    libraryObjects = self.__libraryObjects.setdefault(self.configuration, {})
-    libraryObjects[path] = tuple(objectPaths)
-      
-  def _resolveObjects(self):
-    """Resolve the list of library names to object file paths.
-    
-    @return: A tuple containing a list of paths to resolved objects,
-    followed by a list of unresolved libraries.
-    @rtype: tuple of (list of string, list of string)
-    """
-    objects = []
-    libraries = getLibraryPaths(self.getLibraries())
-
-    if not self.linkObjectsInLibrary:
-      return objects, libraries
-
-    paths = self._scanForLibraries(libraries, True)
-    newLibraries = []
-      
-    for i, path in enumerate(paths):
-      if path is not None:
-        objectsInLib = self._getObjectsInLibrary(path)
-        if objectsInLib is not None:
-          objects.extend(objectsInLib)
-          continue
-      newLibraries.append(libraries[i])
+  def _scanDependencyFile(self, depPath, target):
+    self.engine.logger.outputDebug(
+      "scan",
+      "scan: %s\n" % depPath,
+      )
         
-    return objects, newLibraries
+    dependencies = parseDependencyFile(
+        depPath,
+        cake.path.extension(target),
+        )
+    
+    if not self.keepDependencyFile:
+      # Sometimes file removal will fail, perhaps because the compiler
+      # or a file watcher has the file open. Because it's a temp file
+      # this is OK, just let the system delete it later.
+      try:
+        os.remove(depPath)
+      except Exception:
+        self.engine.logger.outputDebug(
+          "scan",
+          "Unable to remove dependency file: %s\n" % depPath,
+          )
+      
+    return dependencies
 
   def _scanForLibraries(self, libraries, flagMissing=False):
     paths = []
@@ -2004,6 +2013,19 @@ class Compiler(Tool):
             "scan: Ignoring missing library '" + library + "'\n",
             )
     return paths
+  
+  def _setObjectsInLibrary(self, path, objectPaths):
+    """Set the list of paths of object files in the specified library.
+    
+    @param path: Path of the library previously built by a call to library().
+    @type path: string
+    
+    @param objectPaths: A list of the objects built by a call to library().
+    @type objectPaths: list of strings
+    """
+    path = os.path.normcase(os.path.normpath(path))
+    libraryObjects = self.__libraryObjects.setdefault(self.configuration, {})
+    libraryObjects[path] = tuple(objectPaths)
   
   def buildPch(self, target, source, header, object):
     compile, args, _ = self.getPchCommands(
@@ -2072,7 +2094,7 @@ class Compiler(Tool):
     
     # Check if the target needs building
     oldDependencyInfo, reasonToBuild = configuration.checkDependencyInfo(target, args)
-    if not reasonToBuild:
+    if reasonToBuild is None:
       return # Target is up to date
     self.engine.logger.outputDebug(
       "reason",
@@ -2080,7 +2102,8 @@ class Compiler(Tool):
       )
 
     useCacheForThisObject = canBeCached and self.objectCachePath is not None
-      
+    cacheDepMagic = "CKCH" 
+    
     if useCacheForThisObject:
       #######################
       # USING OBJECT CACHE
@@ -2146,6 +2169,15 @@ class Compiler(Tool):
         except EnvironmentError:
           continue
         
+        # Check for the correct signature to make sure the file isn't corrupt
+        cacheDepMagicLen = len(cacheDepMagic)
+        cacheDepSignature = cacheDepContents[-cacheDepMagicLen:]
+        cacheDepContents = cacheDepContents[:-cacheDepMagicLen]
+        
+        if cacheDepSignature != cacheDepMagic:
+          # Invalid signature
+          continue
+        
         try:
           candidateDependencies = pickle.loads(cacheDepContents)
         except Exception:
@@ -2180,24 +2212,21 @@ class Compiler(Tool):
           message = self.objectMessage(target, source, pch=getPath(pch), shared=shared, cached=True)
           self.engine.logger.outputInfo(message)
           try:
-            _unzipFile(cachedObjectPath, configuration.abspath(target))
+            cake.zipping.decompressFile(cachedObjectPath, configuration.abspath(target))
           except EnvironmentError:
             continue # Invalid cache file
           configuration.storeDependencyInfo(newDependencyInfo)
+          # Successfully restored object file and saved new dependency info file.
           return
 
-    # If we get to here then we didn't find the object in the cache
-    # so we need to actually execute the build.
+    # Else, if we get here we didn't find the object in the cache so we need
+    # to actually execute the build.
     def command():
       message = self.objectMessage(target, source, pch=getPath(pch), shared=shared, cached=False)
       self.engine.logger.outputInfo(message)
       return compile()
     
-    compileTask = self.engine.createTask(command)
-    compileTask.start(immediate=True)
-
     def storeDependencyInfoAndCache():
-     
       # Since we are sharing this object in the object cache we need to
       # make any paths in this workspace relative to the current workspace.
       abspath = configuration.abspath
@@ -2255,20 +2284,20 @@ class Compiler(Tool):
           # Copy the object file first, then the dependency file
           # so that other processes won't find the dependency until
           # the object file is ready.
-# TODO: What about the case where you're updating the cache, and the .dep
-# already exists, but the object is only partially written (corrupted)?           
-          _zipFile(configuration.abspath(target), cacheObjectPath)
+          cake.zipping.compressFile(configuration.abspath(target), cacheObjectPath)
           
           if not cake.filesys.isFile(cacheDepPath):
-            dependencyString = pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL)
-            
-            cake.filesys.writeFile(cacheDepPath, dependencyString)
+            dependencyString = pickle.dumps(dependencies, pickle.HIGHEST_PROTOCOL)       
+            cake.filesys.writeFile(cacheDepPath, dependencyString + cacheDepMagic)
             
         except EnvironmentError:
           # Don't worry if we can't put the object in the cache
           # The build shouldn't fail.
           pass
-        
+    
+    compileTask = self.engine.createTask(command)
+    compileTask.start(immediate=True)
+
     storeDependencyTask = self.engine.createTask(storeDependencyInfoAndCache)
     storeDependencyTask.startAfter(compileTask, immediate=True)
   

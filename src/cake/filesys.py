@@ -98,39 +98,6 @@ def copyFile(source, target):
   """
   shutil.copyfile(source, target)
 
-def renameFile(source, target):
-  """Rename a file.
-  
-  Unlike os.rename() if the file exists it is replaced.
-
-  @param source: The path of the source file.
-  @type source: string
-  @param target: The path of the target file.
-  @type target: string
-  """
-  try:
-    os.rename(source, target)
-    return # Success
-  except EnvironmentError:
-    # Remove any existing file with the same name
-    remove(target)
-  
-  # Note: When compiling small programs it is common to get a 'Permission denied'
-  # exception here. Presumably it's because the OS has a handle to the destination
-  # file open after we have called os.remove(). For this reason we sit in a loop
-  # attempting to rename until we reach a timeout of 1 second. However I've
-  # noticed under Python 2.4 it's still possible to get 'Permission denied'
-  # errors the first time the examples are built. 
-  timeout = time.clock() + 1.0
-  while True:
-    try:
-      os.rename(source, target)
-      break
-    except EnvironmentError:
-      if time.clock() >= timeout:
-        raise
-      time.sleep(0.05)
-
 def makeDirs(path):
   """Recursively create directories.
   
@@ -140,7 +107,12 @@ def makeDirs(path):
   @param path: The path of the directory to create.
   @type path: string 
   """
-  # Don't try to create directory at the root level, eg: 'C:\\'
+  # Don't try to create an empty directory, eg. if someone calls
+  # makeDirs(os.path.dirname("somefile.txt")).
+  if not path:
+    return
+  
+  # Don't try to create directory at the root level, eg: 'C:\\'.
   if cake.path.isMount(path):
     return
   
@@ -149,7 +121,7 @@ def makeDirs(path):
     head, tail = os.path.split(head)
   if head and tail and not os.path.exists(head):
     makeDirs(head)
-    if tail == os.curdir: # xxx/newdir/. exists if xxx/newdir exists
+    if tail == os.curdir: # xxx/newdir/. exists if xxx/newdir exists.
       return
 
   try:
@@ -199,35 +171,33 @@ def walkTree(path, recursive=True, includeMatch=None):
     for name in os.listdir(path):
       if includeMatch is None or includeMatch(name):
         yield name
-          
+
 def readFile(path):
-  """Read data from a file as safely as possible.
+  """Read data from a file.
 
   @param path: The path of the file to read.
-  @type path: string 
+  @type path: string
+  
+  @return: The data read from the file.
+  @rtype: string  
   """
   f = open(path, "rb")
   try:
     return f.read()
   finally:
     f.close()
-  
+
 def writeFile(path, data):
-  """Write data to a file as safely as possible.
+  """Write data to a file.
 
   @param path: The path of the file to write.
   @type path: string 
   @param data: The data to write to the file.
   @type data: string 
   """
-  makeDirs(os.path.dirname(path))
-
-  tmpPath = path + ".tmp"
-  
-  f = open(tmpPath, "wb")
+  makeDirs(os.path.dirname(path)) 
+  f = open(path, "wb")
   try:
     f.write(data)
   finally:
     f.close()
-
-  renameFile(tmpPath, path)

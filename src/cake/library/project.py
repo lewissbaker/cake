@@ -797,6 +797,60 @@ class ProjectFileItem(ProjectItem):
     ProjectItem.__init__(self, os.path.basename(filePath))
     self.filePath = filePath
 
+def _writeIt(generator, target):
+  """Write the contents of a project or solution file only if the target
+  file is out of date.
+  """
+  configuration = generator.configuration
+  engine = configuration.engine
+  type = generator.type
+
+  stream = StringIO.StringIO()
+  writer = codecs.getwriter(generator.encoding)(stream)
+  try:
+    generator._writeContents(writer)
+  except:
+    writer.close()
+    raise
+  newFileContents = stream.getvalue()
+  writer.close()
+  
+  # Check the existing dependency info file
+  buildArgs = []
+  _, reasonToBuild = configuration.checkDependencyInfo(target, buildArgs)
+  
+  absTarget = configuration.abspath(target) 
+  if reasonToBuild is None:
+    # Compare new file contents against existing file
+    existingFileContents = None
+    try:
+      existingFileContents = cake.filesys.readFile(absTarget)
+      if newFileContents != existingFileContents:
+        reasonToBuild = "it has been changed"
+    except EnvironmentError:
+      reasonToBuild = "it doesn't exist"
+  
+  if reasonToBuild is not None:
+    engine.logger.outputDebug(
+      "reason",
+      "Rebuilding '" + target + "' because " + reasonToBuild + ".\n",
+      )
+    engine.logger.outputInfo("Generating %s %s\n" % (type, target))
+    cake.filesys.writeFile(absTarget, newFileContents)
+
+    # Now that the file has been written successfully, save the new dependency file 
+    newDependencyInfo = configuration.createDependencyInfo(
+      targets=[target],
+      args=buildArgs,
+      dependencies=[],
+      )
+    configuration.storeDependencyInfo(newDependencyInfo)
+  else:
+    engine.logger.outputDebug(
+      "project",
+      "Skipping Identical %s %s\n" % (type, target),
+      )
+      
 _msvsProjectHeader = """\
 <?xml version="1.0" encoding="%(encoding)s"?>
 <VisualStudioProject
@@ -859,8 +913,8 @@ class MsvsProjectGenerator(object):
   """
 
   # Default member values
-  file = None
   encoding = 'utf-8'
+  type = "Project"
 
   def __init__(self, configuration, project):
     """Construct a new project generator instance.
@@ -900,40 +954,7 @@ class MsvsProjectGenerator(object):
 
     Throws an exception if building the project file fails.
     """
-    configuration = self.configuration
-    engine = configuration.engine
-    
-    stream = StringIO.StringIO()
-    self.file = codecs.getwriter(self.encoding)(stream)
-    try:
-      self._writeProject()
-    except:
-      self.file.close()
-      self.file = None
-      raise
-    newFileContents = stream.getvalue()
-    self.file.close()
-    self.file = None
-    
-    shouldBuild = engine.forceBuild
-    absProjectFilePath = configuration.abspath(self.projectFilePath) 
-    if not shouldBuild:
-      # Compare new file contents against existing file
-      existingFileContents = None
-      try:
-        existingFileContents = cake.filesys.readFile(absProjectFilePath)
-        shouldBuild = newFileContents != existingFileContents
-      except EnvironmentError:
-        shouldBuild = True
-    
-    if shouldBuild:
-      engine.logger.outputInfo("Generating Project %s\n" % self.projectFilePath)
-      cake.filesys.writeFile(absProjectFilePath, newFileContents)
-    else:
-      engine.logger.outputDebug(
-        "project",
-        "Skipping Identical Project %s\n" % self.projectFilePath,
-        )
+    _writeIt(self, self.projectFilePath)
   
   def getRelativePath(self, path):
     """Return path relative to the project file.
@@ -941,16 +962,16 @@ class MsvsProjectGenerator(object):
     abspath = self.configuration.abspath
     return cake.path.relativePath(abspath(path), abspath(self.projectDir))
       
-  def _writeProject(self):
+  def _writeContents(self, writer):
     """Write the project to the currently open file.
     """
-    self._writeProjectHeader()
-    self._writePlatforms()
-    self._writeConfigurations()
-    self._writeFiles()
-    self._writeProjectTailer()
+    self._writeProjectHeader(writer)
+    self._writePlatforms(writer)
+    self._writeConfigurations(writer)
+    self._writeFiles(writer)
+    self._writeProjectTailer(writer)
 
-  def _writeProjectHeader(self):
+  def _writeProjectHeader(self, writer):
     """Write the project header section to the currently open file.
 
     This should be written at the start of the file.
@@ -971,7 +992,7 @@ class MsvsProjectGenerator(object):
     else:
       scc_attrs = ""
     
-    self.file.write(_msvsProjectHeader % {
+    writer.write(_msvsProjectHeader % {
       'encoding' : escapeAttr(self.encoding),
       'version' : escapeAttr(self.version),
       'name' : escapeAttr(self.projectName),
@@ -979,35 +1000,35 @@ class MsvsProjectGenerator(object):
       'scc_attrs' : scc_attrs,
       })
 
-  def _writeProjectTailer(self):
+  def _writeProjectTailer(self, writer):
     """Write the project tailer to the file.
 
     This should be the last content written to the file as it closes off
     datastructures written by the header.
     """
-    self.file.write(_msvsProjectTailer)
+    writer.write(_msvsProjectTailer)
 
-  def _writePlatforms(self):
+  def _writePlatforms(self, writer):
     """Write the section that declares all of the platforms supported by this
     project.
     """
-    self.file.write("\t<Platforms>\n")
+    writer.write("\t<Platforms>\n")
     for platform in self.platforms:
-      self.file.write('\t\t<Platform\n')
-      self.file.write('\t\t\tName="%s"\n' % escapeAttr(platform))
-      self.file.write('\t\t/>\n')
-    self.file.write("\t</Platforms>\n")
+      writer.write('\t\t<Platform\n')
+      writer.write('\t\t\tName="%s"\n' % escapeAttr(platform))
+      writer.write('\t\t/>\n')
+    writer.write("\t</Platforms>\n")
 
-  def _writeConfigurations(self):
+  def _writeConfigurations(self, writer):
     """Write the section that declares all of the configurations supported by
     this project.
     """
-    self.file.write("\t<Configurations>\n")
+    writer.write("\t<Configurations>\n")
     for config in self.configs:
-      self._writeConfiguration(config)
-    self.file.write("\t</Configurations>\n")
+      self._writeConfiguration(writer, config)
+    writer.write("\t</Configurations>\n")
 
-  def _writeConfiguration(self, config):
+  def _writeConfiguration(self, writer, config):
     """Write a section that declares an individual build configuration.
     """
     outdir = self.getRelativePath(os.path.dirname(config.output))
@@ -1044,14 +1065,14 @@ class MsvsProjectGenerator(object):
     cleanCmd = "@"
     rebuildCmd = buildCmd + " -f"
 
-    self.file.write(_msvsProjectConfigurationHeader % {
+    writer.write(_msvsProjectConfigurationHeader % {
       'name' : escapeAttr(name),
       'outdir' : escapeAttr(outdir),
       'intdir' : escapeAttr(intdir),
       'buildlog' : escapeAttr(buildlog),
       })
     
-    self.file.write(_msvsProjectConfigurationMakeTool % {
+    writer.write(_msvsProjectConfigurationMakeTool % {
       'buildcmd' : escapeAttr(buildCmd),
       'rebuildcmd' : escapeAttr(rebuildCmd),
       'cleancmd' : escapeAttr(cleanCmd),
@@ -1065,11 +1086,11 @@ class MsvsProjectGenerator(object):
       })
 
     if config.name.endswith("|Xbox 360"):
-      self.file.write(_msvsProjectConfigurationXboxDeploymentTool)
+      writer.write(_msvsProjectConfigurationXboxDeploymentTool)
 
-    self.file.write(_msvsProjectConfigurationTailer)
+    writer.write(_msvsProjectConfigurationTailer)
             
-  def _writeFiles(self):
+  def _writeFiles(self, writer):
 
     configItems = {}
     for config in self.configs:
@@ -1079,11 +1100,11 @@ class MsvsProjectGenerator(object):
         self.projectDir,
         )
     
-    self.file.write("\t<Files>\n")
-    self._writeSubItems(configItems, indent='\t\t')
-    self.file.write("\t</Files>\n")
+    writer.write("\t<Files>\n")
+    self._writeSubItems(writer, configItems, indent='\t\t')
+    writer.write("\t</Files>\n")
 
-  def _writeSubItems(self, configItems, indent):
+  def _writeSubItems(self, writer, configItems, indent):
     """Recursively write out all of the subitems.
 
     configItems - A dictionary mapping from the ConfigurationNode
@@ -1107,43 +1128,43 @@ class MsvsProjectGenerator(object):
     filterNames = mergedFilterSubItems.keys()
     filterNames.sort()
     for name in filterNames:
-      self.file.write('%s<Filter\n' % indent)
-      self.file.write('%s\tName="%s"\n' % (indent, escapeAttr(name)))
-      self.file.write('%s\t>' % indent)
+      writer.write('%s<Filter\n' % indent)
+      writer.write('%s\tName="%s"\n' % (indent, escapeAttr(name)))
+      writer.write('%s\t>' % indent)
 
       # Recurse on each filter's subitems
       filterSubItems = mergedFilterSubItems[name]
       self._writeSubItems(filterSubItems, indent + '\t')
 
-      self.file.write('%s</Filter>\n' % indent)
+      writer.write('%s</Filter>\n' % indent)
 
     # Write out all of the <File> subitems
     filePaths = mergedFileItemConfigs.keys()
     filePaths.sort()
     for path in filePaths:
       configs = mergedFileItemConfigs[path]
-      self.file.write('%s<File\n' % indent)
-      self.file.write('%s\tRelativePath="%s"\n' % (indent, escapeAttr(path)))
-      self.file.write('%s\t>\n' % indent)
+      writer.write('%s<File\n' % indent)
+      writer.write('%s\tRelativePath="%s"\n' % (indent, escapeAttr(path)))
+      writer.write('%s\t>\n' % indent)
 
       for config in self.configs:
-        self.file.write('%s\t<FileConfiguration\n' % indent)
-        self.file.write('%s\t\tName="%s"\n' % (
+        writer.write('%s\t<FileConfiguration\n' % indent)
+        writer.write('%s\t\tName="%s"\n' % (
           indent,
           escapeAttr(config.name),
           ))
 
         # Exclude from build if file not present in this config
         if config not in configs:
-          self.file.write('%s\t\tExcludedFromBuild="true"\n' % indent)
+          writer.write('%s\t\tExcludedFromBuild="true"\n' % indent)
           
-        self.file.write('%s\t\t>\n' % indent)
-        self.file.write('%s\t\t<Tool\n' % indent)
-        self.file.write('%s\t\t\tName="VCNMakeTool"\n' % indent)
-        self.file.write('%s\t\t/>\n' % indent)
-        self.file.write('%s\t</FileConfiguration>\n' % indent)
+        writer.write('%s\t\t>\n' % indent)
+        writer.write('%s\t\t<Tool\n' % indent)
+        writer.write('%s\t\t\tName="VCNMakeTool"\n' % indent)
+        writer.write('%s\t\t/>\n' % indent)
+        writer.write('%s\t</FileConfiguration>\n' % indent)
         
-      self.file.write('%s</File>\n' % indent)
+      writer.write('%s</File>\n' % indent)
 
 _msbuildProjectHeader = """\
 <?xml version="1.0" encoding="%(encoding)s"?>
@@ -1231,8 +1252,8 @@ class MsBuildProjectGenerator(object):
   """
 
   # Default member values
-  file = None
   encoding = 'utf-8'
+  type = "Project"
 
   def __init__(self, configuration, project):
     """Construct a new project generator instance.
@@ -1252,39 +1273,7 @@ class MsBuildProjectGenerator(object):
 
     Throws an exception if building the project file fails.
     """
-    configuration = self.configuration
-    engine = configuration.engine
-    stream = StringIO.StringIO()
-    self.file = codecs.getwriter(self.encoding)(stream)
-    try:
-      self._writeProject()
-    except:
-      self.file.close()
-      self.file = None
-      raise
-    newFileContents = stream.getvalue()
-    self.file.close()
-    self.file = None
-    
-    absProjectFilePath = configuration.abspath(self.projectFilePath)
-
-    shouldBuild = engine.forceBuild
-    if not shouldBuild:
-      # Compare new file contents against existing file
-      try:
-        existingFileContents = cake.filesys.readFile(absProjectFilePath)
-        shouldBuild = newFileContents != existingFileContents
-      except EnvironmentError:
-        shouldBuild = True
-    
-    if shouldBuild:
-      engine.logger.outputInfo("Generating Project %s\n" % self.projectFilePath)
-      cake.filesys.writeFile(absProjectFilePath, newFileContents)
-    else:
-      engine.logger.outputDebug(
-        "project",
-        "Skipping Identical Project %s\n" % self.projectFilePath,
-        )
+    _writeIt(self, self.projectFilePath)
     
   def getRelativePath(self, path):
     """Return path relative to the project file.
@@ -1292,103 +1281,103 @@ class MsBuildProjectGenerator(object):
     abspath = self.configuration.abspath
     return cake.path.relativePath(abspath(path), abspath(self.projectDir))
     
-  def _writeProject(self):
+  def _writeContents(self, writer):
     """Write the project to the currently open file.
     """
-    self._writeProjectHeader()
-    self._writeProjectConfigurations()
-    self._writeGlobals()
-    self._writeConfigurationTypes()
-    self._writeConfigurations()
-    self._writeBuildLogs()
-    self._writeFiles()
-    self._writeProjectTailer()
+    self._writeProjectHeader(writer)
+    self._writeProjectConfigurations(writer)
+    self._writeGlobals(writer)
+    self._writeConfigurationTypes(writer)
+    self._writeConfigurations(writer)
+    self._writeBuildLogs(writer)
+    self._writeFiles(writer)
+    self._writeProjectTailer(writer)
 
-  def _writeProjectHeader(self):
+  def _writeProjectHeader(self, writer):
     """Write the project header section to the currently open file.
 
     This should be written at the start of the file.
     """
-    self.file.write(_msbuildProjectHeader % {
+    writer.write(_msbuildProjectHeader % {
       "encoding" : escapeAttr(self.encoding),
       "version" : escapeAttr(self.version),
       })
 
-  def _writeProjectTailer(self):
+  def _writeProjectTailer(self, writer):
     """Write the project tailer to the file.
 
     This should be the last content written to the file as it closes off
     datastructures written by the header.
     """
-    self.file.write(_msbuildProjectTailer)
+    writer.write(_msbuildProjectTailer)
 
-  def _writeProjectConfigurations(self):
+  def _writeProjectConfigurations(self, writer):
     """Write the section that declares all of the configurations supported by
     this project.
     """
-    self.file.write('  <ItemGroup Label="ProjectConfigurations">\n')
+    writer.write('  <ItemGroup Label="ProjectConfigurations">\n')
     for config in self.configs:
-      self._writeProjectConfiguration(config)
-    self.file.write("  </ItemGroup>\n")
+      self._writeProjectConfiguration(writer, config)
+    writer.write("  </ItemGroup>\n")
 
-  def _writeProjectConfiguration(self, config):
+  def _writeProjectConfiguration(self, writer, config):
     """Write a section that declares an individual build configuration.
     """
-    self.file.write(_msbuildProjectConfiguration % {
+    writer.write(_msbuildProjectConfiguration % {
       "name" : escapeAttr(config.name),
       "platform" : escapeAttr(config.platform),
       })
 
-  def _writeGlobals(self):
+  def _writeGlobals(self, writer):
     """Write a section that declares globals.
     """
     guid = self.project.externalGuid
    
-    self.file.write(_msbuildGlobals % {
+    writer.write(_msbuildGlobals % {
       "guid" : escapeAttr(guid),
       })
 
-  def _writeConfigurationTypes(self):
+  def _writeConfigurationTypes(self, writer):
     """Write the section that declares all of the configurations supported by
     this project.
     """
-    self.file.write(_msbuildConfigurationTypesHeader)
+    writer.write(_msbuildConfigurationTypesHeader)
     for config in self.configs:
-      self._writeConfigurationType(config)
-    self.file.write(_msbuildConfigurationTypesTailer)
+      self._writeConfigurationType(writer, config)
+    writer.write(_msbuildConfigurationTypesTailer)
     for config in self.configs:
-      self._writeConfigurationPropertySheet(config)
-    self.file.write('  <PropertyGroup Label="UserMacros" />\n')
+      self._writeConfigurationPropertySheet(writer, config)
+    writer.write('  <PropertyGroup Label="UserMacros" />\n')
 
-  def _writeConfigurationType(self, config):
+  def _writeConfigurationType(self, writer, config):
     """Write a section that declares an individual build configuration.
     """
     outdir = self.getRelativePath(os.path.dirname(config.output))
     intdir = self.getRelativePath(config.intermediateDir)
     
-    self.file.write(_msbuildConfigurationType % {
+    writer.write(_msbuildConfigurationType % {
       "name" : escapeAttr(config.name),
       "platform" : escapeAttr(config.platform),
       "outdir" : escapeAttr(outdir),
       "intdir" : escapeAttr(intdir),
       })
     
-  def _writeConfigurationPropertySheet(self, config):
+  def _writeConfigurationPropertySheet(self, writer, config):
     """Write a section that declares an individual build configuration.
     """
-    self.file.write(_msbuildConfigurationPropertySheet % {
+    writer.write(_msbuildConfigurationPropertySheet % {
       "name" : escapeAttr(config.name),
       "platform" : escapeAttr(config.platform),
       })
     
-  def _writeConfigurations(self):
+  def _writeConfigurations(self, writer):
     """Write the section that declares all of the configurations supported by
     this project.
     """
     for config in self.configs:
-      self._writeConfiguration(config)
+      self._writeConfiguration(writer, config)
     
-  def _writeConfiguration(self, config):
+  def _writeConfiguration(self, writer, config):
     """Write a section that declares an individual build configuration.
     """
     output = self.getRelativePath(config.output)
@@ -1418,7 +1407,7 @@ class MsBuildProjectGenerator(object):
     cleanCmd = "@"
     rebuildCmd = buildCmd + " -f"
         
-    self.file.write(_msbuildConfiguration % {
+    writer.write(_msbuildConfiguration % {
       "name" : escapeAttr(config.name),
       "platform" : escapeAttr(config.platform),
       "buildcmd" : escapeAttr(buildCmd),
@@ -1432,25 +1421,25 @@ class MsBuildProjectGenerator(object):
       "forcedusings" : escapeAttr(forcedUsings),
       })
     
-  def _writeBuildLogs(self):
+  def _writeBuildLogs(self, writer):
     """Write the section that declares all of the configurations supported by
     this project.
     """
     for config in self.configs:
-      self._writeBuildLog(config)
+      self._writeBuildLog(writer, config)
     
-  def _writeBuildLog(self, config):
+  def _writeBuildLog(self, writer, config):
     """Write a section that declares an individual build configuration.
     """
     buildLog = self.getRelativePath(config.buildLog)
     
-    self.file.write(_msbuildLog % {
+    writer.write(_msbuildLog % {
       "name" : escapeAttr(config.name),
       "platform" : escapeAttr(config.platform),
       "buildlog" : escapeAttr(buildLog),
       })
 
-  def _writeFiles(self):
+  def _writeFiles(self, writer):
 
     configItems = {}
     for config in self.configs:
@@ -1460,11 +1449,11 @@ class MsBuildProjectGenerator(object):
         self.projectDir,
         )
 
-    self.file.write('  <ItemGroup>\n')
-    self._writeSubFiles(configItems)
-    self.file.write('  </ItemGroup>\n')
+    writer.write('  <ItemGroup>\n')
+    self._writeSubFiles(writer, configItems)
+    writer.write('  </ItemGroup>\n')
 
-  def _writeSubFiles(self, configItems, parent=None):
+  def _writeSubFiles(self, writer, configItems, parent=None):
     """Recursively write out all of the subitems.
 
     configItems - A dictionary mapping from the ConfigurationNode
@@ -1509,18 +1498,18 @@ class MsBuildProjectGenerator(object):
           break
       
       if excluded:
-        self.file.write('    <None Include="%(name)s">\n' % {
+        writer.write('    <None Include="%(name)s">\n' % {
           "name" : escapeAttr(path),
           })
         for config in self.configs:
           if config not in configs:
-            self.file.write(_msbuildExcludedFile % {
+            writer.write(_msbuildExcludedFile % {
               "config" : escapeAttr(config.name),
               "platform" : escapeAttr(config.platform),
               })
-        self.file.write('    </None>\n')
+        writer.write('    </None>\n')
       else:
-        self.file.write('    <None Include="%(name)s" />\n' % {
+        writer.write('    <None Include="%(name)s" />\n' % {
           "name" : escapeAttr(path),
           })
         
@@ -1557,8 +1546,8 @@ class MsBuildFiltersGenerator(object):
   """
 
   # Default member values
-  file = None
   encoding = 'utf-8'
+  type = "Filters"
 
   def __init__(self, configuration, project):
     """Construct a new project generator instance.
@@ -1578,65 +1567,34 @@ class MsBuildFiltersGenerator(object):
 
     Throws an exception if building the project file fails.
     """
-    configuration = self.configuration
-    engine = configuration.engine
-    stream = StringIO.StringIO()
-    self.file = codecs.getwriter(self.encoding)(stream)
-    try:
-      self._writeFilters()
-    except:
-      self.file.close()
-      self.file = None
-      raise
-    newFileContents = stream.getvalue()
-    self.file.close()
-    self.file = None
+    _writeIt(self, self.projectFiltersPath)
     
-    absProjectFiltersPath = configuration.abspath(self.projectFiltersPath)
-    shouldBuild = engine.forceBuild
-    if not shouldBuild:
-      # Compare new file contents against existing file
-      try:
-        existingFileContents = cake.filesys.readFile(absProjectFiltersPath)
-        shouldBuild = newFileContents != existingFileContents
-      except EnvironmentError:
-        shouldBuild = True
-    
-    if shouldBuild:
-      engine.logger.outputInfo("Generating Filters %s\n" % self.projectFiltersPath)
-      cake.filesys.writeFile(absProjectFiltersPath, newFileContents)
-    else:
-      engine.logger.outputDebug(
-        "project",
-        "Skipping Identical Filters %s\n" % self.projectFiltersPath,
-        )
-    
-  def _writeFilters(self):
+  def _writeContents(self, writer):
     """Write the project to the currently open file.
     """
-    self._writeFiltersHeader()
-    self._writeFoldersAndFiles()
-    self._writeFiltersTailer()
+    self._writeFiltersHeader(writer)
+    self._writeFoldersAndFiles(writer)
+    self._writeFiltersTailer(writer)
 
-  def _writeFiltersHeader(self):
+  def _writeFiltersHeader(self, writer):
     """Write the project header section to the currently open file.
 
     This should be written at the start of the file.
     """
-    self.file.write(_msbuildFiltersHeader % {
+    writer.write(_msbuildFiltersHeader % {
       "encoding" : escapeAttr(self.encoding),
       "version" : escapeAttr(self.version),
       })
 
-  def _writeFiltersTailer(self):
+  def _writeFiltersTailer(self, writer):
     """Write the project tailer to the file.
 
     This should be the last content written to the file as it closes off
     datastructures written by the header.
     """
-    self.file.write(_msbuildFiltersTailer)
+    writer.write(_msbuildFiltersTailer)
 
-  def _writeFoldersAndFiles(self):
+  def _writeFoldersAndFiles(self, writer):
 
     configItems = {}
     for config in self.configs:
@@ -1646,15 +1604,15 @@ class MsBuildFiltersGenerator(object):
         self.projectDir,
         )
     
-    self.file.write('  <ItemGroup>\n')
-    self._writeSubFolders(configItems)
-    self.file.write('  </ItemGroup>\n')
+    writer.write('  <ItemGroup>\n')
+    self._writeSubFolders(writer, configItems)
+    writer.write('  </ItemGroup>\n')
 
-    self.file.write('  <ItemGroup>\n')
-    self._writeSubFiles(configItems)
-    self.file.write('  </ItemGroup>\n')
+    writer.write('  <ItemGroup>\n')
+    self._writeSubFiles(writer, configItems)
+    writer.write('  </ItemGroup>\n')
 
-  def _writeSubFolders(self, configItems, parent=None):
+  def _writeSubFolders(self, writer, configItems, parent=None):
     """Recursively write out all of the subitems.
 
     configItems - A dictionary mapping from the ConfigurationNode
@@ -1683,16 +1641,16 @@ class MsBuildFiltersGenerator(object):
         path = name
       guid = generateGuid(path)
       
-      self.file.write(_msbuildFolder % {
+      writer.write(_msbuildFolder % {
         "name" : escapeAttr(path),
         "guid" : escapeAttr(guid),
         })
 
       # Recurse on each filter's subitems
       filterSubItems = mergedFilterSubItems[name]
-      self._writeSubFolders(filterSubItems, path)
+      self._writeSubFolders(writer, filterSubItems, path)
 
-  def _writeSubFiles(self, configItems, parent=None):
+  def _writeSubFiles(self, writer, configItems, parent=None):
     """Recursively write out all of the subitems.
 
     configItems - A dictionary mapping from the ConfigurationNode
@@ -1722,19 +1680,19 @@ class MsBuildFiltersGenerator(object):
         
       # Recurse on each filter's subitems
       filterSubItems = mergedFilterSubItems[name]
-      self._writeSubFiles(filterSubItems, path)
+      self._writeSubFiles(writer, filterSubItems, path)
         
     # Write out all of the <File> subitems
     filePaths = mergedFileItemConfigs.keys()
     filePaths.sort()
     for path in filePaths:
       if parent:
-        self.file.write(_msbuildFile % {
+        writer.write(_msbuildFile % {
           "name" : escapeAttr(path),
           "filter" : escapeAttr(parent),
           })
       else:
-        self.file.write(_msbuildFileNoFilter % {
+        writer.write(_msbuildFileNoFilter % {
           "name" : escapeAttr(path),
           })
           
@@ -1745,6 +1703,7 @@ class MsvsSolutionGenerator(object):
   # Default member values
   file = None
   encoding = 'utf-8'
+  type = "Solution"
   
   def __init__(self, configuration, solution, registry):
     """Construct a new solution file writer.
@@ -1819,70 +1778,40 @@ class MsvsSolutionGenerator(object):
   def build(self):
     """Actually write the target file.
     """
-    configuration = self.configuration
-    engine = configuration.engine
-    stream = StringIO.StringIO()
-    self.file = codecs.getwriter(self.encoding)(stream)
-    try:
-      self.file.write(u"\ufeff\r\n") # BOM
-      self.writeSolution()
-    except:
-      self.file.close()
-      self.file = None
-      raise
-    newFileContents = stream.getvalue()
-    self.file.close()
-    self.file = None
-      
-    absSolutionFilePath = configuration.abspath(self.solutionFilePath)
-    shouldBuild = engine.forceBuild
-    if not shouldBuild:
-      try:
-        existingFileContents = cake.filesys.readFile(absSolutionFilePath)
-        shouldBuild = newFileContents != existingFileContents
-      except EnvironmentError:
-        shouldBuild = True
-    
-    if shouldBuild:
-      engine.logger.outputInfo("Generating Solution %s\n" % self.solutionFilePath)
-      cake.filesys.writeFile(absSolutionFilePath, newFileContents)
-    else:
-      engine.logger.outputDebug(
-        "project",
-        "Skipping Identical Solution %s\n" % self.solutionFilePath,
-        )
+    _writeIt(self, self.solutionFilePath)
 
-  def writeSolution(self):
+  def _writeContents(self, writer):
     """Write the solution part (this is essentially the whole file's contents)
     """
-    self.writeHeader()
-    self.writeProjectsSection()
-    self.writeGlobalSection()
+    writer.write(u"\ufeff\r\n") # BOM
+    self._writeHeader(writer)
+    self._writeProjectsSection(writer)
+    self._writeGlobalSection(writer)
 
-  def writeHeader(self):
+  def _writeHeader(self, writer):
     """Write the solution header.
 
     Visual Studio uses this to determine which version of the .sln format this is.
     """
-    self.file.write(
+    writer.write(
       "Microsoft Visual Studio Solution File, Format Version %(version)s\r\n" % {
         'version' : self.version,
         }
       )
-    self.file.write(
+    writer.write(
       "# Generated by Cake for Visual Studio\r\n"
       )
 
-  def writeProjectsSection(self):
+  def _writeProjectsSection(self, writer):
     """Write the projects section.
 
     This section declares all of the constituent project files.
     """
     # Build a global list of all projects across all solution configurations
     for project in self.projects:
-      self.writeProject(project)
+      self._writeProject(writer, project)
 
-  def writeProject(self, project):
+  def _writeProject(self, writer, project):
     """Write details of an individual project.
 
     This associates an internal project guid with the visual studio project files
@@ -1901,31 +1830,31 @@ class MsvsSolutionGenerator(object):
     projectFilePath = project.path
     relativePath = self.getRelativePath(projectFilePath)
     
-    self.file.write('Project("%s") = "%s", "%s", "%s"\r\n' % (
+    writer.write('Project("%s") = "%s", "%s", "%s"\r\n' % (
       internalGuid, projectName, relativePath, externalGuid,
       ))
 
     if self.isDotNet:
-      self.file.write("\tProjectSection(ProjectDependencies) = postProject\r\n")
-      self.file.write("\tEndProjectSection\r\n")
+      writer.write("\tProjectSection(ProjectDependencies) = postProject\r\n")
+      writer.write("\tEndProjectSection\r\n")
     
-    self.file.write('EndProject\r\n')
+    writer.write('EndProject\r\n')
 
-  def writeGlobalSection(self):
+  def _writeGlobalSection(self, writer):
     """Write all global sections.
     """
-    self.file.write("Global\r\n")
-    self.writeSourceCodeControlSection()
-    self.writeSolutionConfigurationPlatformsSection()
-    self.writeProjectConfigurationPlatformsSection()
+    writer.write("Global\r\n")
+    self._writeSourceCodeControlSection(writer)
+    self._writeSolutionConfigurationPlatformsSection(writer)
+    self._writeProjectConfigurationPlatformsSection(writer)
     if self.isDotNet:
-      self.writeExtensibilityGlobalsSection()
-      self.writeExtensibilityAddInsSection()
+      self._writeExtensibilityGlobalsSection(writer)
+      self._writeExtensibilityAddInsSection(writer)
     else:
-      self.writeSolutionPropertiesSection()
-    self.file.write("EndGlobal\r\n")
+      self._writeSolutionPropertiesSection(writer)
+    writer.write("EndGlobal\r\n")
 
-  def writeSourceCodeControlSection(self):
+  def _writeSourceCodeControlSection(self, writer):
     """Write the section that defines the source code control for the projects.
 
     Looks up the MSVS_SCC_PROVIDER of the environment used to build the projects.
@@ -1939,9 +1868,9 @@ class MsvsSolutionGenerator(object):
     if not projectsWithScc:
       return
 
-    self.file.write("\tGlobalSection(SourceCodeControl) = preSolution\r\n")
+    writer.write("\tGlobalSection(SourceCodeControl) = preSolution\r\n")
     
-    self.file.write(
+    writer.write(
       "\t\tSccNumberOfProjects = %i\r\n" % len(projectsWithScc)
       )
 
@@ -1966,7 +1895,7 @@ class MsvsSolutionGenerator(object):
         s = s.replace(' ', '\\u0020')
         return s
 
-      self.file.write(
+      writer.write(
         "\t\tSccProjectUniqueName%(id)i = %(file_base)s\r\n"
         "\t\tSccProjectName%(id)i = %(scc_project_name)s\r\n"
         "\t\tSccLocalPath%(id)i = %(scc_local_path)s\r\n"
@@ -1981,39 +1910,39 @@ class MsvsSolutionGenerator(object):
         )
       i += 1
 
-    self.file.write(
+    writer.write(
       "\t\tSolutionUniqueID = %s\r\n" % self.solutionGUID
       )
-    self.file.write("\tEndGlobalSection\r\n")
+    writer.write("\tEndGlobalSection\r\n")
 
-  def writeSolutionConfigurationPlatformsSection(self):
+  def _writeSolutionConfigurationPlatformsSection(self, writer):
     
     if not self.solutionConfigurations:
       return
 
     if self.isDotNet:
-      self.file.write(
+      writer.write(
         "\tGlobalSection(SolutionConfiguration) = preSolution\r\n"
         )
     else:
-      self.file.write(
+      writer.write(
         "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\r\n"
         )
       
     for solutionVariant, _ in self.variants: 
-      self.file.write("\t\t%s = %s\r\n" % (
+      writer.write("\t\t%s = %s\r\n" % (
         solutionVariant,
         solutionVariant,
         ))
 
-    self.file.write("\tEndGlobalSection\r\n")
+    writer.write("\tEndGlobalSection\r\n")
 
-  def writeProjectConfigurationPlatformsSection(self):
+  def _writeProjectConfigurationPlatformsSection(self, writer):
 
     if self.isDotNet:
-      self.file.write("\tGlobalSection(ProjectConfiguration) = postSolution\r\n")
+      writer.write("\tGlobalSection(ProjectConfiguration) = postSolution\r\n")
     else:
-      self.file.write("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n")
+      writer.write("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n")
 
     # Note: Not bothering to sort these because VS seems to have a strange sort
     # order ('0' comes after '9').     
@@ -2027,7 +1956,7 @@ class MsvsSolutionGenerator(object):
         solutionVariant = self.getSolutionVariant(solutionConfig)
         projectVariant = self.getProjectVariant(projectConfig)
         
-        self.file.write(
+        writer.write(
           "\t\t%(guid)s.%(slnvariant)s.ActiveCfg = %(projvariant)s\r\n" % {
             "guid" : guid,
             "slnvariant" : solutionVariant,
@@ -2035,24 +1964,24 @@ class MsvsSolutionGenerator(object):
             })
         
         if projectConfig.build:
-          self.file.write(
+          writer.write(
             "\t\t%(guid)s.%(slnvariant)s.Build.0 = %(projvariant)s\r\n" % {
               "guid" : guid,
               "slnvariant" : solutionVariant,
               "projvariant" : projectVariant,
               })
     
-    self.file.write("\tEndGlobalSection\r\n")
+    writer.write("\tEndGlobalSection\r\n")
 
-  def writeExtensibilityGlobalsSection(self):
-    self.file.write("\tGlobalSection(ExtensibilityGlobals) = postSolution\r\n")
-    self.file.write("\tEndGlobalSection\r\n")
+  def _writeExtensibilityGlobalsSection(self, writer):
+    writer.write("\tGlobalSection(ExtensibilityGlobals) = postSolution\r\n")
+    writer.write("\tEndGlobalSection\r\n")
 
-  def writeExtensibilityAddInsSection(self):
-    self.file.write("\tGlobalSection(ExtensibilityAddIns) = postSolution\r\n")
-    self.file.write("\tEndGlobalSection\r\n")
+  def _writeExtensibilityAddInsSection(self, writer):
+    writer.write("\tGlobalSection(ExtensibilityAddIns) = postSolution\r\n")
+    writer.write("\tEndGlobalSection\r\n")
 
-  def writeSolutionPropertiesSection(self):
-    self.file.write("\tGlobalSection(SolutionProperties) = preSolution\r\n")
-    self.file.write("\t\tHideSolutionNode = FALSE\r\n")
-    self.file.write("\tEndGlobalSection\r\n")
+  def _writeSolutionPropertiesSection(self, writer):
+    writer.write("\tGlobalSection(SolutionProperties) = preSolution\r\n")
+    writer.write("\t\tHideSolutionNode = FALSE\r\n")
+    writer.write("\tEndGlobalSection\r\n")

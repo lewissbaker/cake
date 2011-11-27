@@ -16,9 +16,6 @@ import time
 
 def _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer):
   
-  if engine.forceBuild:
-    return "rebuild has been forced"
-  
   if not onlyNewer:
     return "onlyNewer is False" # Always rebuild
 
@@ -33,9 +30,10 @@ def _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer):
     
   return None
 
-def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onlyNewer):
+def _extractFile(configuration, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onlyNewer):
   """Extract the ZipInfo object to a physical file at targetDir.
   """
+  engine = configuration.engine
   targetFile = os.path.join(targetDir, zipInfo.filename)
   absTargetFile = os.path.join(absTargetDir, zipInfo.filename)
   
@@ -47,9 +45,13 @@ def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onl
     year, month, day, hour, minute, second = zipInfo.date_time
     zipTime = calendar.timegm((year, month, day, hour, minute, second, 0, 0, 0))
     
-    reasonToBuild = _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer)
+    buildArgs = []
+    _, reasonToBuild = configuration.checkDependencyInfo(targetFile, buildArgs)
+
     if reasonToBuild is None:
-      return # Target is up to date
+      reasonToBuild = _shouldExtractFile(engine, absTargetFile, zipTime, onlyNewer)
+      if reasonToBuild is None:
+        return # Target is up to date
 
     engine.logger.outputDebug(
       "reason",
@@ -68,6 +70,14 @@ def _extractFile(engine, zipFile, zipPath, zipInfo, targetDir, absTargetDir, onl
           str(e),
           ),
         )
+      
+    # Now that the file has been written successfully, save the new dependency file 
+    newDependencyInfo = configuration.createDependencyInfo(
+      targets=[targetFile],
+      args=buildArgs,
+      dependencies=[],
+      )
+    configuration.storeDependencyInfo(newDependencyInfo)
 
     # Set the file modification time to match the zip time
     os.utime(absTargetFile, (zipTime, zipTime))
@@ -104,21 +114,21 @@ def _shouldCompress(
     # File doesn't exist or is invalid
     return None, "'" + targetPath + "' doesn't exist" 
 
-  if onlyNewer:
-    for casedPath, originalPath in toZip.iteritems():
-      zipInfo = fromZip.get(casedPath, None)
+  # Check modification times of source files against those in the zip
+  for casedPath, originalPath in toZip.iteritems():
+    zipInfo = fromZip.get(casedPath, None)
 
-      # Not interested in modified directories
-      if zipInfo is not None and not cake.zipping.isDirectoryInfo(zipInfo):
-        absSourceFilePath = os.path.join(absSourcePath, originalPath)
-        utcTime = time.gmtime(os.stat(absSourceFilePath).st_mtime)
-        zipTime = utcTime[0:5] + (
-          utcTime[5] & 0xFE, # Zip only saves 2 second resolution
-          )              
-        if zipTime != zipInfo.date_time:
-          sourceFilePath = os.path.join(sourcePath, originalPath)
-          # We must recreate the zip to update files
-          return None, "'" + sourceFilePath + "' has been changed"
+    # Not interested in modified directories
+    if zipInfo is not None and not cake.zipping.isDirectoryInfo(zipInfo):
+      absSourceFilePath = os.path.join(absSourcePath, originalPath)
+      utcTime = time.gmtime(os.stat(absSourceFilePath).st_mtime)
+      zipTime = utcTime[0:5] + (
+        utcTime[5] & 0xFE, # Zip only saves 2 second resolution
+        )              
+      if zipTime != zipInfo.date_time:
+        sourceFilePath = os.path.join(sourcePath, originalPath)
+        # We must recreate the entire zip to update files
+        return None, "'" + sourceFilePath + "' has been changed"
       
   if removeStale:
     for path, zipInfo in fromZip.iteritems():
@@ -186,34 +196,43 @@ class ZipTool(Tool):
     def doIt():
       sourcePath = getPath(source)
       absTargetDir = configuration.abspath(targetDir)
-      file = zipfile.ZipFile(configuration.abspath(sourcePath), "r")
+      zipFile = zipfile.ZipFile(configuration.abspath(sourcePath), "r")
       try:
-        zipInfos = file.infolist()
+        zipInfos = zipFile.infolist()
         
         if includeMatch is not None:
           zipInfos = [z for z in zipInfos if includeMatch(z.filename)]
         
         if removeStale:
-          zipFiles = set()
+          filesInZip = set()
           for zipInfo in zipInfos:
-            zipFiles.add(os.path.normcase(os.path.normpath(zipInfo.filename)))
+            filesInZip.add(os.path.normcase(os.path.normpath(zipInfo.filename)))
           
           searchDir = os.path.normpath(absTargetDir)
           for path in cake.filesys.walkTree(searchDir):
+            normPath = os.path.normcase(path)
+            # Skip files that also exist in the zip.
+            if normPath in filesInZip:
+              continue
+            if engine.dependencyInfoPath is None:
+              # Skip .dep files that match a file in the zip.
+              p, e = os.path.splitext(normPath)
+              if e == ".dep" and p in filesInZip:
+                continue
+            
             absPath = os.path.join(searchDir, path)
-            if os.path.normcase(path) not in zipFiles:
-              engine.logger.outputInfo(
-                "Deleting %s\n" % os.path.join(targetDir, path),
-                )
-              if os.path.isdir(absPath):
-                cake.filesys.removeTree(absPath)
-              else:
-                cake.filesys.remove(absPath)
+            engine.logger.outputInfo(
+              "Deleting %s\n" % os.path.join(targetDir, path),
+              )
+            if os.path.isdir(absPath):
+              cake.filesys.removeTree(absPath)
+            else:
+              cake.filesys.remove(absPath)
         
         for zipinfo in zipInfos:
-          _extractFile(engine, file, sourcePath, zipinfo, targetDir, absTargetDir, onlyNewer)   
+          _extractFile(configuration, zipFile, sourcePath, zipinfo, targetDir, absTargetDir, onlyNewer)   
       finally:
-        file.close()
+        zipFile.close()
 
     if self.enabled:
       sourceTask = getTask(source)

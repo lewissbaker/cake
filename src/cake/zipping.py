@@ -8,20 +8,40 @@
 import cake.filesys
 import os
 import os.path
-import zipfile
 import time
+import zipfile
+import zlib
 
-def isDirectoryInfo(zipInfo):
-  """Determine whether a ZipInfo structure corresponds to a directory.
+def compressFile(source, target):
+  """Compress the contents of a file and write it to another file.
   
-  @param zipInfo: ZipInfo to check.
-  @type zipInfo: zipfile.ZipInfo
-  
-  @return: True if the zipInfo corresponds to a directory.
-  @rtype: bool
+  @param source: The path of the file to compress.
+  @type source: string
+  @param target: The path of the compressed file.
+  @type target: string
   """
-  return (zipInfo.external_attr & 0x00000010L) != 0L # FILE_ATTRIBUTE_DIRECTORY
+  data = cake.filesys.readFile(source)
+  try:
+    data = zlib.compress(data, 1)
+  except zlib.error, e:
+    raise EnvironmentError(str(e))
+  cake.filesys.writeFile(target, data)
 
+def decompressFile(source, target):
+  """Decompress the contents of a file and write it to another file.
+  
+  @param source: The path of the file to decompress.
+  @type source: string
+  @param target: The path of the decompressed file.
+  @type target: string
+  """
+  data = cake.filesys.readFile(source)
+  try:
+    data = zlib.decompress(data)
+  except zlib.error, e:
+    raise EnvironmentError(str(e))
+  cake.filesys.writeFile(target, data)
+  
 def findFilesToCompress(sourcePath, includeMatch=None):
   """Return a dictionary of files in a given directory.
   
@@ -41,6 +61,17 @@ def findFilesToCompress(sourcePath, includeMatch=None):
     toZip[os.path.normcase(path)] = path
     
   return toZip
+
+def isDirectoryInfo(zipInfo):
+  """Determine whether a ZipInfo structure corresponds to a directory.
+  
+  @param zipInfo: ZipInfo to check.
+  @type zipInfo: zipfile.ZipInfo
+  
+  @return: True if the zipInfo corresponds to a directory.
+  @rtype: bool
+  """
+  return (zipInfo.external_attr & 0x00000010L) != 0L # FILE_ATTRIBUTE_DIRECTORY
 
 def writeFileToZip(zipFile, sourcePath, targetPath):
   """Write a source file or directory to a zip.

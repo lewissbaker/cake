@@ -5,7 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.gnu import parseDependencyFile
 from cake.library import memoise, getPaths
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 import cake.filesys
@@ -332,37 +331,22 @@ class GccCompiler(Compiler):
       language += '-header'
     
     return language
-  
+
   def getPchCommands(self, target, source, header, object):
+    depPath = self._generateDependencyFile(target)
     args = list(self._getCompileArgs(cake.path.extension(source), shared=False, pch=True))
     args.extend([source, '-o', target])
 
-    def compile():
-      self._runProcess(args, target)
-
-      dependencyFile = cake.path.stripExtension(target) + '.d'
-      absDependencyFile = self.configuration.abspath(dependencyFile)
-      self.engine.logger.outputDebug(
-        "scan",
-        "scan: %s\n" % dependencyFile,
-        )
-      
-      # TODO: Add dependencies on DLLs used by gcc.exe
-      dependencies = [args[0]]
-      dependencies.extend(parseDependencyFile(
-        absDependencyFile,
-        cake.path.extension(target),
-        ))
-      
-      if not self.keepDependencyFile:
-        cake.filesys.remove(absDependencyFile)
-        
+    def compile():   
+      dependencies = self._runProcess(args + ['-MF', depPath], target)
+      dependencies.extend(self._scanDependencyFile(depPath, target))
       return dependencies
     
     canBeCached = True
     return compile, args, canBeCached
   
   def getObjectCommands(self, target, source, pch, shared):
+    depPath = self._generateDependencyFile(target)
     args = list(self._getCompileArgs(cake.path.extension(source), shared))
     args.extend([source, '-o', target])
   
@@ -373,25 +357,9 @@ class GccCompiler(Compiler):
         ])
         
     def compile():
-      self._runProcess(args, target)
-
-      dependencyFile = cake.path.stripExtension(target) + '.d'
-      absDependencyFile = self.configuration.abspath(dependencyFile)
-      self.engine.logger.outputDebug(
-        "scan",
-        "scan: %s\n" % dependencyFile,
-        )
-      
-      # TODO: Add dependencies on DLLs used by gcc.exe
-      dependencies = [args[0]]
-      dependencies.extend(parseDependencyFile(
-        absDependencyFile,
-        cake.path.extension(target),
-        ))
-      
-      if not self.keepDependencyFile:
-        cake.filesys.remove(absDependencyFile)
-        
+      dependencies = self._runProcess(args + ['-MF', depPath], target)
+      dependencies.extend(self._scanDependencyFile(depPath, target))
+              
       if pch is not None:
         dependencies.append(pch.path)
         

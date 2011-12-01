@@ -12,7 +12,7 @@ def shouldInclude(path):
 # the zip. Remove any files/directories in the zip that no longer exist in the
 # source path. 
 zipping.compress(
-  target="../build/zip/zip.zip",
+  target="../build/$TARGET/zip/zip.zip",
   source="zipme",
   onlyNewer=True,
   removeStale=True,

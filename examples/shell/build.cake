@@ -11,13 +11,13 @@ sources = [
 
 # Build the objects.
 objects = compiler.objects(
-  targetDir="../build/shell/obj",
+  targetDir="../build/$TARGET/shell/obj",
   sources=sources,
   )
 
 # Build the program.
 program = compiler.program(
-  target="../build/shell/bin/main",
+  target="../build/$TARGET/shell/bin/main",
   sources=objects,
   )
 

@@ -22,14 +22,14 @@ def makeFile(target, contents):
 sources = []
 
 sources.append(makeFile(
-  target='../build/compilescriptresult/a.c',
+  target='../build/$TARGET/compilescriptresult/a.c',
   contents="""
 void a()
 {
 }
   """))
 sources.append(makeFile(
-  target='../build/compilescriptresult/b.c',
+  target='../build/$TARGET/compilescriptresult/b.c',
   contents="""
 void b()
 {
@@ -37,7 +37,7 @@ void b()
   """))
 
 mainSource = makeFile(
-  target='../build/compilescriptresult/main.c',
+  target='../build/$TARGET/compilescriptresult/main.c',
   contents="""
 extern void a();
 extern void b();

@@ -7,11 +7,11 @@ from cake.tools import filesys
 # of date.
 filesys.copyFile(
   source="copyme.txt",
-  target="../build/copyfile/copiedyou.txt",
+  target="../build/$TARGET/copyfile/copiedyou.txt",
   )
 
 # Copy a list of files to a target directory.
 filesys.copyFiles(
   sources=["copyme.txt", "copymetoo.txt"],
-  targetDir="../build/copyfile/copiedfiles",
+  targetDir="../build/$TARGET/copyfile/copiedfiles",
   )

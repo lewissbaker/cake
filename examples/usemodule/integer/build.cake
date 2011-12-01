@@ -22,15 +22,15 @@ sources = cake.path.join("source", [
 
 # Build the objects.
 objects = compiler.sharedObjects(
-  targetDir="../../build/usemodule/integer/obj",
+  targetDir="../../build/$TARGET/usemodule/integer/obj",
   sources=sources,
   )
 
 # Build the module. Also build a matching import library. And set the install
 # name for Macintosh builds.
 module = compiler.module(
-  target="../../build/usemodule/integer/lib/integer",
-  importLibrary="../../build/usemodule/integer/lib/integer",
+  target="../../build/$TARGET/usemodule/integer/lib/integer",
+  importLibrary="../../build/$TARGET/usemodule/integer/lib/integer",
   installName="@rpath/integer",
   sources=objects,
   )

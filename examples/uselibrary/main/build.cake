@@ -18,12 +18,12 @@ sources = [
 
 # Build the objects.
 objects = compiler.objects(
-  targetDir="../../build/uselibrary/main/obj",
+  targetDir="../../build/$TARGET/uselibrary/main/obj",
   sources=sources,
   )
 
 # Build the program.
 compiler.program(
-  target="../../build/uselibrary/main/bin/main",
+  target="../../build/$TARGET/uselibrary/main/bin/main",
   sources=objects,
   )

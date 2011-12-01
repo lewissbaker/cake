@@ -10,13 +10,13 @@ sources = [
 compiler.clrMode = 'safe' 
 
 objects = compiler.objects(
-  targetDir="../../build/cppdotnet/assembly",
+  targetDir="../../build/$TARGET/cppdotnet/assembly",
   sources=sources,
   language='c++/cli',
   )
 
 module = compiler.module(
-  target="../../build/cppdotnet/assembly/point",
+  target="../../build/$TARGET/cppdotnet/assembly/point",
   sources=objects,
   )
 

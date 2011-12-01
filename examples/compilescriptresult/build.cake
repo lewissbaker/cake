@@ -8,16 +8,16 @@ otherSources = script.getResult('gensources.cake', 'sources')
 mainSource = script.getResult('gensources.cake', 'main')
 
 otherObjects = compiler.objects(
-  targetDir='../build/compilescriptresult/obj',
+  targetDir='../build/$TARGET/compilescriptresult/obj',
   sources=otherSources,
   )
 
 mainObjects = compiler.objects(
-  targetDir='../build/compilescriptresult/obj',
+  targetDir='../build/$TARGET/compilescriptresult/obj',
   sources=[mainSource],
   )
 
 program = compiler.program(
-  target='../build/compilescriptresult/test',
+  target='../build/$TARGET/compilescriptresult/test',
   sources=[otherObjects, mainObjects],
   )

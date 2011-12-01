@@ -14,14 +14,14 @@ pchHeader = "pch.h"
 
 # Build the precompiled header.
 pch = compiler.pch(
-  target="../build/usepch/obj/pch",
+  target="../build/$TARGET/usepch/obj/pch",
   source="pch.cpp",
   header=pchHeader,
   )
 
 # Build the objects. Use the precompiled header built above.
 objects = compiler.objects(
-  targetDir="../build/usepch/obj",
+  targetDir="../build/$TARGET/usepch/obj",
   sources=sources,
   pch=pch,
   )
@@ -29,6 +29,6 @@ objects = compiler.objects(
 # Build the program. The precompiled header must be added to the list of sources
 # for compilers such as MSVC.
 compiler.program(
-  target="../build/usepch/bin/main",
+  target="../build/$TARGET/usepch/bin/main",
   sources=objects + [pch],
   )

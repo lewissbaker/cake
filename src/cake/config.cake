@@ -19,8 +19,7 @@ import cake.system
 import cake.path
 
 platform = cake.system.platform().lower()
-architecture = cake.system.architecture().lower()
-
+hostArchitecture = cake.system.architecture().lower()
 configuration = Script.getCurrent().configuration
 
 # Override the configuration basePath() function.
@@ -53,44 +52,54 @@ def basePath(value):
       
 configuration.basePath = basePath
 
-# Dummy Compiler is the default compiler.
-compiler = DummyCompiler(configuration=configuration)
+def createVariant(platform, architecture, compiler):
+  env = EnvironmentTool(configuration=configuration)
+  if architecture:
+    env["TARGET"] = "-".join([platform, compiler.name, architecture])
+  else:
+    env["TARGET"] = "-".join([platform, compiler.name])
+  
+  variant = Variant(platform=platform, architecture=architecture, compiler=compiler.name)
+  variant.tools["env"] = env
+  variant.tools["script"] = ScriptTool(configuration=configuration)
+  variant.tools["logging"] = LoggingTool(configuration=configuration)
+  variant.tools["variant"] = VariantTool(configuration=configuration)
+  variant.tools["shell"] = ShellTool(configuration=configuration)
+  variant.tools["filesys"] = FileSystemTool(configuration=configuration)
+  variant.tools["zipping"] = ZipTool(configuration=configuration)
+  variant.tools["compiler"] = compiler
+  configuration.addVariant(variant)
 
-# Prefer GCC Compiler over previous compilers.
+# Create Dummy Compiler.
+compiler = DummyCompiler(configuration=configuration)
+createVariant(platform, "", compiler)
+
+# Create GCC Compiler.
 try:
   from cake.library.compilers.gcc import findGccCompiler
   compiler = findGccCompiler(configuration=configuration)
   compiler.addLibrary("stdc++")
+  createVariant(platform, hostArchitecture, compiler)
 except CompilerNotFoundError:
   pass
 
 if cake.system.isWindows():
-  # Prefer MinGW Compiler over previous compilers.
+  # Create MinGW Compiler.
   try:
     from cake.library.compilers.gcc import findMinGWCompiler
     compiler = findMinGWCompiler(configuration=configuration)
+    createVariant(platform, hostArchitecture, compiler)
   except CompilerNotFoundError:
     pass
-  # Prefer MSVC Compiler over previous compilers.
+  # Create MSVC Compilers.
   try:
     from cake.library.compilers.msvc import findMsvcCompiler
-    compiler = findMsvcCompiler(configuration=configuration)
-    compiler.addDefine("WIN32")
-    if compiler.architecture in ["x64", "ia64"]:
-      compiler.addDefine("WIN64")
-    # Get the compilers architecture in case we only have eg. an
-    # x64 MSVC compiler installed on an x86 machine.
-    architecture = compiler.architecture
+    for architecture in ["x86", "amd64", "ia64"]:
+      compiler = findMsvcCompiler(configuration=configuration, architecture=architecture)
+      compiler.addDefine("WIN32")
+      if architecture in ["amd64", "ia64"]:
+        compiler.addDefine("WIN64")
+      createVariant(platform, architecture, compiler)
   except CompilerNotFoundError:
     pass
 
-variant = Variant(platform=platform, architecture=architecture, compiler=compiler.name)
-variant.tools["env"] = EnvironmentTool(configuration=configuration)
-variant.tools["script"] = ScriptTool(configuration=configuration)
-variant.tools["logging"] = LoggingTool(configuration=configuration)
-variant.tools["variant"] = VariantTool(configuration=configuration)
-variant.tools["shell"] = ShellTool(configuration=configuration)
-variant.tools["filesys"] = FileSystemTool(configuration=configuration)
-variant.tools["zipping"] = ZipTool(configuration=configuration)
-variant.tools["compiler"] = compiler
-configuration.addVariant(variant)

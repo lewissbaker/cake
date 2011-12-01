@@ -401,10 +401,10 @@ class GccCompiler(Compiler):
       args.extend(self.moduleFlags)
     else:
       args.extend(self.programFlags)
-
-    if dll and self.importLibrary is not None:
-      args.append('-Wl,--out-implib=' + self.importLibrary)
-    
+      
+    if dll:
+      args.append('-shared')
+        
     args.extend('-L' + p for p in self.getLibraryPaths())
     return args
   
@@ -436,9 +436,13 @@ class GccCompiler(Compiler):
     
     @makeCommand(args)
     def link():
-      if dll and importLibrary:
-        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
       self._runProcess(args, target)
+
+      if dll and importLibrary:
+        # Since the target .dylib is also the import library, copy it to the
+        # .a 'importLibrary' filename the user expects
+        cake.filesys.makeDirs(cake.path.dirName(importLibrary))
+        cake.filesys.copyFile(self.configuration.abspath(target), importLibrary)      
     
     @makeCommand("link-scan")
     def scan():
@@ -487,9 +491,6 @@ class WindowsGccCompiler(GccCompiler):
   def _getCommonLinkArgs(self, dll):
     args = GccCompiler._getCommonLinkArgs(self, dll)
 
-    if dll:
-      args.append('-shared')
-
     if self.useFunctionLevelLinking:
       args.append('-Wl,--gc-sections')
       
@@ -526,6 +527,7 @@ class WindowsMinGWCompiler(WindowsGccCompiler):
 
   _name = 'mingw'
 
+  @memoise
   def _getCommonLinkArgs(self, dll):
     args = WindowsGccCompiler._getCommonLinkArgs(self, dll)
 
@@ -566,16 +568,9 @@ class MacGccCompiler(GccCompiler):
     
   @memoise
   def _getCommonLinkArgs(self, dll):
-    args = [self._gccExe]
-    if dll:
-      args.extend(self.moduleFlags)
-    else:
-      args.extend(self.programFlags)
-    
-    args.extend('-L' + p for p in self.getLibraryPaths())
+    args = GccCompiler._getCommonLinkArgs(self, dll)
  
     if dll:
-      args.append('-shared')
       args.append('-dynamiclib')
       args.extend(["-current_version", "1.0"])
       args.extend(["-compatibility_version", "1.0"])
@@ -619,7 +614,7 @@ class MacGccCompiler(GccCompiler):
         # Since the target .dylib is also the import library, copy it to the
         # .a 'importLibrary' filename the user expects
         cake.filesys.makeDirs(cake.path.dirName(importLibrary))
-        cake.filesys.copyFile(target, importLibrary)
+        cake.filesys.copyFile(self.configuration.abspath(target), importLibrary)
         
     @makeCommand("link-scan")
     def scan():

@@ -19,13 +19,13 @@ sources = cake.path.join("source", [
 
 # Build the objects.
 objects = compiler.objects(
-  targetDir="../../build/uselibrary/printer/obj",
+  targetDir="../../build/$TARGET/uselibrary/printer/obj",
   sources=sources,
   )
 
 # Build the library.
 library = compiler.library(
-  target="../../build/uselibrary/printer/lib/printer",
+  target="../../build/$TARGET/uselibrary/printer/lib/printer",
   sources=objects,
   )
 

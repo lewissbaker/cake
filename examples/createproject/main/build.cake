@@ -20,19 +20,19 @@ extras = [
 
 # Build the objects.
 objects = compiler.objects(
-  targetDir="../../build/$TARGET/createproject/obj",
+  targetDir="../../build/$VARIANT/createproject/obj",
   sources=sources,
   )
 
 # Build the program.
 program = compiler.program(
-  target="../../build/$TARGET/createproject/bin/main",
+  target="../../build/$VARIANT/createproject/bin/main",
   sources=objects,
   )
 
 # Build the project file.
 proj = project.project(
-  target="../../build/$TARGET/createproject/project/createproject",
+  target="../../build/project/createproject/createproject",
   name="My Project",
   items={
     "Include" : includes,

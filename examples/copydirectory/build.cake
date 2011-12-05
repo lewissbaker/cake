@@ -10,7 +10,7 @@ def shouldInclude(path):
 # Copy a source directory to a target directory.
 filesys.copyDirectory(
   sourceDir="copyme",
-  targetDir="../build/$TARGET/copydirectory/copiedyou",
+  targetDir="../build/$VARIANT/copydirectory/copiedyou",
   recursive=True,
   onlyNewer=True,
   removeStale=True,

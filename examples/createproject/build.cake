@@ -7,11 +7,12 @@
 #-------------------------------------------------------------------------------
 from cake.tools import script, project
 
+# Build the main program.
+script.execute("main/build.cake")
+  
 # Build the solution. Use the 'project' result of the main programs build.cake
 # as one of the solutions project files.
 project.solution(
-  target="../build/project/createproject/project/createproject",
-  projects=[
-    script.getResult("main/build.cake", "project"),
-    ],
+  target="../build/project/createproject/createproject",
+  projects=[script.getResult("main/build.cake", "project")],
   )

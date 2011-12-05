@@ -24,5 +24,6 @@ class TestTool(object):
     return script.run(run, targets=[target], args=[path])[0]
   
 tool = TestTool()
-target = tool.build("../build/$TARGET/pythontool/target")
-target.task.addCallback(lambda: logging.outputInfo("pythontool finished\n"))
+target = tool.build("../build/$VARIANT/pythontool/target")
+if target.task is not None:
+  target.task.addCallback(lambda: logging.outputInfo("pythontool finished\n"))

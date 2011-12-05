@@ -16,16 +16,16 @@ sources = [
 compiler.clrMode = 'safe'
 
 objects = compiler.objects(
-  targetDir="../../build/$TARGET/cppdotnet/program",
+  targetDir="../../build/$VARIANT/cppdotnet/program",
   sources=sources,
   language='c++/cli',
   )
 
 compiler.program(
-  target="../../build/$TARGET/cppdotnet/program/main",
+  target="../../build/$VARIANT/cppdotnet/program/main",
   sources=objects,
   )
 
 compiler.copyModulesTo(
-  targetDir="../../build/$TARGET/cppdotnet/program",
+  targetDir="../../build/$VARIANT/cppdotnet/program",
   )

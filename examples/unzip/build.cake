@@ -11,7 +11,7 @@ def shouldInclude(s):
 # in the target directory. Remove any files/directories in the target directory
 # that no longer exist in the source path. 
 zipping.extract(
-  targetDir="../build/$TARGET/unzip",
+  targetDir="../build/$VARIANT/unzip",
   source="unzip.zip",
   onlyNewer=True,
   removeStale=True,

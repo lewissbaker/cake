@@ -10,6 +10,7 @@ script.execute([
   "compilescriptresult/build.cake",
   "copydirectory/build.cake",
   "copyfile/build.cake",
+  "createproject/build.cake",
   "env/build.cake",
   "findfiles/build.cake",
   "pythontool/build.cake",
@@ -22,13 +23,10 @@ script.execute([
   "zip/build.cake",
   ])
 
+# Cppdotnet example only compiles under MSVC.
 if compiler.name == "msvc":
-  script.execute([
-    "cppdotnet/program/build.cake",
-    ])
+  script.execute("cppdotnet/program/build.cake")
 
 # Shell example builds an executable that only runs on the host architecture.
 if variant.architecture == cake.system.architecture().lower():
-  script.execute([
-    "shell/build.cake",
-    ])
+  script.execute("shell/build.cake")

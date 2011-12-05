@@ -1483,7 +1483,7 @@ class MsBuildProjectGenerator(object):
         
       # Recurse on each filter's subitems
       filterSubItems = mergedFilterSubItems[name]
-      self._writeSubFiles(filterSubItems, path)
+      self._writeSubFiles(writer, filterSubItems, path)
         
     # Write out all of the <File> subitems
     filePaths = mergedFileItemConfigs.keys()

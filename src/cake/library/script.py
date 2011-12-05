@@ -250,8 +250,11 @@ class ScriptTool(Tool):
             )
           configuration.storeDependencyInfo(newDependencyInfo)
 
-    task = engine.createTask(_run)
-    task.startAfter(sourceTasks)
+    if self.enabled:
+      task = engine.createTask(_run)
+      task.startAfter(sourceTasks)
+    else:
+      task = None
 
     if targets is not None:
       return [FileTarget(path=t, task=task) for t in targets]

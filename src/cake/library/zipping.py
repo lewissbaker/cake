@@ -362,4 +362,3 @@ class ZipTool(Tool):
       task = None
     
     return task
-    

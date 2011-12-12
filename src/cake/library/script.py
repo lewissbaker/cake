@@ -260,4 +260,3 @@ class ScriptTool(Tool):
       return [FileTarget(path=t, task=task) for t in targets]
     else:
       return task
-

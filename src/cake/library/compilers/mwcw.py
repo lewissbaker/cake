@@ -338,4 +338,3 @@ class WiiMwcwCompiler(MwcwCompiler):
       '-sdata2threshold', '0', # Ditto for const small data section
       ])
     return args
-  

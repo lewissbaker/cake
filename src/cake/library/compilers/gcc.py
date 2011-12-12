@@ -652,4 +652,3 @@ class Ps3GccCompiler(GccCompiler):
         ])
       
     return args
-  

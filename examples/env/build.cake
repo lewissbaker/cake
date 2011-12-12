@@ -74,4 +74,3 @@ sourceFile = {
   "darwin":"Darwin.cpp",
   }.get(env["platform"], "OtherPlatforms.cpp")
 logging.outputInfo("sourceFile is %s.\n" % sourceFile)
-

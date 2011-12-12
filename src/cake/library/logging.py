@@ -63,4 +63,3 @@ class LoggingTool(Tool):
     @type message: string
     """
     return self.logger.outputDebug(message)
-    

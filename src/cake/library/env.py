@@ -162,4 +162,3 @@ class EnvironmentTool(Tool):
         )
     """
     self.vars.update(kwargs)
-      

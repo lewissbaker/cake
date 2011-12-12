@@ -53,4 +53,3 @@ def parseDependencyFile(path, targetSuffix):
     f.close()
   
   return dependencies
-  

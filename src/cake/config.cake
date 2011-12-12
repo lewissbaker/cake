@@ -142,4 +142,3 @@ if cake.system.isWindows():
       createVariants(platform, architecture, compiler)
   except CompilerNotFoundError:
     pass
-

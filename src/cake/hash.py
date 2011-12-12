@@ -33,4 +33,3 @@ def hexlify(digest):
   @rtype: unicode
   """
   return binascii.hexlify(digest).decode("utf8")
-

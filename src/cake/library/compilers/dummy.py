@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-__all__ = ["DummyCompiler"]
-
 import cake.filesys
 import cake.path
 from cake.library import memoise, getPaths

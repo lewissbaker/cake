@@ -118,28 +118,32 @@ class PathTests(unittest.TestCase):
     fileName = "aBcD.tXt"
     f = open(fileName, "wt")
     f.close()
-
-    self.assertEqual(fileSystemPath("abcd.txt"), fileName)
-    self.assertEqual(fileSystemPath("./abcd.txt"), "./" + fileName)
-    os.remove(fileName)
+    try:
+      self.assertEqual(fileSystemPath("abcd.txt"), fileName)
+      self.assertEqual(fileSystemPath("./abcd.txt"), "./" + fileName)
+    finally:
+      os.remove(fileName)
     
     dirName = "WhaT" 
     os.mkdir(dirName)
-    path = dirName + "/" + fileName
-    f = open(path, "wt")
-    f.close()
+    try:
+      path = dirName + "/" + fileName
+      f = open(path, "wt")
+      f.close()
+      try:
+        self.assertEqual(fileSystemPath("whAT/aBCd.txt"), path)
+        self.assertEqual(fileSystemPath("./whAT/aBCd.txt"), "./" + path)
+        self.assertEqual(fileSystemPath("whAT/.."), dirName + "/..")
+        self.assertEqual(fileSystemPath("whAT/../WHat"), dirName + "/../" + dirName)
+        self.assertEqual(
+          fileSystemPath("./whAT/../WHAT/./aBCd.txt"),
+          "./" + dirName + "/../" + dirName + "/./" + fileName,
+          )
+      finally:
+        os.remove(path)
+    finally:
+      os.rmdir(dirName)
 
-    self.assertEqual(fileSystemPath("whAT/aBCd.txt"), path)
-    self.assertEqual(fileSystemPath("./whAT/aBCd.txt"), "./" + path)
-    self.assertEqual(fileSystemPath("whAT/.."), dirName + "/..")
-    self.assertEqual(fileSystemPath("whAT/../WHat"), dirName + "/../" + dirName)
-    self.assertEqual(
-      fileSystemPath("./whAT/../WHAT/./aBCd.txt"),
-      "./" + dirName + "/../" + dirName + "/./" + fileName,
-      )
-    os.remove(path)
-    os.rmdir(dirName)
-        
   def testHasExtension(self):
     from cake.path import hasExtension
     self.assertFalse(hasExtension(""))

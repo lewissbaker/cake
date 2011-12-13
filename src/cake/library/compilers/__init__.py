@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-__all__ = ["Compiler"]
-
 import sys
 import weakref
 import os

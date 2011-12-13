@@ -1,16 +1,16 @@
-"""Minimal main entrypoint.
+"""Main entrypoint.
 
-This main module reduces the risk of a stack dump caused by
-a KeyboardInterrupt by not loading any modules until a
-try-except block is in place.
+This main module reduces the risk of a stack dump caused by a
+KeyboardInterrupt by not loading any unnecessary modules until a
+keyboard interrupt signal handler is in place.
 
 @see: Cake Build System (http://sourceforge.net/projects/cake-build)
 @copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
 @license: Licensed under the MIT license.
 """
 
-def run():
-  """Minimal run function.
+def execute():
+  """Execute Cake passing the result to sys.exit().
   """
   import signal
   import sys
@@ -23,6 +23,6 @@ def run():
   sys.exit(cake.runner.run())
 
 if __name__ == '__main__':
-  """Minimal main function.
+  """Main entrypoint.
   """
-  run()
+  execute()

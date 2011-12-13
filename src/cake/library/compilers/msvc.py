@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-__all__ = ["MsvcCompiler", "findMsvcCompiler"]
-
 import os
 import os.path
 import re

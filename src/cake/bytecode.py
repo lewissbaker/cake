@@ -5,8 +5,6 @@
 @license: Licensed under the MIT license.
 """
 
-__all__ = ["loadCode"]
-
 import __builtin__
 import imp
 import marshal

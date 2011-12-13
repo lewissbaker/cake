@@ -247,6 +247,8 @@ if cake.system.isWindows():
       return str(findData[8])
   except ImportError:
     def _fileSystemBaseName(path, stem, leaf):
+      if not stem:
+        stem = '.'
       leafNorm = os.path.normcase(leaf)
       for f in os.listdir(stem):
         if os.path.normcase(f) == leafNorm:

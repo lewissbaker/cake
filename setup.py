@@ -28,13 +28,12 @@ def run():
     url="http://sourceforge.net/projects/cake-build",
     description="A build system written in Python.",
     license="MIT",
-    scripts=['src/cakemain.py'],#, 'win32/executable/Release/cake.exe'],
     package_dir={'cake' : 'src/cake'},
     package_data={'cake' : ['config.cake']},
     packages=find_packages('src', exclude=['*.test', '*.test.*']),
     entry_points={
       'console_scripts': [
-        'cake = cakemain:run',
+        'cake = cake.main:execute',
         ],
       },
     use_2to3=sys.hexversion >= 0x03000000, # Use Python 3.x support?

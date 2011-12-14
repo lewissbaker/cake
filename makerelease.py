@@ -52,7 +52,7 @@ def removeTree(path):
 
 if __name__ == "__main__":
   # Directory to search for python installs.
-  installDir = "F:\\Tools"
+  installDir = os.path.dirname(os.path.dirname(sys.executable))
   
   # Python versions used to build 2x and 3x install packages.
   packageVariants = [

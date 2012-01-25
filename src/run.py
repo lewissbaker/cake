@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Minimal run script.
 
 This script is just a convenient method for running Cake if it has not been

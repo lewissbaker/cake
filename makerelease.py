@@ -56,8 +56,8 @@ if __name__ == "__main__":
   
   # Python versions used to build 2x and 3x install packages.
   packageVariants = [
-      "Python27",
-      "Python32",
+      ("Python27", "-py2.4-2.7"),
+      ("Python32", "-py3.0-3.2"),
     ]
   
   # TODO: Python versions to test with.
@@ -78,12 +78,21 @@ if __name__ == "__main__":
     ["setup.py", "sdist", "--formats=gztar,zip"],
     ]
 
+  # Package prefix.
+  sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+  import cake.version
+  packagePrefix = "Cake-%s" % cake.version.__version__
+  
   # Build each package.
-  for v in packageVariants:
+  for v, l in packageVariants:
     pythonExe = os.path.join(installDir, v, "python.exe")
+    distDir = "dist\\%s" % v
 
+    # Delete any existing packages.
+    removeTree(distDir)
+    
     for p in packages:
-      retCode = subprocess.call([pythonExe] + p + ["--dist-dir=dist\\%s" % v])
+      retCode = subprocess.call([pythonExe] + p + ["--dist-dir=%s" % distDir])
 
       # Delete the temporary dirs created by setuptools because they can contaminate builds.
       removeTree("build")
@@ -91,6 +100,11 @@ if __name__ == "__main__":
 
       if retCode != 0:
         sys.stderr.write("Package '%s' failed to build with code: %d\n" % (" ".join(p), retCode))
+        
+    for p in os.listdir(distDir):
+      if p.startswith(packagePrefix):
+        newName = packagePrefix + l + p[len(packagePrefix):]
+        os.rename(os.path.join(distDir, p), os.path.join(distDir, newName))
   
   # TODO:
   #docs.run()

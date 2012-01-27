@@ -14,6 +14,7 @@ import os
 import os.path
 import re
 import subprocess
+import tempfile
 
 def _getMinGWInstallDir():
   """Returns the MinGW install directory.
@@ -46,19 +47,23 @@ def _getMinGWInstallDir():
 def _getGccVersion(gccExe):
   """Returns the Gcc version number given an executable.
   """
-  args = [gccExe, '-dumpversion']
+  stdout = tempfile.TemporaryFile(mode="w+t")
   try:
-    p = subprocess.Popen(
-      args=args,
-      stdout=subprocess.PIPE,
-      )
-  except EnvironmentError, e:
-    raise EnvironmentError(
-      "cake: failed to launch %s: %s\n" % (args[0], str(e))
-      )
-  stdoutText = p.stdout.read()
-  p.stdout.close()
-  exitCode = p.wait()
+    try:
+      args = [gccExe, '-dumpversion']
+      p = subprocess.Popen(
+        args=args,
+        stdout=stdout,
+        )
+    except EnvironmentError, e:
+      raise EnvironmentError(
+        "cake: failed to launch %s: %s\n" % (args[0], str(e))
+        )
+    exitCode = p.wait()
+    stdout.seek(0)
+    stdoutText = stdout.read()
+  finally:
+    stdout.close()
   
   if exitCode != 0:
     raise EnvironmentError(
@@ -252,10 +257,13 @@ class GccCompiler(Compiler):
     if self.warningsAsErrors:
       args.append('-Werror')
 
-    if self.warningLevel == 0:
-      args.append('-w')
-    elif self.warningLevel >= 4:
-      args.append('-Wall')
+    # This test is req'd for Python 3.x or it barfs on 'self.warningLevel >= 4'
+    # below when self.warningLevel is None.
+    if self.warningLevel is not None:
+      if self.warningLevel == 0:
+        args.append('-w')
+      elif self.warningLevel >= 4:
+        args.append('-Wall')
 
     if self.debugSymbols:
       args.append('-g')

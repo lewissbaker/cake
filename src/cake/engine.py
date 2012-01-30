@@ -325,7 +325,7 @@ class Engine(object):
     if configScript is None:
       configScript = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        self.defaultConfigScriptName,
+        "config.py",
         )
     return self.getConfiguration(configScript)
   
@@ -701,7 +701,7 @@ class DependencyInfo(object):
   @type: int
   """
   
-  MAGIC = "CKDP"
+  MAGIC = "CKDP".encode('latin-1') # We need bytes for Python 3.x
   """A magic value stored in dependency files to ensure they are valid.
   
   This value is written to the end of the dependency file. If the power goes

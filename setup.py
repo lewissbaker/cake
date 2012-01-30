@@ -29,7 +29,6 @@ def run():
     description="A build system written in Python.",
     license="MIT",
     package_dir={'cake' : 'src/cake'},
-    package_data={'cake' : ['config.cake']},
     packages=find_packages('src', exclude=['*.test', '*.test.*']),
     entry_points={
       'console_scripts': [

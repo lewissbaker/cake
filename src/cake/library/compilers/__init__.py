@@ -1095,9 +1095,9 @@ class Compiler(Tool):
     @rtype: string    
     """
     if cached:
-      return "Cached %s\n" % source
+      return "Cached %s\n" % os.path.normpath(source)
     else:
-      return "Compiling %s\n" % source
+      return "Compiling %s\n" % os.path.normpath(source)
     
   def _pch(self, target, source, header, prerequisites=[],
            forceExtension=True):
@@ -1203,9 +1203,9 @@ class Compiler(Tool):
     @rtype: string    
     """
     if cached:
-      return "Cached %s\n" % source
+      return "Cached %s\n" % os.path.normpath(source)
     else:
-      return "Compiling %s\n" % source
+      return "Compiling %s\n" % os.path.normpath(source)
         
   def _object(self, target, source, pch=None, prerequisites=[],
               forceExtension=True, shared=False):
@@ -1390,9 +1390,9 @@ class Compiler(Tool):
     @rtype: string    
     """
     if cached:
-      return "Cached %s\n" % target
+      return "Cached %s\n" % os.path.normpath(target)
     else:
-      return "Archiving %s\n" % target
+      return "Archiving %s\n" % os.path.normpath(target)
       
   def _library(self, target, sources, prerequisites=[], forceExtension=True):
     
@@ -1498,9 +1498,9 @@ class Compiler(Tool):
     @rtype: string    
     """
     if cached:
-      return "Cached %s\n" % target
+      return "Cached %s\n" % os.path.normpath(target)
     else:
-      return "Linking %s\n" % target
+      return "Linking %s\n" % os.path.normpath(target)
       
   def _module(self, target, sources, importLibrary=None, installName=None, prerequisites=[], forceExtension=True):
     
@@ -1605,9 +1605,9 @@ class Compiler(Tool):
     @rtype: string    
     """
     if cached:
-      return "Cached %s\n" % target
+      return "Cached %s\n" % os.path.normpath(target)
     else:
-      return "Linking %s\n" % target
+      return "Linking %s\n" % os.path.normpath(target)
     
   def _program(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
 
@@ -1695,9 +1695,9 @@ class Compiler(Tool):
     @rtype: string    
     """
     if cached:
-      return "Cached %s\n" % source
+      return "Cached %s\n" % os.path.normpath(source)
     else:
-      return "Compiling %s\n" % source
+      return "Compiling %s\n" % os.path.normpath(source)
     
   def _resource(self, target, source, prerequisites=[], forceExtension=True):
     

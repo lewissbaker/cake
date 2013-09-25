@@ -68,6 +68,7 @@ class FileSystemTool(Tool):
     @type target: string
     
     @param onlyNewer: Only copy source file if it's newer than the target.
+    If False then always copies the file.
     @type onlyNewer: bool
     
     @return: A FileTarget representing the file that will be copied.

@@ -3,7 +3,9 @@ Cake Build System (http://sourceforge.net/projects/cake-build)
 Description
 -----------
 
-A relatively fast build system written in Python.
+Cake is a fast, general purpose build system written in Python.
+
+Cake has builtin support for building C/C++ projects but can be easily extended to support other kinds of build targets.
 
 Features
 --------
@@ -12,7 +14,7 @@ Features
   - Windows
   - Cygwin
 - Compiler support
-  - Visual Studio 2005/2008
+  - Visual Studio 2005/2008/2010
   - Visual C++ Express
   - WindowsSDK
   - GCC
@@ -21,11 +23,11 @@ Features
 - Object file cache
 - Multi-threaded builds
 - Basic shell commands
+- Pre-compiled headers
 
 Upcoming Features
 -----------------
 
-- Visual Studio Project Generation
 - Linux support
 - OSX support
 - CodeWarrior support
@@ -46,12 +48,12 @@ Optionally run the chosen installer executable or script for your operating syst
 Usage
 -----
 
-boot.cake
-=========
+config.cake
+===========
 
 When Cake starts it will search for a 'config.cake' file starting from the directory of the 'build.cake' script it is trying to execute. This file should generally be located in your projects root directory.
 
-The quickest way to create a config.cake file is to copy src/cake/config.cake. The example config file supports automatic detection of MSVC, MinGW and Gcc compilers, and two development modes, 'debug' and 'release'.
+The quickest way to create a config.cake file is to copy src/cake/config.py. The example config file supports automatic detection of MSVC, MinGW and Gcc compilers, and two development modes, 'debug' and 'release'.
 
 Running Cake
 ============

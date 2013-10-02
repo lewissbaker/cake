@@ -35,9 +35,13 @@ def _createMsvcCompiler(
   @return: The newly created compiler.
   @rtype: L{MsvcCompiler}
   """
-  registryPath = edition + '\\' + version
-  msvsInstallDir = getMsvsInstallDir(registryPath)
-  msvcProductDir = getMsvcProductDir(registryPath)
+  msvsRegistryPath = edition + '\\' + version
+  msvcRegistryPath = msvsRegistryPath
+  if edition == "WDExpress":
+    msvcRegistryPath = "VisualStudio\\" + version
+
+  msvsInstallDir = getMsvsInstallDir(msvsRegistryPath)
+  msvcProductDir = getMsvcProductDir(msvcRegistryPath)
 
   # Use the compilers platform SDK if installed
   platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
@@ -178,6 +182,7 @@ def findMsvcCompiler(
 
   # Valid versions - prefer later versions over earlier ones
   versions = [
+    '11.0',
     '10.0',
     '9.0',
     '8.0',
@@ -189,6 +194,7 @@ def findMsvcCompiler(
   editions = [
     'VisualStudio',
     'VCExpress',
+    'WDExpress',
     ]
 
   # Determine host architecture

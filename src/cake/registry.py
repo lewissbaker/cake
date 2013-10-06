@@ -11,6 +11,15 @@ import cake.system
 
 _shownWow64Warning = False
 
+# Define locally here since some versions of the winreg module don't have them
+KEY_WOW64_64KEY = 0x0100
+KEY_WOW64_32KEY = 0x0200
+
+if cake.system.isWindows64():
+  _readAccessModes = (winreg.KEY_READ | KEY_WOW64_64KEY, winreg.KEY_READ | KEY_WOW64_32KEY)
+else:
+  _readAccessModes = (winreg.KEY_READ,)
+
 def queryString(key, subKey, name):
   """Queries a string value from the Windows registry.
   
@@ -28,31 +37,11 @@ def queryString(key, subKey, name):
   @type name: string
   
   @return: The value queried.
-  @rtype: string 
+  @rtype: string
 
-  @raise WindowsError: If the value could not be found. 
+  @raise WindowsError: If the value could not be found/read.
   """
-  # List of access modes to try.
-  sams = [winreg.KEY_READ]
-  
-  # Also try for a 32-bit registry key on 64-bit Windows. On 64-bit Windows
-  # the Windows SDK is usually installed in the 64-bit program files
-  # directory but the compiler is usually installed in the 32-bit program
-  # files directory.
-  if cake.system.isWindows64():
-    if hasattr(winreg, "KEY_WOW64_32KEY"):
-      sams.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
-    else:
-      global _shownWow64Warning
-      if not _shownWow64Warning:
-        _shownWow64Warning = True
-        sys.stderr.write(
-          "warning: winreg module does not have access key KEY_WOW64_32KEY. "
-          "It may not be possible to find all compiler and SDK install "
-          "locations automatically.\n"
-          )
-
-  for sam in sams:
+  for sam in _readAccessModes:
     try:
       keyHandle = winreg.OpenKey(key, subKey, 0, sam)
       try:
@@ -60,5 +49,5 @@ def queryString(key, subKey, name):
       finally:
         winreg.CloseKey(keyHandle)
     except WindowsError:
-      if sam is sams[-1]:
+      if sam is _readAccessModes[-1]:
         raise

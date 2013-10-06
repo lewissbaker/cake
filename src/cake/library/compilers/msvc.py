@@ -15,7 +15,7 @@ import cake.path
 import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.library import memoise, getPaths, getTasks
-from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkDir
+from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkVersions
 
 def _toArchitectureDir(architecture):
   """Re-map 'x64' to 'amd64' to match MSVC directory names.
@@ -28,6 +28,7 @@ def _createMsvcCompiler(
   edition,
   architecture,
   hostArchitecture,
+  windowsSdkDir,
   ):
   """Attempt to create an MSVC compiler.
   
@@ -42,11 +43,6 @@ def _createMsvcCompiler(
 
   msvsInstallDir = getMsvsInstallDir(msvsRegistryPath)
   msvcProductDir = getMsvcProductDir(msvcRegistryPath)
-
-  # Use the compilers platform SDK if installed
-  platformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
-  if not cake.filesys.isDir(platformSdkDir):
-    platformSdkDir = getPlatformSdkDir()
 
   msvcRootBinDir = cake.path.join(msvcProductDir, "bin")
   
@@ -67,12 +63,20 @@ def _createMsvcCompiler(
           ),
         )
     else:
-      # Determine the bin directory for 64-bit compilers
+      # Try native compiler for target architecture first
       msvcBinDir = cake.path.join(
         msvcRootBinDir,
         "%s" % msvcArchitecture,
         )
-
+      # Fall back to x86 cross-compiler for target architecture if on amd64 machine.
+      if not cake.filesys.isDir(msvcBinDir) and msvcHostArchitecture == 'amd64':
+        msvcBinDir = cake.path.join(
+          msvcRootBinDir,
+          "x86_%s" % (
+            msvcArchitecture,
+            ),
+          )
+          
   # Find the host bin dir for exe's such as 'cvtres.exe'
   if hostArchitecture == 'x86':
     msvcHostBinDir = msvcRootBinDir
@@ -81,37 +85,62 @@ def _createMsvcCompiler(
     msvcHostBinDir = cake.path.join(msvcRootBinDir, msvcHostArchitecture)
     
   msvcIncludeDir = cake.path.join(msvcProductDir, "include")
-  platformSdkIncludeDir = cake.path.join(platformSdkDir, "Include")
+  
+  # Try using the compiler's platform SDK if none explicitly specified
+  compilerPlatformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
+  compilerPlatformSdkIncludeDir = cake.path.join(compilerPlatformSdkDir, "Include")
 
+  if windowsSdkDir:
+    windowsSdkIncludeDir = cake.path.join(windowsSdkDir, "Include")
+    windowsSdkRootBinDir = cake.path.join(windowsSdkDir, "Bin")
+  
   if architecture == 'x86':
     msvcLibDir = cake.path.join(msvcProductDir, "lib")
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib")
+    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib")
+    if windowsSdkDir:
+      windowsSdkLibDir = cake.path.join(windowsSdkDir, "Lib")
+      windowsSdkBinDir = windowsSdkRootBinDir
   elif architecture in ['x64', 'amd64']:
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "amd64")
-    # External Platform SDKs may use 'x64' instead of 'amd64'
-    if not cake.filesys.isDir(platformSdkLibDir):
-      platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "x64")
+    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib", "amd64")
+    if windowsSdkDir:
+      # External Platform SDKs may use 'x64' instead of 'amd64'
+      windowsSdkLibDir = cake.path.join(windowsSdkDir, "Lib", "x64")
+      windowsSdkBinDir = cake.path.join(windowsSdkRootBinDir, "x64")
   elif architecture == 'ia64':
     msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
-    platformSdkLibDir = cake.path.join(platformSdkDir, "Lib", "IA64")
+    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib", "IA64")
+    if windowsSdkDir:
+      windowsSdkLibDir = cake.path.join(windowsSdkDir, "Lib", "IA64")
+      windowsSdkBinDir = cake.path.join(windowsSdkRootBinDir, "IA64")
+
+  # Use compiler's PlatformSDK in preference to Windows SDK
+  if cake.filesys.isDir(compilerPlatformSdkLibDir) or not windowsSdkDir:
+    platformSdkIncludeDir = compilerPlatformSdkIncludeDir
+    platformSdkLibDir = compilerPlatformSdkLibDir
+  else:
+    platformSdkIncludeDir = cake.path.join(windowsSdkDir, "Include")
+    platformSdkLibDir = windowsSdkLibDir
 
   clExe = cake.path.join(msvcBinDir, "cl.exe")
   libExe = cake.path.join(msvcBinDir, "lib.exe")
   linkExe = cake.path.join(msvcBinDir, "link.exe")
-  rcExe = cake.path.join(msvcBinDir, "rc.exe")
-  mtExe = cake.path.join(msvcBinDir, "mt.exe")
+  
   bscExe = cake.path.join(msvcRootBinDir, "bscmake.exe")
 
+  rcExe = cake.path.join(msvcBinDir, "rc.exe")
   if not cake.filesys.isFile(rcExe):
-    rcExe = cake.path.join(msvcProductDir, "Bin", "rc.exe")
-  if not cake.filesys.isFile(rcExe):
-    rcExe = cake.path.join(platformSdkDir, "Bin", "rc.exe")
+    rcExe = cake.path.join(msvcRootBinDir, "rc.exe")
+  if windowsSdkDir and not cake.filesys.isFile(rcExe):
+    # Should we by trying platform-specific directories here?
+    rcExe = cake.path.join(windowsSdkRootBinDir, "rc.exe")
 
+  mtExe = cake.path.join(msvcBinDir, "mt.exe")
   if not cake.filesys.isFile(mtExe):
-    mtExe = cake.path.join(msvcProductDir, "Bin", "mt.exe")
-  if not cake.filesys.isFile(mtExe):
-    mtExe = cake.path.join(platformSdkDir, "Bin", "mt.exe")
+    mtExe = cake.path.join(msvcRootBinDir, "mt.exe")
+  if windowsSdkDir and not cake.filesys.isFile(mtExe):
+    # Should we by trying platform-specific directories here?
+    mtExe = cake.path.join(windowsSdkRootBinDir, "mt.exe")
 
   def checkFile(path):
     if not cake.filesys.isFile(path):
@@ -197,6 +226,10 @@ def findMsvcCompiler(
     'WDExpress',
     ]
 
+  windowsSdkVersions = getPlatformSdkVersions()
+  if not windowsSdkVersions:
+    windowsSdkVersions.append((None, None, None))
+    
   # Determine host architecture
   hostArchitecture = cake.system.architecture().lower()
   if hostArchitecture not in validArchitectures:
@@ -223,11 +256,11 @@ def findMsvcCompiler(
   for a in architectures:
     for v in versions:
       for e in editions:
-        try:
-          return _createMsvcCompiler(configuration, v, e, a, hostArchitecture)
-        except WindowsError:
-          # Try the next version/edition
-          pass
+        for wsdkName, wsdkVer, wsdkPath in windowsSdkVersions:
+          try:
+            return _createMsvcCompiler(configuration, v, e, a, hostArchitecture, wsdkPath)
+          except WindowsError, ex:
+            pass
   else:
     raise CompilerNotFoundError(
       "Could not find Microsoft Visual Studio C++ compiler."

@@ -81,8 +81,9 @@ def _createMsvcCompiler(
   if hostArchitecture == 'x86':
     msvcHostBinDir = msvcRootBinDir
   else:
-    msvcHostArchitecture = _toArchitectureDir(hostArchitecture)
-    msvcHostBinDir = cake.path.join(msvcRootBinDir, msvcHostArchitecture)
+    msvcHostBinDir = cake.path.join(msvcRootBinDir, _toArchitectureDir(hostArchitecture))
+    if not cake.filesys.isDir(msvcHostBinDir):
+      msvcHostBinDir = msvcRootBinDir
     
   msvcIncludeDir = cake.path.join(msvcProductDir, "include")
   
@@ -211,6 +212,7 @@ def findMsvcCompiler(
 
   # Valid versions - prefer later versions over earlier ones
   versions = [
+    '12.0',
     '11.0',
     '10.0',
     '9.0',

@@ -573,8 +573,9 @@ class MsvcCompiler(Compiler):
           
     if self.optimisation == self.FULL_OPTIMISATION:
       args.append('/GL') # Global optimisation
+      args.append('/O2') # Full optimisation
     elif self.optimisation == self.PARTIAL_OPTIMISATION:
-      args.append('/Ox') # Full optimisation
+      args.append('/O2') # Full optimisation
     elif self.optimisation == self.NO_OPTIMISATION:
       args.append('/Od') # No optimisation
  

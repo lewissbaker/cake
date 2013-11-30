@@ -87,7 +87,6 @@ def getPlatformSdkVersions():
   try:
     keyHandle = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0, sam)
   except WindowsError:
-    print "A"
     return []
 
   results = []
@@ -100,8 +99,7 @@ def getPlatformSdkVersions():
         try:
           installDir = str(winreg.QueryValueEx(subKeyHandle, "InstallationFolder")[0])
           productVersion = str(winreg.QueryValueEx(subKeyHandle, "ProductVersion")[0])
-        except WindowsError, e:
-          print "B", name, subKeyHandle, str(e)
+        except WindowsError:
           continue
       finally:
         winreg.CloseKey(subKeyHandle)

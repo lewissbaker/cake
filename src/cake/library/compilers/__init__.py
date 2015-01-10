@@ -9,6 +9,7 @@ import sys
 import weakref
 import os
 import os.path
+import datetime
 import tempfile
 import subprocess
 import itertools
@@ -30,6 +31,12 @@ from cake.library import (
   getPaths, getPath, getResult, getResults, getTasks, getTask,
   )
 from cake.task import Task
+
+def _totalSeconds(td):
+  """Return the total number of seconds for a datetime.timedelta value.
+  """
+  return (td.microseconds + (
+    td.seconds + td.days * 24 * 3600) * 10**6) / float(10**6)
 
 class CompilerNotFoundError(Exception):
   """Exception raised when a compiler cannot be found.
@@ -1890,12 +1897,17 @@ class Compiler(Tool):
       
       debugString = "run: %s\n" % argsString
       if argsPath is not None:
-        debugString += "contents of %s: %s\n" % (argsPath, argsFileString) 
+        debugString += "contents of %s: %s\n" % (argsPath, argsFileString)
+        
       self.engine.logger.outputDebug(
         "run",
         debugString,
         )
-      
+
+      isTiming = self.engine.logger.debugEnabled("time")
+      if isTiming:
+        start = datetime.datetime.utcnow()
+        
       if cake.system.isWindows():
         # Use shell=False to avoid command line length limits.
         executable = self.configuration.abspath(args[0])
@@ -1924,6 +1936,14 @@ class Compiler(Tool):
       p.stdin.close()
   
       exitCode = p.wait()
+  
+      if isTiming:
+        elapsed = (datetime.datetime.utcnow() - start)
+        totalSeconds = _totalSeconds(elapsed)
+        self.engine.logger.outputDebug(
+          "time",
+          "time: %.3fs %s\n" % (totalSeconds, debugString[5:]),
+          )
   
       stdout.seek(0)
       stderr.seek(0)

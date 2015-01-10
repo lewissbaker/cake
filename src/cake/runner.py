@@ -235,7 +235,7 @@ def run(args=None, cwd=None):
     "--debug", metavar="KEYWORDS",
     action="extend",
     dest="debugComponents",
-    help="Set features to debug, eg: 'reason,run,script,scan'.",
+    help="Set features to debug, eg: 'reason,run,script,scan,time'.",
     default=[],
     )
   parser.add_option(

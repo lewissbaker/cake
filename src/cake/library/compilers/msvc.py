@@ -479,6 +479,7 @@ class MsvcCompiler(Compiler):
         if startPos != pos: 
           outputLines.append(inputText[pos:startPos])
         path = self.configuration.abspath(os.path.normpath(path))
+        path = cake.path.fileSystemPath(path)
         outputLines.append(spaces + path)
         pos = endPos
       else:

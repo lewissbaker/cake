@@ -74,6 +74,7 @@ class _ProjectConfiguration(object):
     forcedIncludes,
     forcedUsings,
     compileAsManaged,
+    localDebuggerEnvironment,
     ):
     
     self.name = name
@@ -89,6 +90,7 @@ class _ProjectConfiguration(object):
     self.forcedIncludes = forcedIncludes
     self.forcedUsings = forcedUsings
     self.compileAsManaged = compileAsManaged
+    self.localDebuggerEnvironment = localDebuggerEnvironment
 
 class _Solution(object):
   
@@ -271,6 +273,16 @@ class ProjectTool(Tool):
   @type: enum
   """
 
+  localDebuggerEnvironment = '$(LocalDebuggerEnvironment)'
+  """Defines the environment used when using the local debugger.
+  This should be in the form VARIABLE=VALUE where each variable is
+  defined on a new line.
+  
+  Only applicable for L{VS2010}
+  
+  @type: string
+  """
+  
   class SolutionProjectItem(object):
     """A class used to further define solution project items.
     
@@ -555,6 +567,7 @@ class ProjectTool(Tool):
         forcedIncludes,
         forcedUsings,
         compileAsManaged,
+        self.localDebuggerEnvironment,
         ))
 
     if self.enabled:
@@ -1211,6 +1224,7 @@ _msbuildConfigurationType = """\
     <UseDebugLibraries>false</UseDebugLibraries>
     <OutDir>%(outdir)s</OutDir>
     <IntDir>%(intdir)s</IntDir>
+    <LocalDebuggerEnvironment>%(localdebuggerenvironment)s</LocalDebuggerEnvironment>
   </PropertyGroup>
 """
 
@@ -1360,6 +1374,7 @@ class MsBuildProjectGenerator(object):
       "platform" : escapeAttr(config.platform),
       "outdir" : escapeAttr(outdir),
       "intdir" : escapeAttr(intdir),
+      "localdebuggerenvironment" : escapeAttr(config.localDebuggerEnvironment),
       })
     
   def _writeConfigurationPropertySheet(self, writer, config):

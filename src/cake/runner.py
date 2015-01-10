@@ -105,7 +105,11 @@ def _overrideOpen():
         if flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
           raise ValueError("Cannot specify both 'S' and 'R' in mode")
 
-        fd = os.open(filename, flags)
+        try:
+          fd = os.open(filename, flags)
+        except OSError, e:
+          raise IOError(str(e))
+
         return os.fdopen(fd,  mode, bufsize)
     else:
       # Simpler version for platforms that have fopen() that understands 'N'

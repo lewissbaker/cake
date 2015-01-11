@@ -501,9 +501,12 @@ class WindowsGccCompiler(GccCompiler):
   def _getCommonLinkArgs(self, dll):
     args = GccCompiler._getCommonLinkArgs(self, dll)
 
+    if dll and self.importLibrary is not None:
+      args.append('-Wl,--out-implib=' + self.importLibrary)
+
     if self.useFunctionLevelLinking:
       args.append('-Wl,--gc-sections')
-      
+
     return args
 
   @memoise

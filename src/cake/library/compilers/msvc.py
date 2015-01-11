@@ -966,22 +966,10 @@ class MsvcCompiler(Compiler):
           embeddedRc,
           ]
 
-        def processStdout(text):
-          outputLines = text.splitlines()
-  
-          # Skip any leading logo output by some of the later versions of rc.exe
-          if len(outputLines) >= 2 and \
-             outputLines[0].startswith('Microsoft (R) Windows (R) Resource Compiler Version ') and \
-             outputLines[1].startswith('Copyright (C) Microsoft Corporation.  All rights reserved.'):
-            outputLines = outputLines[2:]
-            
-          if outputLines:
-            self._outputStdout("\n".join(outputLines) + "\n")
-        
         self._runProcess(
           args=rcArgs,
           target=embeddedRes,
-          processStdout=processStdout,
+          processStdout=self._processRcStdout,
           allowResponseFile=False,
           )
       
@@ -1131,7 +1119,11 @@ class MsvcCompiler(Compiler):
     
     @makeCommand(args)
     def compile():
-      self._runProcess(args, target, allowResponseFile=False)
+      self._runProcess(
+        args,
+        target,
+        processStdout=self._processRcStdout,
+        allowResponseFile=False)
 
     @makeCommand("rc-scan")
     def scan():
@@ -1139,3 +1131,20 @@ class MsvcCompiler(Compiler):
       return [target], [self.__rcExe, source]
 
     return compile, scan
+    
+  def _processRcStdout(self, text):
+    """Process the output of rc.exe, suppressing the leading logo.
+    
+    We use this rather than /nologo as the /nologo flag isn't supported on all
+    versions of rc.exe.
+    """
+    outputLines = text.splitlines()
+
+    # Skip any leading logo output by some of the later versions of rc.exe
+    if len(outputLines) >= 2 and \
+       outputLines[0].startswith('Microsoft (R) Windows (R) Resource Compiler Version ') and \
+       outputLines[1].startswith('Copyright (C) Microsoft Corporation.  All rights reserved.'):
+      outputLines = outputLines[2:]
+      
+    if outputLines:
+      self._outputStdout("\n".join(outputLines) + "\n")

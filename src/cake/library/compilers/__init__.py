@@ -1449,7 +1449,7 @@ class Compiler(Tool):
     functions. 
 
     Related compiler options::
-      GCC:  --out-implib
+      GCC (MinGW only):  --out-implib
       MSVC: /IMPLIB
     @type importLibrary: string or None
     

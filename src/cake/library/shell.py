@@ -22,7 +22,7 @@ class ShellTool(Tool):
     else:
       self._env = dict(env)
 
-  def run(self, args, targets=None, sources=[], cwd=None, shell=False, removeTargets=False):
+  def run(self, args, targets=[], sources=[], cwd=None, shell=False, removeTargets=False):
     """Run a shell command to build specified targets.
 
     @param args: The command-line to run.
@@ -51,7 +51,7 @@ class ShellTool(Tool):
    
     return tool._run(args, basePath(targets), basePath(sources), basePath(cwd), shell, removeTargets)
   
-  def _run(self, args, targets=None, sources=[], cwd=None, shell=False, removeTargets=False):
+  def _run(self, args, targets, sources, cwd, shell, removeTargets):
 
     engine = self.engine
     

@@ -307,6 +307,7 @@ class GccCompiler(Compiler):
  
     if shared and self.__version[0] >= 4:
       args.append('-fvisibility=hidden')
+      args.append('-fPIC')
 
     for p in self.getIncludePaths():
       args.extend(['-I', p])
@@ -412,7 +413,8 @@ class GccCompiler(Compiler):
       
     if dll:
       args.append('-shared')
-        
+      args.append('-fPIC')
+
     args.extend('-L' + p for p in self.getLibraryPaths())
     return args
   

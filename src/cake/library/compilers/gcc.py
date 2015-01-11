@@ -300,7 +300,7 @@ class GccCompiler(Compiler):
     elif self.optimisation == self.PARTIAL_OPTIMISATION:
       args.append('-O2')
     elif self.optimisation == self.FULL_OPTIMISATION:
-      args.append('-O4')
+      args.append('-O3')
       
     if self.useSse:
       args.append('-msse')

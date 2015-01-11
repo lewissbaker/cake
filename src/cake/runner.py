@@ -429,6 +429,18 @@ def run(args=None, cwd=None):
           )
       else:
         msg = "Build failed with %i errors.\n" % engine.errorCount
+        
+      if engine.failedTargets:
+        msg += "The following targets failed to build:\n"
+        if len(engine.failedTargets) >= 20:
+          extraCount = len(engine.failedTargets) - 16
+          targetsToPrint = engine.failedTargets[:16]
+          targetsToPrint.append('... %i more targets ...' % extraCount)
+        else:
+          targetsToPrint = engine.failedTargets
+
+        msg += "".join("- " + t + "\n" for t in targetsToPrint)
+
     engine.logger.outputInfo(msg)
   
   mainTask = cake.task.Task()

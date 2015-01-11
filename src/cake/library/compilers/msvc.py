@@ -900,13 +900,15 @@ class MsvcCompiler(Compiler):
     if self.optimisation == self.FULL_OPTIMISATION and \
        self.useIncrementalLinking:
       self.engine.raiseError(
-        "Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n"
+        "Cannot set useIncrementalLinking with optimisation=FULL_OPTIMISATION\n",
+        targets=[target],
         )
 
     if self.embedManifest:
       if not self.__mtExe:
         self.engine.raiseError(
-          "You must set path to mt.exe with embedManifest=True\n"
+          "You must set path to mt.exe with embedManifest=True\n",
+          targets=[target],
           )
       
       if dll:
@@ -918,7 +920,8 @@ class MsvcCompiler(Compiler):
       if self.useIncrementalLinking:
         if not self.__rcExe:
           self.engine.raiseError(
-            "You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n"
+            "You must set path to rc.exe with embedManifest=True and useIncrementalLinking=True\n",
+            targets=[target],
             )
         
         intermediateManifest = target + '.intermediate.manifest'
@@ -1005,7 +1008,10 @@ class MsvcCompiler(Compiler):
           # tool when the manifest file hasn't actually changed. We can
           # avoid a second link if the manifest file hasn't changed.
           if exitCode != 0 and exitCode != 1090650113:
-            self.engine.raiseError("%s: failed with exit code %i\n" % (mtArgs[0], exitCode))
+            self.engine.raiseError(
+              "%s: failed with exit code %i\n" % (mtArgs[0], exitCode),
+              targets=[target],
+              )
   
           result.append(exitCode != 0)
       

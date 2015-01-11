@@ -240,15 +240,23 @@ class ScriptTool(Tool):
           pass
 
       try:
-        return func()
-      finally:
+        result = func()
+      except Exception:
         if targets:
-          newDependencyInfo = configuration.createDependencyInfo(
-            targets=targets,
-            args=buildArgs,
-            dependencies=sourcePaths,
-            )
-          configuration.storeDependencyInfo(newDependencyInfo)
+          append = engine.failedTargets.append
+          for t in targets:
+            append(t)
+        raise
+      
+      if targets:
+        newDependencyInfo = configuration.createDependencyInfo(
+          targets=targets,
+          args=buildArgs,
+          dependencies=sourcePaths,
+          )
+        configuration.storeDependencyInfo(newDependencyInfo)
+        
+      return result
 
     if self.enabled:
       task = engine.createTask(_run)

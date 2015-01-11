@@ -93,9 +93,21 @@ class ShellTool(Tool):
       if targets:
         for t in targets:
           absT = abspath(t)
-          cake.filesys.makeDirs(cake.path.dirName(absT))
+          
+          try:
+            cake.filesys.makeDirs(cake.path.dirName(absT))
+          except Exception, e:
+            msg = "cake: Error creating target directory %s: %s\n" % (
+              cake.path.dirName(t), str(e))
+            engine.raiseError(msg, targets=targets)
+            
           if removeTargets:
-            cake.filesys.remove(absT)
+            try:
+              cake.filesys.remove(absT)
+            except Exception, e:
+              msg = "cake: Error removing old target %s: %s\n" % (
+                t, str(e))
+              engine.raiseError(msg, targets=targets)
 
       if cwd is None:
         cwd = configuration.baseDir
@@ -121,14 +133,14 @@ class ShellTool(Tool):
           )
       except EnvironmentError, e:
         msg = "cake: failed to launch %s: %s\n" % (argsList[0], str(e))
-        engine.raiseError(msg)
+        engine.raiseError(msg, targets=targets)
 
       p.stdin.close()
       exitCode = p.wait()
       
       if exitCode != 0:
         msg = "%s exited with code %i\n" % (argsList[0], exitCode)
-        engine.raiseError(msg)
+        engine.raiseError(msg, targets=targets)
 
       if targets:
         newDependencyInfo = configuration.createDependencyInfo(

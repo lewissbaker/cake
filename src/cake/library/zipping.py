@@ -6,6 +6,7 @@
 """
 
 from cake.library import Tool, getPath, getTask
+from cake.engine import BuildError
 import cake.filesys
 import cake.zipping
 import zipfile
@@ -69,6 +70,7 @@ def _extractFile(configuration, zipFile, zipPath, zipInfo, targetDir, absTargetD
           zipPath,
           str(e),
           ),
+        targets=[targetFile],
         )
       
     # Now that the file has been written successfully, save the new dependency file 
@@ -193,7 +195,7 @@ class ZipTool(Tool):
     targetDir = basePath(targetDir)
     source = basePath(source)
         
-    def doIt():
+    def _extract():
       sourcePath = getPath(source)
       absTargetDir = configuration.abspath(targetDir)
       zipFile = zipfile.ZipFile(configuration.abspath(sourcePath), "r")
@@ -234,10 +236,20 @@ class ZipTool(Tool):
       finally:
         zipFile.close()
 
+    def _run():
+      try:
+        _extract()
+      except BuildError:
+        raise
+      except Exception, e:
+        msg = "cake: Error extracting %s to %s: %s\n" % (
+          getPath(source), target, str(e))
+        engine.raiseError(msg, targets=[targetDir])
+        
     if self.enabled:
       sourceTask = getTask(source)
 
-      task = engine.createTask(doIt)
+      task = engine.createTask(_run)
       task.startAfter(sourceTask)
     else:
       task = None
@@ -287,7 +299,7 @@ class ZipTool(Tool):
     target = basePath(target)
     source = basePath(source)
     
-    def doIt():
+    def _compress():
       sourceDir = getPath(source)
       absSourceDir = configuration.abspath(sourceDir)
 
@@ -353,10 +365,19 @@ class ZipTool(Tool):
         )
       configuration.storeDependencyInfo(newDependencyInfo)
 
+    def _run():
+      try:
+        return _compress()
+      except BuildError:
+        raise
+      except Exception, e:
+        msg = "cake: Error creating %s: %s\n" % (target, str(e))
+        engine.raiseError(msg, targets=[target])
+      
     if self.enabled:
       sourceTask = getTask(source)
 
-      task = engine.createTask(doIt)
+      task = engine.createTask(_run)
       task.startAfter(sourceTask)
     else:
       task = None

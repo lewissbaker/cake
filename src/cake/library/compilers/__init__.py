@@ -1876,7 +1876,12 @@ class Compiler(Tool):
 
     if target is not None:
       absTarget = self.configuration.abspath(target)
-      cake.filesys.makeDirs(cake.path.dirName(absTarget))
+      try:
+        cake.filesys.makeDirs(cake.path.dirName(absTarget))
+      except Exception, e:
+        msg = "cake: Error creating target directory %s: %s\n" % (
+          cake.path.dirName(target), str(e))
+        self.engine.raiseError(msg, targets=[target])
 
     stdout = None
     stderr = None
@@ -1931,7 +1936,8 @@ class Compiler(Tool):
           )
       except EnvironmentError, e:
         self.engine.raiseError(
-          "cake: failed to launch %s: %s\n" % (args[0], str(e))
+          "cake: failed to launch %s: %s\n" % (args[0], str(e)),
+          targets=[target],
           )
       p.stdin.close()
   
@@ -1974,7 +1980,8 @@ class Compiler(Tool):
       processExitCode(exitCode)
     elif exitCode != 0:
       self.engine.raiseError(
-        "%s: failed with exit code %i\n" % (args[0], exitCode)
+        "%s: failed with exit code %i\n" % (args[0], exitCode),
+        targets=[target],
         )
       
     # TODO: Return DLL's/EXE's used by gcc.exe or MSVC as well.
@@ -2330,7 +2337,7 @@ class Compiler(Tool):
     'canCache' is a boolean value that indicates whether the built object
     file can be safely cached or not.
     """
-    self.engine.raiseError("Don't know how to compile %s\n" % source)
+    self.engine.raiseError("Don't know how to compile %s\n" % source, targets=[target])
 
   def getObjectCommands(self, target, source, pch, shared):
     """Get the command-lines for compiling a source to a target.
@@ -2343,7 +2350,7 @@ class Compiler(Tool):
     'canCache' is a boolean value that indicates whether the built object
     file can be safely cached or not.
     """
-    self.engine.raiseError("Don't know how to compile %s\n" % source)
+    self.engine.raiseError("Don't know how to compile %s\n" % source, targets=[target])
   
   def buildLibrary(self, target, sources):
     """Perform the actual build of a library.
@@ -2397,7 +2404,7 @@ class Compiler(Tool):
     build the library, scan is a function that when called returns a
     (targets, dependencies) tuple. 
     """
-    self.engine.raiseError("Don't know how to archive %s\n" % target)
+    self.engine.raiseError("Don't know how to archive %s\n" % target, targets=[target])
   
   def buildModule(self, target, sources, importLibrary, installName):
     """Perform the actual build of a module.
@@ -2441,7 +2448,7 @@ class Compiler(Tool):
     the link and scan for dependencies respectively. The scan command
     returns a tuple of (targets, dependencies). 
     """
-    self.engine.raiseError("Don't know how to link %s\n" % target)
+    self.engine.raiseError("Don't know how to link %s\n" % target, targets=[target])
   
   def buildProgram(self, target, sources):
     """Perform the actual build of a module.
@@ -2503,7 +2510,7 @@ class Compiler(Tool):
     the link and scan for dependencies respectively. The scan command
     returns the tuple (targets, dependencies). 
     """
-    self.engine.raiseError("Don't know how to link %s\n" % target)
+    self.engine.raiseError("Don't know how to link %s\n" % target, targets=[target])
     
   def buildResource(self, target, source):
     """Perform the actual build of a resource.
@@ -2554,4 +2561,4 @@ class Compiler(Tool):
     build the resource, scan is a function that when called returns a
     (targets, dependencies) tuple. 
     """
-    self.engine.raiseError("Don't know how to compile %s\n" % target)
+    self.engine.raiseError("Don't know how to compile %s\n" % target, targets=[target])

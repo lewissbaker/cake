@@ -192,6 +192,7 @@ class Engine(object):
     self.scriptThreadPool = cake.threadpool.ThreadPool(1)
     self.errors = []
     self.warnings = []
+    self.failedTargets = []
     self.logger = logger
     self.parser = parser
     self.args = args
@@ -483,7 +484,7 @@ class Engine(object):
 
     return task
     
-  def raiseError(self, message):
+  def raiseError(self, message, targets=None):
     """Log an error and raise the BuildError exception.
     
     @param message: The error message to output.
@@ -494,6 +495,10 @@ class Engine(object):
     """
     self.logger.outputError(message)
     self.errors.append(message)
+    if targets:
+      append = self.failedTargets.append
+      for t in targets:
+        append(t)
     raise BuildError(message)
     
   def getByteCode(self, path, cached=True):
@@ -680,7 +685,11 @@ class Engine(object):
 
     dependencyString = pickle.dumps(dependencyInfo, pickle.HIGHEST_PROTOCOL)
  
-    cake.filesys.writeFile(depPath, dependencyString + DependencyInfo.MAGIC)
+    try:
+      cake.filesys.writeFile(depPath, dependencyString + DependencyInfo.MAGIC)
+    except Exception, e:
+      msg = "cake: Error writing dependency info to %s: %s" % (depPath, e)
+      self.engine.raiseError(msg, targets=dependencyInfo.targets)
       
     self._dependencyInfoCache[target] = dependencyInfo
   

@@ -51,6 +51,24 @@ def callOnce(f):
   return func 
 
 @callOnce
+def _overrideFile():
+  """Override the builtin file() class to make use of the open() function
+  so that the no-inherit flag on files is set to prevent processes from
+  inheriting file handles.
+  """
+  import __builtin__
+  old_file = __builtin__.file
+  
+  class new_file(old_file):
+    def __init__(self, *args, **kwargs):
+      pass
+      
+    def __new__(cls, filename, mode="r", bufsize=0):
+      return open(filename, mode, bufsize)
+      
+  __builtin__.file = new_file
+
+@callOnce
 def _overrideOpen():
   """
   Override the built-in open() and os.open() to set the no-inherit
@@ -189,6 +207,7 @@ def run(args=None, cwd=None):
   """
   startTime = datetime.datetime.utcnow()
   
+  _overrideFile()
   _overrideOpen()
   _overridePopen()
   _speedUp()

@@ -97,6 +97,7 @@ class Script(object):
     self.variant = variant
     self.engine = engine
     self.task = task
+    self.parent = parent
     if tools is None:
       self.tools = {}
     else:
@@ -136,6 +137,18 @@ class Script(object):
       return current.root
     else:
       return None
+
+  def getAncestors(self):
+    """Query the include ancestry of this script.
+    
+    @return: A sequence of Script objects starting with self and
+    ending with the root Script that indicates how this script was
+    included from the root script.
+    """
+    s = self
+    while s:
+      yield s
+      s = s.parent
 
   def setResult(self, **kwargs):
     """Return a set of named values from the script execution.

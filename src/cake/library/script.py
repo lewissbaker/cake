@@ -167,7 +167,13 @@ class ScriptTool(Tool):
       parent=currentScript,
       )
     self._included[normalisedPath] = includedScript
-    includedScript.execute()
+    
+    try:
+      includedScript.execute()
+    except IOError, e:
+      currentScript.engine.raiseError(
+        ("Failed to include cake script %s: %s\n" % (path, str(e))) +
+        "".join("  from " + s.path + "\n" for s in currentScript.getAncestors()))
     
   def execute(self, scripts, **keywords):
     """Execute another script as a background task.

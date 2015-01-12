@@ -689,7 +689,7 @@ class Engine(object):
       cake.filesys.writeFile(depPath, dependencyString + DependencyInfo.MAGIC)
     except Exception, e:
       msg = "cake: Error writing dependency info to %s: %s" % (depPath, e)
-      self.engine.raiseError(msg, targets=dependencyInfo.targets)
+      self.raiseError(msg, targets=dependencyInfo.targets)
       
     self._dependencyInfoCache[target] = dependencyInfo
   

@@ -243,7 +243,7 @@ class ZipTool(Tool):
         raise
       except Exception, e:
         msg = "cake: Error extracting %s to %s: %s\n" % (
-          getPath(source), target, str(e))
+          getPath(source), targetDir, str(e))
         engine.raiseError(msg, targets=[targetDir])
         
     if self.enabled:

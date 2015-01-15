@@ -558,11 +558,10 @@ class Engine(object):
     """
     timestamp = self._timestampCache.get(path, None)
     if timestamp is None:
+      # Assuming here that os.stat() returns the modification time in
+      # seconds since the unix time epoch (Jan 1 1970 UTC).
       stat = os.stat(path)
-      timestamp = time.mktime(time.gmtime(stat.st_mtime))
-      # The above calculation truncates to the nearest second so we need to
-      # re-add the fractional part back to the timestamp otherwise 
-      timestamp += math.fmod(stat.st_mtime, 1)
+      timestamp = stat.st_mtime
       self._timestampCache[path] = timestamp
     return timestamp
 

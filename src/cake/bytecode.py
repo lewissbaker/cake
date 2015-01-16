@@ -9,6 +9,7 @@ import __builtin__
 import imp
 import marshal
 import os
+import sys
 import struct
 import platform
 
@@ -54,7 +55,15 @@ def loadCode(file, cfile=None, dfile=None, cached=True):
     cfile = file + (__debug__ and 'c' or 'o')
 
   timestamp = None
-  
+
+  try:
+    if sys.dont_write_bytecode:
+      cached = False
+  except AttributeError:
+    # Fallback for Python 2.5 or earlier
+    if "PYTHONDONTWRITEBYTECODE" in os.environ:
+      cached = False
+
   if cached:
     # Try to load the cache file if possible, don't sweat if we can't
     try:

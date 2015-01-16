@@ -1892,7 +1892,7 @@ class Compiler(Tool):
       
       if allowResponseFile and self.useResponseFile:
         argsTemp, argsPath = tempfile.mkstemp(text=True)
-        argsFileString = " ".join(_escapeArgs(args[1:]))
+        argsFileString = "\n".join(_escapeArgs(args[1:]))
         argsFile = os.fdopen(argsTemp, "wt")
         argsFile.write(argsFileString)
         argsFile.close()

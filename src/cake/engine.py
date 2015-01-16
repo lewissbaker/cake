@@ -186,7 +186,6 @@ class Engine(object):
     self._byteCodeCache = {}
     self._timestampCache = {}
     self._digestCache = {}
-    self._dependencyInfoCache = {}
     self._searchUpCache = {}
     self._configurations = {}
     self.scriptThreadPool = cake.threadpool.ThreadPool(1)
@@ -618,38 +617,34 @@ class Engine(object):
     
     @raise DependencyInfoError: if the dependency info could not be retrieved.
     """
-    dependencyInfo = self._dependencyInfoCache.get(target, None)
-    if dependencyInfo is None:
-      depPath = self.getDependencyInfoPath(target)
-      
-      # Read entire file at once otherwise thread-switching will kill performance.
-      try:
-        fileContents = cake.filesys.readFile(depPath)
-      except EnvironmentError:
-        raise DependencyInfoError("doesn't exist")
-      
-      # Split magic signature from the pickled dependency info.
-      magicLength = len(DependencyInfo.MAGIC)
-      dependencyString = fileContents[:-magicLength]
-      dependencyMagic = fileContents[-magicLength:]
-      
-      if dependencyMagic != DependencyInfo.MAGIC:
-        raise DependencyInfoError("has an invalid signature")
+    depPath = self.getDependencyInfoPath(target)
+    
+    # Read entire file at once otherwise thread-switching will kill performance.
+    try:
+      fileContents = cake.filesys.readFile(depPath)
+    except EnvironmentError:
+      raise DependencyInfoError("doesn't exist")
+    
+    # Split magic signature from the pickled dependency info.
+    magicLength = len(DependencyInfo.MAGIC)
+    dependencyString = fileContents[:-magicLength]
+    dependencyMagic = fileContents[-magicLength:]
+    
+    if dependencyMagic != DependencyInfo.MAGIC:
+      raise DependencyInfoError("has an invalid signature")
 
-      try:      
-        dependencyInfo = pickle.loads(dependencyString)
-      except:
-        raise DependencyInfoError("could not be understood")
-      
-      # Check that the dependency info is valid  
-      if not isinstance(dependencyInfo, DependencyInfo):
-        raise DependencyInfoError("has an invalid instance")
+    try:      
+      dependencyInfo = pickle.loads(dependencyString)
+    except:
+      raise DependencyInfoError("could not be understood")
+    
+    # Check that the dependency info is valid  
+    if not isinstance(dependencyInfo, DependencyInfo):
+      raise DependencyInfoError("has an invalid instance")
 
-      if dependencyInfo.version != DependencyInfo.VERSION:
-        raise DependencyInfoError("version has changed")
+    if dependencyInfo.version != DependencyInfo.VERSION:
+      raise DependencyInfoError("version has changed")
 
-      self._dependencyInfoCache[target] = dependencyInfo
-      
     return dependencyInfo
   
   def getDependencyInfoPath(self, target):
@@ -689,8 +684,6 @@ class Engine(object):
     except Exception, e:
       msg = "cake: Error writing dependency info to %s: %s" % (depPath, e)
       self.raiseError(msg, targets=dependencyInfo.targets)
-      
-    self._dependencyInfoCache[target] = dependencyInfo
   
 class DependencyInfo(object):
   """Object that holds the dependency info for a target.

@@ -15,7 +15,7 @@ import cake.path
 import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.library import memoise, getPaths, getTasks
-from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkVersions
+from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkVersions, getWindowsKitsDir
 
 def _toArchitectureDir(architecture):
   """Re-map 'x64' to 'amd64' to match MSVC directory names.
@@ -84,36 +84,51 @@ def _createMsvcCompiler(
     msvcHostBinDir = cake.path.join(msvcRootBinDir, _toArchitectureDir(hostArchitecture))
     if not cake.filesys.isDir(msvcHostBinDir):
       msvcHostBinDir = msvcRootBinDir
-    
-  msvcIncludeDir = cake.path.join(msvcProductDir, "include")
-  
+
+  msvcIncludeDirs = [cake.path.join(msvcProductDir, "include")]
+  msvcLibDirs = []
+  if architecture == 'x86':
+    msvcLibDirs.append(cake.path.join(msvcProductDir, "lib"))
+  elif architecture in ['x64', 'amd64']:
+    msvcLibDirs.append(cake.path.join(msvcProductDir, "lib", "amd64"))
+  elif architecture == 'ia64':
+    msvcLibDirs.append(cake.path.join(msvcProductDir, "lib", "ia64"))
+
+  if version == '14.0':
+    # Visual Studio 2015 separates out some of the CRT into a separate area
+    # under the Windows Kit 10. The Univercal C Run-time (ucrt).
+    windowsKit10Dir = getWindowsKitsDir(version='10')
+    windowsKit10LibArch = architecture
+    if architecture == 'amd64':
+      windowsKit10LibArch = 'x64'
+    msvcIncludeDirs.append(cake.path.join(windowsKit10Dir, 'include', 'ucrt'))
+    msvcLibDirs.append(cake.path.join(windowsKit10Dir, 'Lib', 'winv10.0', 'ucrt', windowsKit10LibArch))
+
   # Try using the compiler's platform SDK if none explicitly specified
   compilerPlatformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")
   compilerPlatformSdkIncludeDir = cake.path.join(compilerPlatformSdkDir, "Include")
+  if architecture == 'x86':
+    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib")
+  elif architecture in ['x64', 'amd64']:
+    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib", "x64")
+  elif architecture == 'ia64':
+    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib", "IA64")
 
   if windowsSdkDir:
     windowsSdkIncludeDir = cake.path.join(windowsSdkDir, "Include")
     windowsSdkRootBinDir = cake.path.join(windowsSdkDir, "Bin")
-  
-  if architecture == 'x86':
-    msvcLibDir = cake.path.join(msvcProductDir, "lib")
-    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib")
-    if windowsSdkDir:
+    if architecture == 'x86':
       windowsSdkLibDir = cake.path.join(windowsSdkDir, "Lib")
       windowsSdkBinDir = windowsSdkRootBinDir
-  elif architecture in ['x64', 'amd64']:
-    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'amd64')
-    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib", "amd64")
-    if windowsSdkDir:
+    elif architecture in ['x64', 'amd64']:
       # External Platform SDKs may use 'x64' instead of 'amd64'
       windowsSdkLibDir = cake.path.join(windowsSdkDir, "Lib", "x64")
       windowsSdkBinDir = cake.path.join(windowsSdkRootBinDir, "x64")
-  elif architecture == 'ia64':
-    msvcLibDir = cake.path.join(msvcProductDir, "lib", 'ia64')
-    compilerPlatformSdkLibDir = cake.path.join(compilerPlatformSdkDir, "Lib", "IA64")
-    if windowsSdkDir:
+    elif architecture == 'ia64':
       windowsSdkLibDir = cake.path.join(windowsSdkDir, "Lib", "IA64")
       windowsSdkBinDir = cake.path.join(windowsSdkRootBinDir, "IA64")
+
+  # TODO: Add support for Windows Kit as an alternative Windows SDK.
 
   # Use compiler's PlatformSDK in preference to Windows SDK
   if cake.filesys.isDir(compilerPlatformSdkLibDir) or not windowsSdkDir:
@@ -159,14 +174,16 @@ def _createMsvcCompiler(
   if not cake.filesys.isFile(bscExe):
     bscExe = None # Not fatal. This just means we can't build browse info files.
 
-  checkDirectory(msvcIncludeDir)
+  for msvcIncludeDir in msvcIncludeDirs:
+    checkDirectory(msvcIncludeDir)
+  for msvcLibDir in msvcLibDirs:
+    checkDirectory(msvcLibDir)
   checkDirectory(platformSdkIncludeDir)
-  checkDirectory(msvcLibDir)
   checkDirectory(platformSdkLibDir)
   
   binPaths = [msvcHostBinDir, msvsInstallDir]
-  includePaths = [msvcIncludeDir, platformSdkIncludeDir]
-  libraryPaths = [msvcLibDir, platformSdkLibDir]
+  includePaths = msvcIncludeDirs + [platformSdkIncludeDir]
+  libraryPaths = msvcLibDirs + [platformSdkLibDir]
 
   compiler = MsvcCompiler(
     configuration=configuration,
@@ -212,6 +229,7 @@ def findMsvcCompiler(
 
   # Valid versions - prefer later versions over earlier ones
   versions = [
+    '14.0',
     '12.0',
     '11.0',
     '10.0',

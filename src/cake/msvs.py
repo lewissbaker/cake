@@ -120,9 +120,28 @@ def getPlatformSdkDir(version=None):
   
   @raise WindowsError: If this version of the Platform SDK is not installed.
   """
+  if version:
+    subKey = r"SOFTWARE\Microsoft\Microsoft SDKs\Windows\%s" % version
+    valueName = "InstallationFolder"
+  else:
+    subKey = r"SOFTWARE\Microsoft\Microsoft SDKs\Windows"
+    valueName = "CurrentInstallFolder"
+  return queryString(winreg.HKEY_LOCAL_MACHINE, subKey, valueName)
+
+def getWindowsKitsDir(version='80'):
+  """Returns the Microsoft Windows Kit directory.
   
-  subKey = r"SOFTWARE\Microsoft\Microsoft SDKs\Windows\%s" % version
-  return queryString(winreg.HKEY_LOCAL_MACHINE, subKey, "InstallationFolder")
+  @param version: The version of the SDK to look-up.
+  @type version: string
+  
+  @return: The path to the Windows Kit directory.
+  @rtype: string
+  
+  @raise WindowsError: If this version of the Platform SDK is not installed.
+  """
+  subKey = r"SOFTWARE\Microsoft\Windows Kits\Installed Roots"
+  valueName = 'KitsRoot' if version == '80' else 'KitsRoot' + version
+  return queryString(winreg.HKEY_LOCAL_MACHINE, subKey, valueName)
   
 def getDotNetFrameworkSdkDir(version='2.0'):
   """Looks up the path of the Microsoft .NET Framework SDK directory.

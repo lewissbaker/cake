@@ -101,8 +101,9 @@ def _createMsvcCompiler(
     windowsKit10LibArch = architecture
     if architecture == 'amd64':
       windowsKit10LibArch = 'x64'
-    msvcIncludeDirs.append(cake.path.join(windowsKit10Dir, 'include', 'ucrt'))
-    msvcLibDirs.append(cake.path.join(windowsKit10Dir, 'Lib', 'winv10.0', 'ucrt', windowsKit10LibArch))
+    # HACK: Should really allow the caller to specify the desired Universal CRT version somehow.
+    msvcIncludeDirs.append(cake.path.join(windowsKit10Dir, 'include', '10.0.10150.0', 'ucrt'))
+    msvcLibDirs.append(cake.path.join(windowsKit10Dir, 'Lib', '10.0.10150.0', 'ucrt', windowsKit10LibArch))
 
   # Try using the compiler's platform SDK if none explicitly specified
   compilerPlatformSdkDir = cake.path.join(msvcProductDir, "PlatformSDK")

@@ -35,6 +35,7 @@ def run():
         'cake = cake.main:execute',
         ],
       },
+    test_suite='cake.test',
     use_2to3=sys.hexversion >= 0x03000000, # Use Python 3.x support?
     )
   return 0

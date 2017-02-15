@@ -5,6 +5,9 @@ import unittest
 
 _modules = [
   "cake.test.task",
+  "cake.test.path",
+  "cake.test.threadpool",
+  "cake.test.asyncresult",
   ]
 
 def suite():

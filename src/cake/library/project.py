@@ -19,9 +19,9 @@ import cake.path
 import cake.filesys
 import cake.hash
 
-from cake.library import (
-  Tool, FileTarget, AsyncResult, waitForAsyncResult, flatten, getPath, getPaths
-  )
+from cake.target import FileTarget, getPath, getPaths
+from cake.async import getResult, waitForAsyncResult, flatten
+from cake.library import Tool
 from cake.script import Script
 from cake.library.compilers.msvc import MsvcCompiler
 
@@ -639,9 +639,6 @@ class ProjectTool(Tool):
         projectExtension = self._msvsProjectSuffix
 
       for p in projects:
-        while isinstance(p, AsyncResult):
-          p = p.result
-
         if not isinstance(p, self.SolutionProjectItem):
           p = self.SolutionProjectItem(p)
 

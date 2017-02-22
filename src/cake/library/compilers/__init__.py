@@ -25,12 +25,11 @@ import cake.system
 import cake.zipping
 
 from cake.gnu import parseDependencyFile
-from cake.library import (
-  Tool, FileTarget, AsyncResult,
-  memoise, waitForAsyncResult, flatten,
-  getPaths, getPath, getResult, getResults, getTasks, getTask,
-  )
+from cake.async import AsyncResult, waitForAsyncResult, flatten, getResult
+from cake.target import FileTarget, getPath, getPaths, getTask, getTasks
 from cake.task import Task
+from cake.library import Tool, memoise
+from cake.script import Script
 
 def _totalSeconds(td):
   """Return the total number of seconds for a datetime.timedelta value.
@@ -1031,18 +1030,20 @@ class Compiler(Tool):
         if self.enabled:  
           sourceTask = getTask(source)
           copyTask = self.engine.createTask(lambda s=sourcePath, t=targetPath: doCopy(s, t))
-          copyTask.startAfter(sourceTask)
+          copyTask.lazyStartAfter(sourceTask)
         else:
           copyTask = None
 
         results.append(FileTarget(path=targetPath, task=copyTask))
+
+      Script.getCurrent().getDefaultTarget().addTargets(results)
 
       return results
     
     # TODO: Handle copying .manifest files if present for MSVC
     # built DLLs.
 
-    return run(self.modules, targetDir)
+    return run(flatten(self.modules), targetDir)
 
   def pch(self, target, source, header, prerequisites=[],
           forceExtension=True, **kwargs):
@@ -1120,23 +1121,27 @@ class Compiler(Tool):
         object = cake.path.stripExtension(target) + self.pchObjectSuffix
       
       if self.enabled:
-        tasks = getTasks([source])
-        tasks.extend(getTasks(prerequisites))
+        tasks = getTasks(prerequisites + [source, header])
         pchTask = self.engine.createTask(
           lambda t=target, s=source, h=header, o=object, c=self:
             c.buildPch(t, getPath(s), h, o)
           )
-        pchTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+        pchTask.lazyStartAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         pchTask = None
       
-      return PchTarget(
+      pchTarget = PchTarget(
         path=target,
         task=pchTask,
         compiler=self,
         header=header,
         object=object,
         )
+      currentScript = Script.getCurrent()
+      currentScript.getDefaultTarget().addTarget(pchTarget)
+      currentScript.getTarget(cake.path.baseName(target)).addTarget(pchTarget)
+      currentScript.getTarget("pch").addTarget(pchTarget)
+      return pchTarget
       
     allPrerequisites = flatten([
       prerequisites,
@@ -1221,24 +1226,30 @@ class Compiler(Tool):
     def run(target, source, pch, prerequisites):
       if forceExtension:
         target = cake.path.forceExtension(target, self.objectSuffix)
-        
+
+      sourcePath = getPath(source)
+
       if self.enabled:
-        tasks = getTasks([source])
-        tasks.extend(getTasks([pch]))
-        tasks.extend(getTasks(prerequisites))
+        tasks = getTasks((source, pch, prerequisites))
         objectTask = self.engine.createTask(
-          lambda t=target, s=source, p=pch, h=shared, c=self:
-            c.buildObject(t, getPath(s), getResult(p), h)
+          lambda t=target, s=sourcePath, p=pch, h=shared, c=self:
+            c.buildObject(t, s, p, h)
           )
-        objectTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+        objectTask.lazyStartAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         objectTask = None
       
-      return ObjectTarget(
+      objectTarget = ObjectTarget(
         path=target,
         task=objectTask,
         compiler=self,
         )
+      currentScript = Script.getCurrent()
+      currentScript.getDefaultTarget().addTarget(objectTarget)
+      currentScript.getTarget("objects").addTarget(objectTarget)
+      currentScript.getTarget(cake.path.baseName(target)).addTarget(objectTarget)
+      currentScript.getTarget(cake.path.baseName(sourcePath)).addTarget(objectTarget)
+      return objectTarget
       
     allPrerequisites = flatten([
       prerequisites,
@@ -1418,16 +1429,21 @@ class Compiler(Tool):
         tasks = getTasks(sources)
         tasks.extend(getTasks(prerequisites))
         libraryTask = self.engine.createTask(build)
-        libraryTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+        libraryTask.lazyStartAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         libraryTask = None
       
-      return LibraryTarget(
+      libraryTarget = LibraryTarget(
         path=target,
         task=libraryTask,
         compiler=self,
         )
-      
+      currentScript = Script.getCurrent()
+      currentScript.getDefaultTarget().addTarget(libraryTarget)
+      currentScript.getTarget("libs").addTarget(libraryTarget)
+      currentScript.getTarget(cake.path.baseName(target)).addTarget(libraryTarget)
+      return libraryTarget
+
     return run(target, flatten(sources), flatten(prerequisites))
     
   def module(self, target, sources, importLibrary=None, installName=None, prerequisites=[], forceExtension=True, **kwargs):
@@ -1545,17 +1561,26 @@ class Compiler(Tool):
         tasks.extend(getTasks(prerequisites))
         tasks.extend(getTasks(self.getLibraries()))
         moduleTask = self.engine.createTask(build)
-        moduleTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+        moduleTask.lazyStartAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         moduleTask = None
      
-      return ModuleTarget(
+      moduleTarget = ModuleTarget(
         path=target,
         task=moduleTask,
         compiler=self,
         library=importLibrary,
         manifest=manifest,
         )
+
+      currentScript = Script.getCurrent()
+      currentScript.getDefaultTarget().addTarget(moduleTarget)
+      currentScript.getTarget(cake.path.baseName(target)).addTarget(moduleTarget)
+      currentScript.getTarget("modules").addTarget(moduleTarget)
+      if moduleTarget.library:
+        currentScript.getTarget("libs").addTarget(moduleTarget.library)
+
+      return moduleTarget
 
     return run(target, flatten(sources), importLibrary, installName, flatten(prerequisites))
 
@@ -1619,7 +1644,7 @@ class Compiler(Tool):
   def _program(self, target, sources, prerequisites=[], forceExtension=True, **kwargs):
 
     @waitForAsyncResult
-    def run(target, sources, prerequisites):
+    def run(target, sources, prerequisites, libraries):
     
       if forceExtension:
         target = cake.path.forceExtension(target, self.programSuffix)
@@ -1636,20 +1661,31 @@ class Compiler(Tool):
 
         tasks = getTasks(sources)
         tasks.extend(getTasks(prerequisites))
-        tasks.extend(getTasks(self.getLibraries()))
+        tasks.extend(getTasks(libraries))
         programTask = self.engine.createTask(build)
-        programTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+        programTask.lazyStartAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         programTask = None
     
-      return ProgramTarget(
+      programTarget = ProgramTarget(
         path=target,
         task=programTask,
         compiler=self,
         manifest=manifest,
         )
+
+      currentScript = Script.getCurrent()
+      currentScript.getDefaultTarget().addTarget(programTarget)
+      currentScript.getTarget("programs").addTarget(programTarget)
+      currentScript.getTarget(cake.path.baseName(target)).addTarget(programTarget)
+
+      return programTarget
       
-    return run(target, flatten(sources), flatten(prerequisites))
+    return run(
+      target,
+      flatten(sources),
+      flatten(prerequisites),
+      flatten(self.getLibraries()))
 
   def resource(self, target, source, prerequisites=[], forceExtension=True, **kwargs):
     """Build a resource from a collection of sources.
@@ -1721,15 +1757,21 @@ class Compiler(Tool):
         tasks = getTasks([source])
         tasks.extend(getTasks(prerequisites))
         resourceTask = self.engine.createTask(build)
-        resourceTask.startAfter(tasks, threadPool=self.engine.scriptThreadPool)
+        resourceTask.lazyStartAfter(tasks, threadPool=self.engine.scriptThreadPool)
       else:
         resourceTask = None
       
-      return ResourceTarget(
+      resourceTarget = ResourceTarget(
         path=target,
         task=resourceTask,
         compiler=self,
         )
+
+      currentScript = Script.getCurrent()
+      currentScript.getDefaultTarget().addTarget(resourceTarget)
+      currentScript.getTarget(cake.path.baseName(target)).addTarget(resourceTarget)
+
+      return resourceTarget
       
     return run(target, source, flatten(prerequisites))
 
@@ -2079,6 +2121,7 @@ class Compiler(Tool):
       return compile()
 
     compileTask = self.engine.createTask(command)
+    compileTask.parent.completeAfter(compileTask)
     compileTask.start(immediate=True)
 
     def storeDependencyInfo():
@@ -2097,6 +2140,7 @@ class Compiler(Tool):
       self.configuration.storeDependencyInfo(newDependencyInfo)
         
     storeDependencyTask = self.engine.createTask(storeDependencyInfo)
+    storeDependencyTask.parent.completeAfter(storeDependencyTask)
     storeDependencyTask.startAfter(compileTask, immediate=True)
 
   def buildObject(self, target, source, pch, shared):
@@ -2321,9 +2365,11 @@ class Compiler(Tool):
           pass
     
     compileTask = self.engine.createTask(command)
+    compileTask.parent.completeAfter(compileTask)
     compileTask.start(immediate=True)
 
     storeDependencyTask = self.engine.createTask(storeDependencyInfoAndCache)
+    storeDependencyTask.parent.completeAfter(storeDependencyTask)
     storeDependencyTask.startAfter(compileTask, immediate=True)
   
   def getPchCommands(self, target, source, header, object):
@@ -2395,6 +2441,7 @@ class Compiler(Tool):
       self.configuration.storeDependencyInfo(newDependencyInfo)
 
     archiveTask = self.engine.createTask(command)
+    archiveTask.parent.completeAfter(archiveTask)
     archiveTask.start(immediate=True)
   
   def getLibraryCommand(self, target, sources):
@@ -2439,6 +2486,7 @@ class Compiler(Tool):
       self.configuration.storeDependencyInfo(newDependencyInfo)
   
     moduleTask = self.engine.createTask(command)
+    moduleTask.parent.completeAfter(moduleTask)
     moduleTask.start(immediate=True)
   
   def getModuleCommands(self, target, sources, importLibrary, installName):
@@ -2494,6 +2542,7 @@ class Compiler(Tool):
       self.configuration.storeDependencyInfo(newDependencyInfo)
 
     programTask = self.engine.createTask(command)
+    programTask.parent.completeAfter(programTask)
     programTask.start(immediate=True)
 
   def getProgramCommands(self, target, sources):
@@ -2552,6 +2601,7 @@ class Compiler(Tool):
       self.configuration.storeDependencyInfo(newDependencyInfo)
 
     resourceTask = self.engine.createTask(command)
+    resourceTask.parent.completeAfter(resourceTask)
     resourceTask.start(immediate=True)
   
   def getResourceCommand(self, target, sources):

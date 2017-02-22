@@ -291,6 +291,11 @@ class Engine(object):
     """
     configuration = self._configurations.get(path, None)
     if configuration is None:
+      # Note that we are potentially executing the configuration
+      # script multiple times, but will only keep the Configuration
+      # object that is registered first in self._configurations
+      # dictionary below. This avoids needing a separate mutex
+      # for configuration execution.
       configuration = Configuration(path=path, engine=self)
       script = _Script(
         path=cake.path.baseName(path),
@@ -380,7 +385,7 @@ class Engine(object):
     elif len(tasks) > 1:
       task = self.createTask()
       task.completeAfter(tasks)
-      task.start()
+      task.lazyStart()
       return task
     else:
       return tasks[0]
@@ -800,11 +805,7 @@ class Configuration(object):
     """Register a new variant with this engine.
     
     @param variant: The Variant object to register.
-    @type variant: L{Variant}
-    
-    @param default: If True then make this newly added variant the default
-    build variant.
-    @type default: C{bool}
+    @type variant: L{Variant}    
     """
     key = frozenset(variant.keywords.iteritems())
     if key in self._variants:
@@ -934,7 +935,7 @@ class Configuration(object):
             "Finished %s\n" % script.path,
             )
           )
-        task.start(threadPool=self.engine.scriptThreadPool)
+        task.lazyStart(threadPool=self.engine.scriptThreadPool)
     finally:
       self._executedLock.release()
 

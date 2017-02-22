@@ -8,8 +8,11 @@
 import glob
 import cake.path
 import cake.filesys
-from cake.library import Tool, DirectoryTarget, FileTarget, getPath, getTask, \
-                         flatten, waitForAsyncResult
+
+from cake.async import flatten, waitForAsyncResult
+from cake.target import DirectoryTarget, FileTarget, getPath, getTask
+from cake.library import Tool
+from cake.script import Script
 
 class FileSystemTool(Tool):
   """Tool that provides file system related utilities. 
@@ -126,11 +129,16 @@ class FileSystemTool(Tool):
       if self.enabled:  
         sourceTask = getTask(source)
         copyTask = self.engine.createTask(doCopy)
-        copyTask.startAfter(sourceTask)
+        copyTask.lazyStartAfter(sourceTask)
       else:
         copyTask = None
 
-      return FileTarget(path=target, task=copyTask)
+      fileTarget = FileTarget(path=target, task=copyTask)
+
+      currentScript = Script.getCurrent()
+      currentScript.getDefaultTarget().addTarget(fileTarget)
+
+      return fileTarget
 
     return run(source)
 
@@ -215,7 +223,6 @@ class FileSystemTool(Tool):
     
     sourceDir = basePath(sourceDir)
     targetDir = basePath(targetDir)
-    sourceTask = getTask(sourceDir)
     
     def doMakeDir(path):
       targetAbsPath = abspath(path)
@@ -252,7 +259,9 @@ class FileSystemTool(Tool):
         targets = set(cake.filesys.walkTree(path=abspath(targetDir), recursive=recursive))
         oldFiles = targets.difference(sources)
         removeTask = self.engine.createTask(lambda f=oldFiles: doDelete(f))
-        removeTask.start()
+        removeTask.lazyStart()
+      else:
+        removeTask = None
       
       results = []
       for source in sources:
@@ -261,12 +270,19 @@ class FileSystemTool(Tool):
         if cake.path.isDir(abspath(sourcePath)):
           if self.enabled:  
             dirTask = self.engine.createTask(lambda t=targetPath: doMakeDir(t))
-            dirTask.start()
+            dirTask.completeAfter(removeTask)
+            dirTask.lazyStart()
           else:
             dirTask = None
           results.append(DirectoryTarget(path=source, task=dirTask))
         else:
-          results.append(self._copyFile(source=sourcePath, target=targetPath, onlyNewer=onlyNewer))
+          fileTarget = self._copyFile(source=sourcePath, target=targetPath, onlyNewer=onlyNewer)
+          if fileTarget.task:
+            fileTarget.task.completeAfter(removeTask)
+          results.append(fileTarget)
+
+      Script.getCurrent().getDefaultTarget().addTargets(results)
+
       return results
     
     return run(sourceDir)

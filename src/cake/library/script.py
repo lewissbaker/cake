@@ -7,7 +7,8 @@
 
 import os.path
 
-from cake.library import Tool, FileTarget, getPaths, getTasks
+from cake.target import Target, FileTarget, getPaths, getTask
+from cake.library import Tool
 from cake.script import Script
 
 class ScriptTool(Tool):
@@ -50,6 +51,67 @@ class ScriptTool(Tool):
     """
     return self.get(script).getResult(name, *args, **kwargs)
   
+  def getTarget(self, name):
+    """Get the named ScriptTarget for this script.
+
+    @param name: The name of the target to get.
+    @type name: C{str}
+    """
+    return Script.getCurrent().getTarget(name)
+
+  def getDefaultTarget(self):
+    return Script.getCurrent().getDefaultTarget()
+
+  def addDefaultTarget(self, target):
+    """Add a target to be built when the default target for this script is built.
+
+    @param target: The target to be built.
+    @type target: L{Target} or L{AsyncResult} that yields a L{Target}
+    """
+    Script.getCurrent().getDefaultTarget().addTarget(target)
+
+  def addDefaultTargets(self, targets):
+    """Add a collection of targets to the default script target.
+
+    The default script target is the target that is built when the user
+    executes the current build script without specifying a particular target name.
+
+    @param targets: A collection of targets to be built.
+    @type targets: A list of L{Target} or L{AsyncResult} yielding a list of L{Target}   
+    """
+    Script.getCurrent().getDefaultTarget().addTargets(targets)
+
+  def addTarget(self, name, target):
+    """Add a target to the named script target.
+
+    The specified target will be built whenever the named script target is
+    built.
+
+    @param name: The name of the script-target to add the target to.
+    @type name: C{str}
+
+    @param target: A target to build when the named script-target is
+    built.
+    @type target: L{Target} or L{AsyncResult} yielding a L{Target}
+    """
+    Script.getCurrent().getTarget(name).addTarget(target)
+
+  def addTargets(self, name, targets):
+    """Add a collection of targets to the named script target.
+
+    The specified targets will be built whenever the named script target is
+    requested to be built.
+
+    @param name: The name of the script-target to add the targets to.
+    @type name: C{str}
+
+    @param target: A target to build when the named script-target is
+    built.
+    @type target: L{Target} or L{AsyncResult} yielding a L{Target}
+
+    """
+    Script.getCurrent().getTarget(name).addTargets(targets)
+
   def get(self, script, keywords={}, useContext=None, configScript=None, configScriptName=None):
     """Get another script to use in referencing targets.
     
@@ -200,10 +262,15 @@ class ScriptTool(Tool):
     configuration = script.configuration
     variant = configuration.findVariant(keywords, baseVariant=script.variant)
     execute = configuration.execute
+    def _execute(path):
+      script = execute(path, variant)
+      self.addDefaultTarget(script.getDefaultTarget())
+      return script
+
     if isinstance(scripts, basestring):
-      return execute(scripts, variant)
+      return _execute(scripts)
     else:
-      return [execute(path, variant) for path in scripts]
+      return [_execute(path) for path in scripts]
 
   def run(self, func, args=None, targets=None, sources=[]):
     """Execute the specified python function as a task.
@@ -222,8 +289,6 @@ class ScriptTool(Tool):
     
     targets = basePath(targets)
     sources = basePath(sources)
-
-    sourceTasks = getTasks(sources)
 
     def _run():
       sourcePaths = getPaths(sources)
@@ -266,11 +331,17 @@ class ScriptTool(Tool):
 
     if self.enabled:
       task = engine.createTask(_run)
-      task.startAfter(sourceTasks)
+      task.lazyStartAfter(getTask(sources))
     else:
       task = None
 
+    currentScript = Script.getCurrent()
+
     if targets is not None:
-      return [FileTarget(path=t, task=task) for t in targets]
+      targets = [FileTarget(path=t, task=task) for t in targets]
+      currentScript.getDefaultTarget().addTargets(targets)
+      return targets
     else:
-      return task
+      target = Target(task)
+      currentScript.getDefaultTarget().addTarget(target)
+      return target

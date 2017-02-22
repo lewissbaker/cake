@@ -5,8 +5,10 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.library import Tool, getPath, getTask
+from cake.library import Tool
+from cake.target import getPath, getTask, getTasks, DirectoryTarget, FileTarget
 from cake.engine import BuildError
+from cake.script import Script
 import cake.filesys
 import cake.zipping
 import zipfile
@@ -182,8 +184,8 @@ class ZipTool(Tool):
     expression function such as re.compile().match or re.match.
     @type includeMatch: any callable 
     
-    @return: A task that will complete when the extraction has finished.
-    @rtype: L{Task} 
+    @return: A DirectoryTarget that will complete when the extraction has finished.
+    @rtype: L{DirectoryTarget} 
     """
     if not isinstance(targetDir, basestring):
       raise TypeError("targetDir must be a string")
@@ -247,14 +249,16 @@ class ZipTool(Tool):
         engine.raiseError(msg, targets=[targetDir])
         
     if self.enabled:
-      sourceTask = getTask(source)
-
       task = engine.createTask(_run)
-      task.startAfter(sourceTask)
+      task.lazyStartAfter(getTask(source))
     else:
       task = None
 
-    return task
+    directoryTarget = DirectoryTarget(path=targetDir, task=task)
+
+    Script.getCurrent().getDefaultTarget().addTarget(directoryTarget)
+
+    return directoryTarget
 
   def compress(
     self,
@@ -286,8 +290,9 @@ class ZipTool(Tool):
     expression function such as re.compile().match or re.match.
     @type includeMatch: any callable 
     
-    @return: A task that will complete when the compression has finished.
-    @rtype: L{Task} 
+    @return: A FileTarget corresponding to the zip file that will be created.
+    It's task will complete when the zip file has been built.
+    @rtype: L{FileTarget}
     """
     if not isinstance(target, basestring):
       raise TypeError("target must be a string")
@@ -375,11 +380,15 @@ class ZipTool(Tool):
         engine.raiseError(msg, targets=[target])
       
     if self.enabled:
-      sourceTask = getTask(source)
-
       task = engine.createTask(_run)
-      task.startAfter(sourceTask)
+      task.lazyStartAfter(getTask(source))
     else:
       task = None
-    
-    return task
+
+    fileTarget = FileTarget(path=target, task=task)
+
+    currentScript = Script.getCurrent()
+    currentScript.getDefaultTarget().addTarget(fileTarget)
+    currentScript.getTarget(cake.path.baseName(target)).addTarget(fileTarget)
+
+    return fileTarget

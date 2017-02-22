@@ -296,7 +296,7 @@ def run(args=None, cwd=None):
     )
   
   # Find and remove script filenames from the arguments.
-  scripts = []
+  scriptPaths = []
   newArgs = []
   for arg in args:
     path = arg
@@ -304,14 +304,14 @@ def run(args=None, cwd=None):
       path = os.path.join(cwd, path)
     # If it's a file or directory assume it's a script path.
     if os.path.exists(path):
-      scripts.append(path)
+      scriptPaths.append(path)
     else:
       newArgs.append(arg)
   args = newArgs
 
   # Default to building a script file in the working directory.    
-  if not scripts:
-    scripts.append(cwd)
+  if not scriptPaths:
+    scriptPaths.append(cwd)
 
   logger = cake.logging.Logger()
   engine = cake.engine.Engine(logger, parser, args)
@@ -323,13 +323,13 @@ def run(args=None, cwd=None):
       if argsFileName:
         break
   else:
-    # Try to find an args.cake by searching up from each scripts directory.
-    for script in scripts:
+    # Try to find an args.cake by searching up from each script's directory.
+    for scriptPath in scriptPaths:
       # Script could be a file or directory name.
-      if os.path.isdir(script):
-        scriptDirName = script
+      if os.path.isdir(scriptPath):
+        scriptDirName = scriptPath
       else:
-        scriptDirName = os.path.dirname(script)
+        scriptDirName = os.path.dirname(scriptPath)
         
       argsFileName = engine.searchUpForFile(scriptDirName, "args.cake")
       if argsFileName:
@@ -395,15 +395,17 @@ def run(args=None, cwd=None):
   
   bootFailed = False
   
-  for script in scripts:
-    script = cake.path.fileSystemPath(script)
+  for scriptPath in scriptPaths:
+    scriptPath = cake.path.fileSystemPath(scriptPath)
     try:
-      task = engine.execute(
-        path=script,
-        configScript=configScript,
-        keywords=keywords,
-        )
-      tasks.append(task)
+      if configScript is None:
+        configuration = engine.findConfiguration(scriptPath)
+      else:
+        configuration = engine.getConfiguration(configScript)
+
+      for variant in configuration.findAllVariants(keywords):
+        script = configuration.execute(scriptPath, variant)
+        tasks.append(script.getDefaultTarget().task)
     except cake.engine.BuildError:
       # Error already output
       bootFailed = True
@@ -444,9 +446,8 @@ def run(args=None, cwd=None):
     engine.logger.outputInfo(msg)
   
   mainTask = cake.task.Task()
-  mainTask.completeAfter(tasks)
   mainTask.addCallback(onFinish)
-  mainTask.start()
+  mainTask.startAfter(tasks)
 
   finished = threading.Event()
   mainTask.addCallback(finished.set)

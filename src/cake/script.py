@@ -8,21 +8,8 @@
 import threading
 import cake.path
 
-class AsyncResult(object):
-  """Base class for asynchronous results.
-  
-  @ivar task: A Task that will complete when the result is available.
-  @ivar result: The result of the asynchronous operation.
-  """ 
-
-class DeferredResult(AsyncResult):
-  
-  def __init__(self, task):
-    self.task = task
-
-  @property
-  def result(self):
-    return self.task.result
+from cake.target import Target
+from cake.async import AsyncResult, waitForAsyncResult
 
 _undefined = object()
 
@@ -31,13 +18,6 @@ class ScriptResult(AsyncResult):
   script that may not be available yet.
   
   The result will be available when the task has completed successfully.
-  
-  If you try to access the result before the task has completed the script
-  will be forcibly executed on the current thread.
-  
-  However it is better to wait until the result is ready by chaining a new
-  task to start after this one and then access the result. That will provide
-  better CPU utilisation and faster build times.
   """
   
   __slots__ = ['__script', '__name', '__default']
@@ -63,7 +43,9 @@ class ScriptResult(AsyncResult):
   def result(self):
     """Access the result.
     """
-    self.__script.execute()
+    if not self.task.completed:
+      raise AttributeError("ScriptResult.result only available once Script task has completed")
+
     try:
       return self.__script._getResult(self.__name)
     except KeyError:
@@ -72,6 +54,59 @@ class ScriptResult(AsyncResult):
         return default
       else:
         raise
+
+class ScriptTarget(Target):
+  """A script target is a named target defined by a script.
+
+  These types of targets can be built from the command-line.
+
+  Every top-level script has a default script-target that is
+  built if the user does not specify a particular target to
+  build when building that cake script.
+  """
+
+  __slots__ = ['script', 'name', 'targets']
+
+  def __init__(self, script, name):
+    task = script.engine.createTask(self._finalise)
+    task.lazyStartAfter(script.task)
+
+    super(ScriptTarget, self).__init__(task)
+
+    self.name = name
+    self.script = script
+    self.targets = []
+
+  def __str__(self):
+    if self.name is None:
+      return self.script.path
+    else:
+      return self.script.path + "@" + self.name
+
+  @waitForAsyncResult
+  def addTarget(self, target):
+    if not isinstance(target, Target):
+      raise TypeError("Must specify Target object for addTarget")
+
+    self.targets.append(target)
+    self.task.completeAfter(target.task)
+
+  @waitForAsyncResult
+  def addTargets(self, targets):
+    targets = flatten(targets)
+    for target in targets:
+      if not isinstance(target, Target):
+        raise TypeError("Must specify Target object for addTargets")
+
+    self.targets.extend(targets)
+    self.task.completeAfter(t.task for t in targets)
+
+  def _finalise(self):
+    if not self.targets:
+      engine = self.script.engine
+      msg = "Warning: No targets defined for named script target %s\n" % str(self)
+      engine.logger.outputWarning(msg)
+      engine.warnings.append(msg)
 
 class Script(object):
   """A class that represents an instance of a Cake script. 
@@ -105,6 +140,8 @@ class Script(object):
     self._results = {}
     if parent is None:
       self.root = self
+      self._defaultTarget = ScriptTarget(self, None)
+      self._targets = {}
     else:
       self.root = parent.root
     self._executionLock = threading.Lock()
@@ -167,6 +204,33 @@ class Script(object):
     the script does not define that result.
     """
     return ScriptResult(self, name, *args, **kwargs)
+
+  def getDefaultTarget(self):
+    """Get the default ScriptTarget for this script.
+
+    This is the target that should be built by default when the command-line
+    has just specified a script to build.
+    """
+    return self.root._defaultTarget
+
+  def getTarget(self, name):
+    """Get the named script target for this script.
+
+    @param name: The name of the target.
+    @type name: C{basestring}
+
+    @return: The ScriptTarget with the specified name.
+    @rtype: L{ScriptTarget}
+    """
+    if name is None:
+      return self.getDefaultTarget()
+
+    targets = self.root._targets
+    target = targets.get(name, None)
+    if target is None:
+      target = targets.setdefault(name, ScriptTarget(script=self, name=name))
+
+    return target
 
   def cwd(self, *args):
     """Return the path prefixed with the current script's directory.

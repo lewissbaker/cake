@@ -306,6 +306,7 @@ class TaskTests(unittest.TestCase):
         raise RuntimeError()
       
       t = cake.task.Task(b)
+      t.parent.completeAfter(t)
       t.start()
       
     def c():

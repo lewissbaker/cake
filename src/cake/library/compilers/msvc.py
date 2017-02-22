@@ -14,7 +14,8 @@ import cake.filesys
 import cake.path
 import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
-from cake.library import memoise, getPaths, getTasks
+from cake.library import memoise
+from cake.target import getPaths, getTasks
 from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkVersions, getWindowsKitsDir
 
 def _toArchitectureDir(architecture):
@@ -740,10 +741,12 @@ class MsvcCompiler(Compiler):
       
     def compileWhenPdbIsFree():
       absPdbFile = self.configuration.abspath(pdbFile)
+      compileTask = self.engine.createTask(compile)
+      compileTask.parent.completeAfter(compileTask)
+      
       self._pdbQueueLock.acquire()
       try:
         predecessor = self._pdbQueue.get(absPdbFile, None)
-        compileTask = self.engine.createTask(compile)
         if predecessor is not None:
           predecessor.addCallback(
             lambda: compileTask.start(immediate=True)

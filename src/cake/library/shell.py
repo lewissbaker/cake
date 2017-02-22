@@ -9,7 +9,10 @@ import os
 import subprocess
 import cake.filesys
 import cake.path
-from cake.library import Tool, FileTarget, flatten, getPaths, getTasks, waitForAsyncResult
+from cake.async import waitForAsyncResult, flatten
+from cake.target import Target, FileTarget, getPaths, getTasks
+from cake.library import Tool
+from cake.script import Script
 
 _undefined = object()
 
@@ -153,17 +156,19 @@ class ShellTool(Tool):
     @waitForAsyncResult
     def _run(targets, sources, cwd):
       if self.enabled:
-        tasks = getTasks(sources)
-  
         task = engine.createTask(lambda t=targets, s=sources, c=cwd: spawnProcess(t, s, c))
-        task.startAfter(tasks)
+        task.lazyStartAfter(getTasks(sources))
       else:
         task = None
   
       if targets:
-        return [FileTarget(path=t, task=task) for t in targets]
+        targets = [FileTarget(path=t, task=task) for t in targets]
+        Script.getCurrent().getDefaultTarget().addTargets(targets)
+        return targets
       else:
-        return task
+        target = Target(task)
+        Script.getCurrent().getDefaultTarget().addTarget(target)
+        return target
     
     return _run(flatten(targets), flatten(sources), cwd)
 

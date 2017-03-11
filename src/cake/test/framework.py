@@ -411,12 +411,12 @@ class CakeOutput:
         except ValueError:
           if i > 0:
             self.reporter.error(
-              "Expected line '%s' somewhere after '%s', but not present" % (
-                line, lines[i-1]))
+              "Expected line '%s' somewhere after '%s', but not present.\nOutput:\n%s" % (
+                line, lines[i-1], self.output))
           else:
             self.reporter.error(
-              "Expected line '%s' somewhere in output, but not present" % (
-                line))
+              "Expected line '%s' somewhere in output, but not present.\nOutput:\n%s" % (
+                line, self.output))
     
 def caketest(*args, **kwargs):
   """Decorator to be used to identify a test-case function.

@@ -25,14 +25,9 @@ def testModifyAndRebuildCLibrary(t):
 def testCompileProgramUsingLibrary(t):
   out = t.runCake("main")
   out.checkSucceeded()
-  if cake.system.isWindows() and not cake.system.isCygwin():
-    out.checkHasLine("Compiling main\\main.cpp")
-    out.checkHasLine("Compiling printer\\source\\printer.cpp")
-    out.checkHasLine("Archiving printer\\lib\\printer.lib")
-  else:
-    out.checkHasLine("Compiling main/main.cpp")
-    out.checkHasLine("Compiling printer/source/printer.cpp")
-    out.checkHasLine("Archiving printer/lib/printer.lib")
+  out.checkHasLine("Compiling main/main.cpp")
+  out.checkHasLine("Compiling printer/source/printer.cpp")
+  out.checkHasLine("Archiving printer/lib/printer.lib")
 
   t.runCake("main").checkBuildWasNoop()
   t.runCake("printer").checkBuildWasNoop()

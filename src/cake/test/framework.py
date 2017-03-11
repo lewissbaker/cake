@@ -326,7 +326,7 @@ class CakeOutput:
     self.reporter = reporter
     self.exitCode = exitCode
     self.output = output
-    self.lines = [l.rstrip() for l in output.split('\n') if l.rstrip()]
+    self.lines = [l.rstrip().replace("\\", "/") for l in output.split('\n') if l.rstrip()]
 
   @property
   def command(self):

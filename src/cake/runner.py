@@ -22,6 +22,8 @@ import cake.task
 import cake.threadpool
 import cake.version
 
+from cake.async import flatten
+
 from cake.optparse import Option, OptionParser
 
 # Make sure stat() returns floats so timestamps are consistent across
@@ -294,24 +296,48 @@ def run(args=None, cwd=None):
     help="Halt the build after a certain number of errors.",
     default=100,
     )
+  parser.add_option(
+    "-l", "--list-targets",
+    dest="listTargetsMode",
+    action="store_true",
+    help="List named targets in specified build scripts.",
+    default=False,
+  )
   
   # Find and remove script filenames from the arguments.
-  scriptPaths = []
+  scriptTargets = []
   newArgs = []
   for arg in args:
-    path = arg
+    if arg.startswith('-'):
+      newArgs.append(arg)
+      continue
+    
+    # Strip off any '@' part
+    atPos = arg.find('@')
+    if atPos == 0:
+      path = cwd
+    elif atPos > 0:
+      path = arg[:atPos]
+    else:
+      path = arg
+
     if not os.path.isabs(path):
       path = os.path.join(cwd, path)
     # If it's a file or directory assume it's a script path.
     if os.path.exists(path):
-      scriptPaths.append(path)
+      if atPos >= 0:
+        targetNames = arg[atPos + 1:].split(',')
+      else:
+        targetNames = None
+
+      scriptTargets.append((path, targetNames))
     else:
       newArgs.append(arg)
   args = newArgs
 
   # Default to building a script file in the working directory.    
-  if not scriptPaths:
-    scriptPaths.append(cwd)
+  if not scriptTargets:
+    scriptTargets.append((cwd, None))
 
   logger = cake.logging.Logger()
   engine = cake.engine.Engine(logger, parser, args)
@@ -324,7 +350,7 @@ def run(args=None, cwd=None):
         break
   else:
     # Try to find an args.cake by searching up from each script's directory.
-    for scriptPath in scriptPaths:
+    for scriptPath, targetNames in scriptTargets:
       # Script could be a file or directory name.
       if os.path.isdir(scriptPath):
         scriptDirName = scriptPath
@@ -394,8 +420,34 @@ def run(args=None, cwd=None):
     configScript = os.path.abspath(configScript)
   
   bootFailed = False
-  
-  for scriptPath in scriptPaths:
+
+  def listTargets(scripts):
+    defaultTargets = []
+    namedTargets = {}
+    for script in scripts:
+      defaultTargets.extend(flatten(script.getDefaultTarget().targets))
+      for name, target in script._targets.items():
+        namedTargets.setdefault(name, []).extend(flatten(target.targets))
+
+    def targetList(targets):
+      targets = sorted(set(str(t) for t in targets))
+      if targets:
+        return "".join("   -> " + t + "\n" for t in targets)
+      else:
+        return "   <no targets defined>\n"
+
+    path = scripts[0].path
+
+    message = "Targets for " + path + "\n"
+    message += "  <default>\n"
+    message += targetList(defaultTargets)
+    for name in sorted(namedTargets.keys()):
+      message += "  @" + name + "\n"
+      message += targetList(namedTargets[name])
+
+    logger.outputInfo(message)
+
+  for scriptPath, targetNames in scriptTargets:
     scriptPath = cake.path.fileSystemPath(scriptPath)
     try:
       if configScript is None:
@@ -403,9 +455,23 @@ def run(args=None, cwd=None):
       else:
         configuration = engine.getConfiguration(configScript)
 
-      for variant in configuration.findAllVariants(keywords):
-        script = configuration.execute(scriptPath, variant)
-        tasks.append(script.getDefaultTarget().task)
+      variants = configuration.findAllVariants(keywords)      
+
+      scripts = [configuration.execute(scriptPath, variant)
+                 for variant in variants] 
+      if options.listTargetsMode:
+        scriptTasks = [s.task for s in scripts]
+        task = engine.createTask(lambda s=scripts: listTargets(scripts))
+        task.startAfter(scriptTasks)
+        tasks.append(task)
+      else:
+        if targetNames:
+          for script in scripts:
+            tasks.extend(script.getTarget(targetName).task
+                         for targetName in targetNames)
+        else:
+          for script in scripts:
+            tasks.append(script.getDefaultTarget().task)
     except cake.engine.BuildError:
       # Error already output
       bootFailed = True

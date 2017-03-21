@@ -86,7 +86,7 @@ class ScriptTarget(Target):
   @waitForAsyncResult
   def addTarget(self, target):
     if not isinstance(target, Target):
-      raise TypeError("Must specify Target object for addTarget")
+      raise TypeError("Must specify Target object for addTarget not " + str(type(target)))
 
     self.targets.append(target)
     self.task.completeAfter(target.task)

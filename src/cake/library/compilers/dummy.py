@@ -7,7 +7,8 @@
 
 import cake.filesys
 import cake.path
-from cake.library import memoise, getPaths
+from cake.library import memoise
+from cake.target import getPaths
 from cake.library.compilers import Compiler, makeCommand
 
 class DummyCompiler(Compiler):

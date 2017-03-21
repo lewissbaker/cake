@@ -3,7 +3,7 @@
 # found by searching up from the working directory.
 #-------------------------------------------------------------------------------
 from cake.engine import Variant
-from cake.library import waitForAsyncResult
+from cake.async import waitForAsyncResult
 from cake.library.compilers import CompilerNotFoundError
 from cake.library.compilers.dummy import DummyCompiler
 from cake.library.env import EnvironmentTool

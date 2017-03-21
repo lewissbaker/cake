@@ -9,7 +9,7 @@ import threading
 import cake.path
 
 from cake.target import Target
-from cake.async import AsyncResult, waitForAsyncResult
+from cake.async import AsyncResult, waitForAsyncResult, flatten
 
 _undefined = object()
 

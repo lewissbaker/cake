@@ -5,7 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
-from cake.library import memoise, getPaths
+from cake.library import memoise
+from cake.target import getPaths
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 import cake.filesys
 import cake.path

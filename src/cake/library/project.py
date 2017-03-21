@@ -268,11 +268,12 @@ class ProjectTool(Tool):
   VS2010 = 4
   """Visual Studio 2010
   """
+  VS2015 = 5
 
-  product = VS2010
+  product = VS2015
   """The product to generate solutions and projects for.
 
-  Can be one of L{VS2002}, L{VS2003}, L{VS2005}, L{VS2008} or L{VS2010}.
+  Can be one of L{VS2002}, L{VS2003}, L{VS2005}, L{VS2008}, L{VS2010} or L{VS2015}.
   @type: enum
   """
 
@@ -281,7 +282,7 @@ class ProjectTool(Tool):
   This should be in the form VARIABLE=VALUE where each variable is
   defined on a new line.
 
-  Only applicable for L{VS2010}
+  Only applicable for L{VS2010} or L{VS2015}
 
   @type: string
   """
@@ -328,6 +329,7 @@ class ProjectTool(Tool):
     VS2005 : "8.00",
     VS2008 : "9.00",
     VS2010 : "4.0", # MSBuild script
+    VS2015 : "14.0", # MSBuild script
     }
 
   _toSolutionVersion = {
@@ -336,6 +338,7 @@ class ProjectTool(Tool):
     VS2005 : '9.00',
     VS2008 : '10.00',
     VS2010 : '11.00',
+    VS2015 : '12.00',
     }
 
   def __init__(self, configuration):
@@ -474,7 +477,7 @@ class ProjectTool(Tool):
     if name is None:
       name = cake.path.baseNameWithoutExtension(target)
 
-    if self.product == self.VS2010:
+    if self.product >= self.VS2010:
       target = cake.path.forceExtension(target, self._msvsProjectSuffix2010)
       filters = cake.path.forceExtension(target, self._msvsFiltersSuffix2010)
     else:
@@ -519,7 +522,7 @@ class ProjectTool(Tool):
         intermediateDir = cake.path.dirName(outputPath)
 
       # Build log defaults to the output path
-      if self.product == self.VS2010:
+      if self.product >= self.VS2010:
         if buildLog is None:
           buildLog = cake.path.stripExtension(outputPath)
         buildLog = cake.path.forceExtension(buildLog, self._msvsBuildLogSuffix2010)
@@ -633,7 +636,7 @@ class ProjectTool(Tool):
         )
       solution.addConfiguration(configuration)
 
-      if self.product == self.VS2010:
+      if self.product >= self.VS2010:
         projectExtension = self._msvsProjectSuffix2010
       else:
         projectExtension = self._msvsProjectSuffix
@@ -679,7 +682,7 @@ class ProjectTool(Tool):
       generator.build()
 
     for project in self._projects.projects.values():
-      if project.version == '4.0':
+      if project.version in ('4.0', '14.0'):
         generator = MsBuildProjectGenerator(self.configuration, project)
         generator.build()
         generator = MsBuildFiltersGenerator(self.configuration, project)
@@ -1153,7 +1156,7 @@ class MsvsProjectGenerator(object):
 
       # Recurse on each filter's subitems
       filterSubItems = mergedFilterSubItems[name]
-      self._writeSubItems(filterSubItems, indent + '\t')
+      self._writeSubItems(writer, filterSubItems, indent + '\t')
 
       writer.write('%s</Filter>\n' % indent)
 

@@ -149,7 +149,7 @@ class ScriptTool(Tool):
       # to the current variant.
       baseVariant = Script.getCurrent().variant
       variant = self.configuration.findVariant(keywords, baseVariant=baseVariant)
-      return self.configuration.execute(path=script, variant=variant)
+      return ScriptProxy(self.configuration.execute(path=script, variant=variant))
     else:
       # Re-evaluate the configuration to execute the script with.
       # Uses the keywords specified to find the variant in the variants
@@ -165,7 +165,7 @@ class ScriptTool(Tool):
           path=self.configuration.abspath(configScript),
           )
       variant = configuration.findVariant(keywords)
-      return configuration.execute(path=path, variant=variant)
+      return ScriptProxy(configuration.execute(path=path, variant=variant))
 
   def cwd(self, *args):
     """Return the path prefixed with the this script's directory.
@@ -265,7 +265,7 @@ class ScriptTool(Tool):
     def _execute(path):
       script = execute(path, variant)
       self.addDefaultTarget(script.getDefaultTarget())
-      return script
+      return ScriptProxy(script)
 
     if isinstance(scripts, basestring):
       return _execute(scripts)
@@ -345,3 +345,53 @@ class ScriptTool(Tool):
       target = Target(task)
       currentScript.getDefaultTarget().addTarget(target)
       return target
+
+class ScriptProxy:
+  """Proxy class for a Script instance that limits what
+  you can do with a script.
+
+  This object is returned from ScriptTool.get() and ScriptTool.execute().
+  """
+
+  def __init__(self, script):
+    self._script = script
+
+  def execute(self):
+    """Executing a script is shorthand for adding it's default
+    targets to your default targets. This means it will only actually
+    run if the current script's default target is built.
+    """
+    Script.getCurrent().getDefaultTarget().addTarget(
+      self._script.getDefaultTarget())
+
+  def getTarget(self, name):
+    """Get the named target of a script.
+
+    @param name: The name of the target.
+    @type name: C{str}
+
+    @return: A target corresponding to the named target defined
+    by this script.
+    @rtype: L{ScriptTarget}
+    """
+    return self._script.getTarget(name)
+
+  def getDefaultTarget(self):
+    """Get the default target for this script.
+
+    This is the target that will be built if the script is built
+    from the command-line without specifying a particular named target.
+
+    @rtype: L{ScriptTarget}
+    """
+    return self._script.getDefaultTarget()
+
+  def getResult(self, name):
+    """Get the result output of a script.
+
+    This will be an AsyncResult value that allows one script to consume
+    a programmatic output from another script.
+
+    @rtype: L{ScriptResult}
+    """
+    return self._script.getResult(name)

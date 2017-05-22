@@ -383,6 +383,7 @@ class ProjectTool(Tool):
     intermediateDir=None,
     buildLog=None,
     compiler=None,
+    buildTargets=None,
     **kwargs
     ):
     """Generate a project file.
@@ -432,6 +433,9 @@ class ProjectTool(Tool):
     used for the aid of intellisense. If not supplied the compiler is
     obtained implicitly via 'ouput.compiler'.
     @type compiler: L{cake.library.compilers.Compiler} or C{None}
+    @param buildTargets: A collection of build targets to build when
+    building the project from within Visual Studio.
+    @type buildTargets: list of L{cake.target.Target}
 
     @return: A L{FileTarget} that specifies the full path to the
     generated project file (with extension if applicable).
@@ -457,6 +461,7 @@ class ProjectTool(Tool):
       intermediateDir,
       buildLog,
       compiler,
+      buildTargets,
       )
 
   def _project(
@@ -468,6 +473,7 @@ class ProjectTool(Tool):
     intermediateDir=None,
     buildLog=None,
     compiler=None,
+    buildTargets=None,
     ):
 
     # Project name defaults the base filename without extension
@@ -476,6 +482,21 @@ class ProjectTool(Tool):
 
     if name is None:
       name = cake.path.baseNameWithoutExtension(target)
+
+    projectBuildTargetName = name + "_vsbuild"
+    script = Script.getCurrentRoot()
+    projectBuildTarget = script.getTarget(projectBuildTargetName)
+
+    if buildTargets is not None:
+      projectBuildTarget.addTargets(buildTargets)
+    elif output is None:
+      projectBuildTarget.addTarget(script.getDefaultTarget())
+    else:
+      @waitForAsyncResult
+      def addTarget(output):
+        if isinstance(output, cake.target.Target):
+          projectBuildTarget.addTarget(output)
+      addTarget(output)
 
     if self.product >= self.VS2010:
       target = cake.path.forceExtension(target, self._msvsProjectSuffix2010)
@@ -550,11 +571,14 @@ class ProjectTool(Tool):
       if not cake.path.isFile(cakeScript):
         raise EnvironmentError("Could not find Cake script at: '%s'" % cakeScript)
 
+      scriptArg = cake.path.relativePath(scriptPath, targetDir)
+      scriptArg += "@" + projectBuildTargetName
+
       buildArgs = [
         cake.path.relativePath(pythonExe, targetDir),
         "-u",
         cake.path.relativePath(cakeScript, targetDir),
-        cake.path.relativePath(scriptPath, targetDir),
+        scriptArg,
         ]
       buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
 

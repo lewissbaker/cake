@@ -16,7 +16,7 @@ import cake.system
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 from cake.library import memoise
 from cake.target import getPaths, getTasks
-from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkVersions, getWindowsKitsDir
+from cake.msvs import getMsvcProductDir, getMsvsInstallDir, getPlatformSdkVersions, getWindowsKitsDir, vswhere
 
 def _toArchitectureDir(architecture):
   """Re-map 'x64' to 'amd64' to match MSVC directory names.
@@ -202,6 +202,256 @@ def _createMsvcCompiler(
     )
   
   return compiler
+
+def _toVersionTuple(versionString):
+  """Split a version string like "10.5.0.2345" into a tuple (10, 5, 0, 2345).
+  """
+  return tuple(int(part) for part in versionString.split("."))
+
+class WindowsSdkInfo(object):
+
+  def __init__(self, version, architecture):
+    self.version = version
+    self.architecture = architecture
+    self.includeDirs = []
+    self.libDirs = []
+    self.binDir = None
+
+class UniversalCRuntimeInfo(object):
+
+  def __init__(self, version, architecture):
+    self.version = version
+    self.architecture = architecture
+    self.includeDirs = []
+    self.libDirs = []
+
+def findWindows10Sdks(windowsKits10Dir=None, targetArchitecture=None):
+  if windowsKits10Dir is None:
+    windowsKits10Dir = getWindowsKitsDir(version='10')
+
+  includeBase = cake.path.join(windowsKits10Dir, 'Include')
+  libBase = cake.path.join(windowsKits10Dir, 'Lib')
+  binBase = cake.path.join(windowsKits10Dir, 'bin')
+
+  if cake.system.isWindows64():
+    binArch = "x64"
+  else:
+    binArch = "x86"
+
+  results = []
+
+  if not os.path.isdir(libBase) or not os.path.isdir(includeBase) or not os.path.isdir(binBase):
+    return results
+
+  versions = os.listdir(libBase)
+  versions.sort(key=_toVersionTuple, reverse=True)
+
+  for version in versions:
+    binDir = cake.path.join(binBase, version, binArch)
+    if not os.path.isdir(binDir):
+      binDir = cake.path.join(binBase, binArch)
+
+    umLibBase = os.path.join(libBase, version, 'um')
+
+    umIncludeDir = os.path.join(includeBase, version, 'um')
+    sharedIncludeDir = os.path.join(includeBase, version, 'shared')
+
+    if all(os.path.isdir(p) for p in (umLibBase, umIncludeDir, sharedIncludeDir)):
+      if targetArchitecture:
+        architectures = [targetArchitecture]
+      else:
+        architectures = os.listdir(umLibBase)
+
+      for architecture in architectures:
+        umLibDir = os.path.join(umLibBase, architecture)
+        if os.path.isdir(umLibDir):
+          info = WindowsSdkInfo(version, architecture)
+          info.includeDirs.extend([umIncludeDir, sharedIncludeDir])
+          info.libDirs.append(umLibDir)
+          info.binDir = binDir
+          results.append(info)
+
+  return results
+
+def findUniversalCRuntimes(windowsKits10Dir=None, targetArchitecture=None):
+  if windowsKits10Dir is None:
+    windowsKits10Dir = getWindowsKitsDir(version='10')
+
+  includeBase = cake.path.join(windowsKits10Dir, 'Include')
+  libBase = cake.path.join(windowsKits10Dir, 'Lib')
+
+  results = []
+
+  if not os.path.isdir(libBase) or not os.path.isdir(includeBase):
+    return results
+
+  versions = os.listdir(libBase)
+  versions.sort(key=_toVersionTuple, reverse=True)
+
+  for version in versions:
+    ucrtLibBase = os.path.join(libBase, version, 'ucrt')
+    ucrtIncludeDir = os.path.join(includeBase, version, 'ucrt')
+
+    if all(os.path.isdir(p) for p in (ucrtLibBase, ucrtIncludeDir)):
+      if targetArchitecture:
+        architectures = [targetArchitecture]
+      else:
+        architectures = os.listdir(ucrtLibBase)
+
+      for architecture in architectures:
+        ucrtLibDir = os.path.join(ucrtLibBase, architecture)
+        if os.path.isdir(ucrtLibDir):
+          info = UniversalCRuntimeInfo(version, architecture)
+          info.includeDirs.append(ucrtIncludeDir)
+          info.libDirs.append(ucrtLibDir)
+          results.append(info)
+
+  return results
+
+def findMsvc2017InstallDir(targetArchitecture):
+  """Find the location of the MSVC 2017 install directory.
+
+  Returns path of the latest VC install directory that contains a compiler
+  for the specified target architecture. Throws CompilerNotFoundError if
+  couldn't find any MSVC 2017 version.
+  """
+  infos = vswhere(["-version", "[15.0,16.0)"])
+  infos.sort(key=lambda info: _toVersionTuple(info.get("installationVersion", "0")), reverse=True)
+
+  for info in infos:
+    vsInstallDir = info["installationPath"]
+    msvcBasePath = cake.path.join(vsInstallDir, r'VC\Tools\MSVC')
+    if os.path.isdir(msvcBasePath):
+      versions = os.listdir(msvcBasePath)
+      versions.sort(key=_toVersionTuple, reverse=True)
+      for version in versions:
+        msvcPath = cake.path.join(msvcBasePath, version)
+        if cake.system.isWindows64():
+          if os.path.isdir(cake.path.join(msvcPath, 'bin', 'HostX64', targetArchitecture)):
+            return msvcPath
+        else:
+          if os.path.isdir(cake.path.join(msvcPath, 'bin', 'HostX86', targetArchitecture)):
+            return msvcPath
+  else:
+    raise CompilerNotFoundError()
+
+
+def getVisualStudio2015Compiler(configuration, targetArchitecture, ucrtInfo=None, windowsSdkInfo=None, vcInstallDir=None):
+
+  if vcInstallDir is None:
+    vcInstallDir = getMsvcProductDir("VisualStudio\\14.0")
+
+  if windowsSdkInfo is None:
+    windowsSdks = findWindows10Sdks(targetArchitecture=targetArchitecture)
+    if not windowsSdks:
+      raise CompilerNotFoundError("Windows 10 SDK not found")
+    windowsSdkInfo = windowsSdks[0]
+
+  if ucrtInfo is None:
+    ucrtInfos = findUniversalCRuntimes(targetArchitecture=targetArchitecture)
+    if not ucrtInfos:
+      raise CompilerNotFoundError("Universal C Runtime library not found")
+    ucrtInfo = ucrtInfos[0]
+
+  if cake.system.isWindows64():
+    vcNativeBinDir = cake.path.join(vcInstallDir, "bin", "amd64")
+  else:
+    vcNativeBinDir = cake.path.join(vcInstallDir, "bin")
+
+  vcIncludeDir = cake.path.join(vcInstallDir, "include")
+
+  if targetArchitecture == "x64":
+    if cake.system.isWindows64():
+      vcBinDir = vcNativeBinDir
+    else:
+      vcBinDir = cake.path.join(vcInstallDir, "bin", "x86_amd64")
+    vcLibDir = cake.path.join(vcInstallDir, "lib", "amd64")
+  elif targetArchitecture == "x86":
+    if cake.system.isWindows64():
+      vcBinDir = cake.path.join(vcInstallDir, "bin", "amd64_x86")
+    else:
+      vcBinDir = vcNativeBinDir
+    vcLibDir = cake.path.join(vcInstallDir, "lib")
+
+  vcBinPaths = [vcBinDir]
+  if vcNativeBinDir != vcBinDir:
+    vcBinPaths.append(vcNativeBinDir)
+
+  return MsvcCompiler(
+    configuration=configuration,
+    clExe=cake.path.join(vcBinDir, "cl.exe"),
+    libExe=cake.path.join(vcBinDir, "lib.exe"),
+    linkExe=cake.path.join(vcBinDir, "link.exe"),
+    rcExe=cake.path.join(windowsSdkInfo.binDir, "rc.exe"),
+    mtExe=cake.path.join(windowsSdkInfo.binDir, "mt.exe"),
+    bscExe=None,
+    binPaths=vcBinPaths + [windowsSdkInfo.binDir],
+    includePaths=[vcIncludeDir] + ucrtInfo.includeDirs + windowsSdkInfo.includeDirs,
+    libraryPaths=[vcLibDir] + ucrtInfo.libDirs + windowsSdkInfo.libDirs,
+    architecture=targetArchitecture,
+    )
+
+def getVisualStudio2017Compiler(configuration, targetArchitecture=None, ucrtInfo=None, windowsSdkInfo=None, vcInstallDir=None):
+
+  if targetArchitecture is None:
+    if cake.system.isWindows64():
+      targetArchitecture = "x64"
+    else:
+      targetArchitecture = "x86"
+
+  if vcInstallDir is None:
+    vcInstallDir = str(findMsvc2017InstallDir(targetArchitecture))
+
+  if windowsSdkInfo is None:
+    windowsSdks = findWindows10Sdks(targetArchitecture=targetArchitecture)
+    if not windowsSdks:
+      raise CompilerNotFoundError("Windows 10 SDK not found")
+    windowsSdkInfo = windowsSdks[0]
+
+  if ucrtInfo is None:
+    ucrtInfos = findUniversalCRuntimes(targetArchitecture=targetArchitecture)
+    if not ucrtInfos:
+      raise CompilerNotFoundError("Universal C Runtime library not found")
+    ucrtInfo = ucrtInfos[0]
+
+  vcIncludeDir = cake.path.join(vcInstallDir, "include")
+
+  if cake.system.isWindows64():
+    vcNativeBinDir = cake.path.join(vcInstallDir, "bin", "HostX64", "x64")
+  else:
+    vcNativeBinDir = cake.path.join(vcInstallDir, "bin", "HostX86", "x86")
+
+  if targetArchitecture == "x64":
+    if cake.system.isWindows64():
+      vcBinDir = vcNativeBinDir
+    else:
+      vcBinDir = cake.path.join(vcInstallDir, "bin", "HostX86", "x64")
+    vcLibDir = cake.path.join(vcInstallDir, "lib", "x64")
+  elif targetArchitecture == "x86":
+    if cake.system.isWindows64():
+      vcBinDir = cake.path.join(vcInstallDir, "bin", "HostX64", "x86")
+    else:
+      vcBinDir = vcNativeBinDir
+    vcLibDir = cake.path.join(vcInstallDir, "lib", "x86")
+
+  binPaths = [vcBinDir]
+  if vcNativeBinDir != vcBinDir:
+    binPaths.append(vcNativeBinDir)
+  binPaths.append(windowsSdkInfo.binDir)
+
+  return MsvcCompiler(
+    configuration=configuration,
+    clExe=cake.path.join(vcBinDir, "cl.exe"),
+    libExe=cake.path.join(vcBinDir, "lib.exe"),
+    linkExe=cake.path.join(vcBinDir, "link.exe"),
+    rcExe=cake.path.join(windowsSdkInfo.binDir, "rc.exe"),
+    mtExe=cake.path.join(windowsSdkInfo.binDir, "mt.exe"),
+    bscExe=None,
+    binPaths=binPaths,
+    includePaths=[vcIncludeDir] + ucrtInfo.includeDirs + windowsSdkInfo.includeDirs,
+    libraryPaths=[vcLibDir] + ucrtInfo.libDirs + windowsSdkInfo.libDirs,
+    architecture=targetArchitecture,
+    )
 
 def findMsvcCompiler(
   configuration,

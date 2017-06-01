@@ -4,8 +4,12 @@
 @copyright: Copyright (c) 2010 Lewis Baker, Stuart McMahon.
 @license: Licensed under the MIT license.
 """
+import json
+import os
+import subprocess
 import _winreg as winreg
 
+import cake.path
 import cake.system
 from cake.registry import queryString, KEY_WOW64_32KEY
   
@@ -142,7 +146,7 @@ def getWindowsKitsDir(version='80'):
   subKey = r"SOFTWARE\Microsoft\Windows Kits\Installed Roots"
   valueName = 'KitsRoot' if version == '80' else 'KitsRoot' + version
   return queryString(winreg.HKEY_LOCAL_MACHINE, subKey, valueName)
-  
+
 def getDotNetFrameworkSdkDir(version='2.0'):
   """Looks up the path of the Microsoft .NET Framework SDK directory.
 
@@ -157,3 +161,38 @@ def getDotNetFrameworkSdkDir(version='2.0'):
   subKey = r"SOFTWARE\Microsoft\.NETFramework"
   valueName = "sdkInstallRootv" + version
   return queryString(winreg.HKEY_LOCAL_MACHINE, subKey, valueName)
+
+def vswhere(args=[]):
+  """Helper function for running vswhere helper utility and parsing the output.
+
+  The vswhere utility can be used to find the installation locations of Visual Studio 2017 or later.
+  It can also be used to find older install locations by passing "-legacy" as an argument.
+
+  @return: An array of dictionaries containing information about each installation.
+
+  @raise EnvironmentError:
+  If there was a problem running vswhere with the provided arguments.
+  """
+  if cake.system.isWindows64():
+    programFiles = os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')
+  else:
+    programFiles = os.environ.get('ProgramFiles', r'C:\Program Files')
+  vsInstaller = cake.path.join(programFiles, 'Microsoft Visual Studio', 'Installer')
+  vsWherePath = cake.path.join(vsInstaller, 'vswhere.exe')
+  if not os.path.isfile(vsWherePath):
+    raise EnvironmentError("vswhere not found at " + vsWherePath)
+
+  p = subprocess.Popen(
+    args=["vswhere", "-format", "json"] + args,
+    executable=vsWherePath,
+    cwd=vsInstaller,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    stdin=subprocess.PIPE,
+    )
+  out, err = p.communicate(input=b"")
+
+  if p.returncode != 0:
+    raise EnvironmentError("vswhere: returned with exit code " + str(p.returncode) + "\n" + out)
+
+  return json.loads(out)

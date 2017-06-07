@@ -23,7 +23,16 @@ from cake.target import FileTarget, getPath, getPaths
 from cake.async import getResult, waitForAsyncResult, flatten
 from cake.library import Tool
 from cake.script import Script
-from cake.library.compilers.msvc import MsvcCompiler
+
+try:
+  from cake.library.compilers.msvc import MsvcCompiler
+except ImportError:
+  # This import will fail on platforms without the Windows registry.
+  #
+  # Given the tool can't be imported it can't be in use so the checking
+  # performed below would never succeed.
+  class MsvcCompiler(object):
+    pass
 
 class _Project(object):
 

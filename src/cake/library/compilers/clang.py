@@ -22,12 +22,10 @@ class ClangCompiler(Compiler):
                configuration,
                clangExe,
                llvmArExe,
-               lldExe,
                binPaths):
     Compiler.__init__(self, configuration=configuration, binPaths=binPaths)
     self._clangExe = clangExe
     self._llvmArExe = llvmArExe
-    self._lldExe = lldExe
 
   def _getLanguage(self, suffix, pch=False):
     language = self.language
@@ -116,7 +114,7 @@ class ClangCompiler(Compiler):
 
   @memoise
   def _getCommonLinkArgs(self, dll):
-    args = [self._lldExe]
+    args = [self._clangExe]
     if dll:
       args.append('--shared')
       args.extend(self.moduleFlags)
@@ -126,9 +124,6 @@ class ClangCompiler(Compiler):
     return args
 
   def _getLinkCommands(self, target, sources, importLibrary=None, installName=None, dll=False):
-    if not self._lldExe:
-      self.engine.raiseError("error: lld not configured for Clang compiler.\n",
-                             targets=[targets])
 
     objects, libraries = self._resolveObjects()
 

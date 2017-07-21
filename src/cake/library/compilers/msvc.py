@@ -308,14 +308,17 @@ def findUniversalCRuntimes(windowsKits10Dir=None, targetArchitecture=None):
 
   return results
 
-def findMsvc2017InstallDir(targetArchitecture):
+def findMsvc2017InstallDir(targetArchitecture, allowPreRelease=False):
   """Find the location of the MSVC 2017 install directory.
 
   Returns path of the latest VC install directory that contains a compiler
   for the specified target architecture. Throws CompilerNotFoundError if
   couldn't find any MSVC 2017 version.
   """
-  infos = vswhere(["-version", "[15.0,16.0)"])
+  vswhereArgs = ["-version", "[15.0,16.0)"]
+  if allowPreRelease:
+    vswhereArgs.append("-prerelease")
+  infos = vswhere(vswhereArgs)
   infos.sort(key=lambda info: _toVersionTuple(info.get("installationVersion", "0")), reverse=True)
 
   for info in infos:

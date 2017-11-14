@@ -589,6 +589,12 @@ class ProjectTool(Tool):
         cake.path.relativePath(cakeScript, targetDir),
         scriptArg,
         ]
+
+      # Propgate the option (at the time of project generation) to suppress
+      # bytecode files when building from the projects.
+      if sys.dont_write_bytecode:
+        buildArgs.insert(1, "-B")
+
       buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
 
       try:

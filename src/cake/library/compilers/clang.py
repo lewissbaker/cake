@@ -6,14 +6,63 @@
 """
 
 from cake.library import memoise
-from cake.target import getPaths
+from cake.target import getPaths, getPath
 from cake.library.compilers import Compiler, makeCommand, CompilerNotFoundError
 
 import cake.path
 import cake.filesys
 
 import os.path
+import subprocess
 
+def _getClangVersion(clangExe):
+  """Returns the Clang version number given an executable.
+  """
+  args = [getPath(clangExe), '--version']
+  try:
+    p = subprocess.Popen(
+      args=args,
+      stdout=subprocess.PIPE,
+      )
+  except EnvironmentError, e:
+    raise EnvironmentError(
+      "cake: failed to launch %s: %s\n" % (args[0], str(e))
+      )
+  stdoutText = p.stdout.readline()
+  p.stdout.close()
+  exitCode = p.wait()
+  
+  if exitCode != 0:
+    raise EnvironmentError(
+      "%s: failed with exit code %i\n" % (args[0], exitCode)
+      )
+
+  # Parse through the line to get the version number. Examples:
+  # Ubuntu clang version 3.6.2-svn238746-1~exp1 (branches/release_36) (based on LLVM 3.6.2)
+  # clang version 3.5.0 (217039)
+  versionText = "version "
+  index = stdoutText.find(versionText)
+  if index == -1:
+    raise EnvironmentError(
+      "%s: version format invalid: %s\n" % (args[0], stdoutText)
+      )
+  versionString = stdoutText[index + len(versionText):]
+  index = versionString.find('-')
+  index2 = versionString.find(' ')
+  if index != -1:
+    if index2 != -1:
+      index = min(index, index2)
+  else:
+    if index2 != -1:
+      index = index2
+  versionString = versionString[:index].strip()
+  return versionString
+  
+def _makeVersionTuple(versionString):
+  return tuple(
+    int(n) for n in versionString.split(".")
+    )
+    
 class ClangCompiler(Compiler):
 
   _name = 'clang'
@@ -26,6 +75,8 @@ class ClangCompiler(Compiler):
     Compiler.__init__(self, configuration=configuration, binPaths=binPaths)
     self._clangExe = clangExe
     self._llvmArExe = llvmArExe
+    self.version = _getClangVersion(clangExe)
+    self.versionTuple = _makeVersionTuple(self.version)
 
   def _getLanguage(self, suffix, pch=False):
     language = self.language

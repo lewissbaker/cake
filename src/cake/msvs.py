@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import _winreg as winreg
+import re
 
 import cake.path
 import cake.system
@@ -195,4 +196,4 @@ def vswhere(args=[]):
   if p.returncode != 0:
     raise EnvironmentError("vswhere: returned with exit code " + str(p.returncode) + "\n" + out)
 
-  return json.loads(out)
+  return json.loads(re.sub(r'[^\x00-\x7F]', ' ', out))

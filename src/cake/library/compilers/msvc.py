@@ -206,7 +206,8 @@ def _createMsvcCompiler(
 def _toVersionTuple(versionString):
   """Split a version string like "10.5.0.2345" into a tuple (10, 5, 0, 2345).
   """
-  return tuple(int(part) for part in versionString.split("."))
+  return tuple((int(part) if part.isdigit() else part)
+               for part in versionString.split("."))
 
 class WindowsSdkInfo(object):
 

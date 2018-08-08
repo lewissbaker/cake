@@ -584,7 +584,7 @@ class ProjectTool(Tool):
       scriptArg += "@" + projectBuildTargetName
 
       buildArgs = [
-        cake.path.relativePath(pythonExe, targetDir),
+        pythonExe,
         "-u",
         cake.path.relativePath(cakeScript, targetDir),
         scriptArg,

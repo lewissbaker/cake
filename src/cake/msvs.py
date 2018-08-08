@@ -8,7 +8,6 @@ import json
 import os
 import subprocess
 import _winreg as winreg
-import re
 
 import cake.path
 import cake.system

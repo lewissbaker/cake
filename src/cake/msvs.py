@@ -183,7 +183,7 @@ def vswhere(args=[]):
     raise EnvironmentError("vswhere not found at " + vsWherePath)
 
   p = subprocess.Popen(
-    args=["vswhere", "-format", "json"] + args,
+    args=["vswhere", "-format", "json", "-utf8"] + args,
     executable=vsWherePath,
     cwd=vsInstaller,
     stdout=subprocess.PIPE,
@@ -195,4 +195,4 @@ def vswhere(args=[]):
   if p.returncode != 0:
     raise EnvironmentError("vswhere: returned with exit code " + str(p.returncode) + "\n" + out)
 
-  return json.loads(out)
+  return json.loads(out.decode("utf8"))

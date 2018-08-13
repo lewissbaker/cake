@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import _winreg as winreg
+import codecs
 
 import cake.path
 import cake.system
@@ -162,6 +163,56 @@ def getDotNetFrameworkSdkDir(version='2.0'):
   valueName = "sdkInstallRootv" + version
   return queryString(winreg.HKEY_LOCAL_MACHINE, subKey, valueName)
 
+try:
+  import ctypes
+  import ctypes.wintypes
+
+  _GetConsoleOutputCP = ctypes.windll.kernel32.GetConsoleOutputCP
+  _GetConsoleOutputCP.argtypes = []
+  _GetConsoleOutputCP.restype = ctypes.wintypes.UINT
+
+  # Constructed from translating between:
+  # https://docs.microsoft.com/en-gb/windows/desktop/Intl/code-page-identifiers
+  # and
+  # https://docs.python.org/2.4/lib/standard-encodings.html
+  _codepageToCodec = {
+    950 : "big5",
+    1200 : "utf_16_le",
+    1201 : "utf_16_be",
+    12000 : "utf_32_le",
+    12001 : "utf_32_be",
+    20127 : "us-ascii",
+    28591 : "latin_1",
+    28592 : "iso8859_2",
+    28593 : "iso8859_3",
+    28594 : "iso8859_4",
+    28595 : "iso8859_5",
+    28596 : "iso8859_6",
+    28597 : "iso8859_7",
+    28598 : "iso8859_8",
+    28599 : "iso8859_9",
+    28603 : "iso8859_13",
+    28605 : "iso8859_15",
+    65000 : "utf_7",
+    65001 : "utf_8",
+    }
+
+  def _getCodecFromCodepage():
+    codepage = _GetConsoleOutputCP()
+    codecName = _codepageToCodec.get(codepage, None)
+    if codecName is None:
+      codecName = "cp{0:03}".format(codepage)
+
+    try:
+      return codecs.lookup(codecName)
+    except LookupError:
+      return None
+
+except Exception:
+
+  def _getCodecFromCodepage():
+    return None
+
 def vswhere(args=[]):
   """Helper function for running vswhere helper utility and parsing the output.
 
@@ -191,8 +242,28 @@ def vswhere(args=[]):
     stdin=subprocess.PIPE,
     )
   out, err = p.communicate(input=b"")
+  codec = codecs.lookup("utf_8")
 
   if p.returncode != 0:
-    raise EnvironmentError("vswhere: returned with exit code " + str(p.returncode) + "\n" + out)
+    # Probably failed because it's an old version of vswhere that doesn't support
+    # -utf8 flag. Let's try using it without -utf8 and then use whatever the current
+    # Windows codepage is to decode it.
+    p = subprocess.Popen(
+      args=["vswhere", "-format", "json"] + args,
+      executable=vsWherePath,
+      cwd=vsInstaller,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.STDOUT,
+      stdin=subprocess.PIPE,
+      )
+    out, err = p.communicate(input=b"")
+    codec = _getCodecFromCodepage()
+    if codec is None:
+      # Fall back to ASCII if we couldn't figure out the codec for
+      # the current Windows codepage.
+      codec = codecs.lookup("ascii")
 
-  return json.loads(out.decode("utf8"))
+    if p.returncode != 0:
+      raise EnvironmentError("vswhere: returned with exit code " + str(p.returncode) + "\n" + out) 
+
+  return json.loads(codec.decode(out, 'replace')[0])

@@ -309,14 +309,19 @@ def findUniversalCRuntimes(windowsKits10Dir=None, targetArchitecture=None):
 
   return results
 
-def findMsvc2017InstallDir(targetArchitecture, allowPreRelease=False):
-  """Find the location of the MSVC 2017 install directory.
+
+def findMsvcInstallDir(targetArchitecture, allowPreRelease=False, versionRange=None):
+  """Find the location of the MSVC install directory.
 
   Returns path of the latest VC install directory that contains a compiler
   for the specified target architecture. Throws CompilerNotFoundError if
-  couldn't find any MSVC 2017 version.
+  couldn't find any MSVC version.
+
+  Works for finding Visual Studio 2017 and later.
   """
-  vswhereArgs = ["-version", "[15.0,16.0)"]
+  vswhereArgs = []
+  if versionRange:
+    vswhereArgs.extend(["-version", versionRange])
   if allowPreRelease:
     vswhereArgs.append("-prerelease")
   infos = vswhere(vswhereArgs)
@@ -339,6 +344,14 @@ def findMsvc2017InstallDir(targetArchitecture, allowPreRelease=False):
   else:
     raise CompilerNotFoundError()
 
+def findMsvc2017InstallDir(targetArchitecture, allowPreRelease=False):
+  """Find the location of the MSVC 2017 install directory.
+
+  Returns path of the latest VC install directory that contains a compiler
+  for the specified target architecture. Throws CompilerNotFoundError if
+  couldn't find any MSVC 2017 version.
+  """
+  return findMsvcInstallDir(targetArchitecture, allowPreRelease=allowPreRelease, versionRange="[15.0,16.0)")
 
 def getVisualStudio2015Compiler(configuration, targetArchitecture, ucrtInfo=None, windowsSdkInfo=None, vcInstallDir=None):
 
@@ -396,7 +409,6 @@ def getVisualStudio2015Compiler(configuration, targetArchitecture, ucrtInfo=None
     )
 
 def getVisualStudio2017Compiler(configuration, targetArchitecture=None, ucrtInfo=None, windowsSdkInfo=None, vcInstallDir=None):
-
   if targetArchitecture is None:
     if cake.system.isWindows64():
       targetArchitecture = "x64"
@@ -405,6 +417,19 @@ def getVisualStudio2017Compiler(configuration, targetArchitecture=None, ucrtInfo
 
   if vcInstallDir is None:
     vcInstallDir = str(findMsvc2017InstallDir(targetArchitecture))
+
+  return getVisualStudioCompiler(configuration, targetArchitecture, ucrtInfo, windowsSdkInfo, vcInstallDir)
+
+def getVisualStudioCompiler(configuration, targetArchitecture=None, ucrtInfo=None, windowsSdkInfo=None, vcInstallDir=None):
+
+  if targetArchitecture is None:
+    if cake.system.isWindows64():
+      targetArchitecture = "x64"
+    else:
+      targetArchitecture = "x86"
+
+  if vcInstallDir is None:
+    vcInstallDir = str(findMsvcInstallDir(targetArchitecture))
 
   if windowsSdkInfo is None:
     windowsSdks = findWindows10Sdks(targetArchitecture=targetArchitecture)

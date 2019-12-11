@@ -260,6 +260,13 @@ def run(args=None, cwd=None):
     default=[],
     )
   parser.add_option(
+    "--macros", metavar="KEYWORDS",
+    action="extend",
+    dest="defMacros",
+    help="Define macros, eg: '--macros=MACRO_ONE,MACRO_TWO'.",
+    default=[],
+    )
+  parser.add_option(
     "-s", "--silent", "--quiet",
     action="store_true",
     dest="quiet",

@@ -13,6 +13,7 @@ import shutil
 import datetime
 import time
 import threading
+import traceback
 from functools import wraps
 
 class TestCase:
@@ -34,8 +35,9 @@ class TestCase:
       except TestFailedException:
         pass
       except Exception as e:
+        stack_frames = traceback.format_tb(sys.exc_info()[2])
         reporter.result.errors.append(
-          "Test threw unhandled exception: %s" % str(e))
+          "Test threw unhandled exception: %s\n%s" % (str(e), "\n".join(stack_frames)))
       finally:
         reporter.testFinished()
     

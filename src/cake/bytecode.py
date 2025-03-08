@@ -5,8 +5,8 @@
 @license: Licensed under the MIT license.
 """
 
-import __builtin__
-import imp
+import builtins
+import importlib.util
 import marshal
 import os
 import sys
@@ -14,7 +14,7 @@ import struct
 import platform
 
 # Magic header written at start of file
-_MAGIC = imp.get_magic()
+_MAGIC = importlib.util.MAGIC_NUMBER
 _MAGIC_LEN = len(_MAGIC)
 _NOTMAGIC = '\0' * _MAGIC_LEN
 
@@ -56,62 +56,45 @@ def loadCode(file, cfile=None, dfile=None, cached=True):
 
   timestamp = None
 
-  try:
-    if sys.dont_write_bytecode:
-      cached = False
-  except AttributeError:
-    # Fallback for Python 2.5 or earlier
-    if "PYTHONDONTWRITEBYTECODE" in os.environ:
-      cached = False
+  if sys.dont_write_bytecode:
+    cached = False
 
   if cached:
     # Try to load the cache file if possible, don't sweat if we can't
     try:
-      f = open(cfile, 'rb')
-      try:
+      with open(cfile, 'rb') as f:
         if f.read(_MAGIC_LEN) == _MAGIC:
-          cacheTimestamp = struct.unpack('<I', f.read(4))[0]
-          timestamp = long(os.stat(file).st_mtime)
+          cacheTimestamp = struct.unpack('<q', f.read(8))[0]
+          timestamp = os.stat(file).st_mtime_ns
           if timestamp == cacheTimestamp:
             return marshal.load(f)
-      finally:
-        f.close()
     except Exception:
       # Failed to load the cache file
       pass
   
   # Load the source file
-  f = open(file, 'rU')
-  try:
+  with open(file, mode='rb') as f:
     if timestamp is None:
-      try:
-        timestamp = long(os.fstat(f.fileno()).st_mtime)
-      except AttributeError:
-        timestamp = long(os.stat(file).st_mtime)
-    codestring = f.read()
-  finally:
-    f.close()
+      timestamp = os.stat(f.fileno()).st_mtime_ns
+    codestring = f.read().decode(encoding='utf-8', errors='strict')
     
   # Source needs a trailing newline to compile correctly
   if not codestring.endswith('\n'):
     codestring = codestring + '\n'
     
   # Compile the source
-  codeobject = __builtin__.compile(codestring, dfile or file, 'exec')
+  codeobject = builtins.compile(codestring, dfile or file, 'exec')
   
   if cached:
     # Try to save the cache file if possible, don't sweat if we can't
     try:
-      f = open(cfile, 'wb')
-      try:
+      with open(cfile, 'wb') as f:
         f.write(_NOTMAGIC)
-        f.write(struct.pack('<I', timestamp))
+        f.write(struct.pack('<q', timestamp))
         marshal.dump(codeobject, f)
         f.flush()
         f.seek(0, 0)
         f.write(_MAGIC)
-      finally:
-        f.close()
       _setCreatorType(cfile)
     except Exception:
       pass

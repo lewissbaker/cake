@@ -401,7 +401,7 @@ class Task(object):
       finally:
         self._lock.release()
         
-    except Exception, e:
+    except Exception as e:
       trace = sys.exc_info()[2]
       self._lock.acquire()
       try:

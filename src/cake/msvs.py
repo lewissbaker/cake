@@ -17,7 +17,7 @@ from cake.registry import queryString, KEY_WOW64_32KEY
 def getMsvsInstallDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS install directory.
   
-  Typically: 'C:\Program Files\Microsoft Visual Studio 8\Common7\IDE'.
+  Typically: 'C:\\Program Files\\Microsoft Visual Studio 8\\Common7\\IDE'.
   
   @param version: The registry path used to search for MSVS.
   @type version: string
@@ -33,7 +33,7 @@ def getMsvsInstallDir(version=r'VisualStudio\8.0'):
 def getMsvsProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVS product directory.
   
-  Typically: 'C:\Program Files\Microsoft Visual Studio 8\'.
+  Typically: 'C:\\Program Files\\Microsoft Visual Studio 8\\'.
 
   @param version: The registry path used to search for MSVS.
   @type version: string
@@ -49,7 +49,7 @@ def getMsvsProductDir(version=r'VisualStudio\8.0'):
 def getMsvcProductDir(version=r'VisualStudio\8.0'):
   """Returns the MSVC product directory as obtained from the registry.
 
-  Typically: 'C:\Program Files\Microsoft Visual Studio 8\VC'.
+  Typically: 'C:\\Program Files\\Microsoft Visual Studio 8\\VC'.
 
   @param version: The registry path used to search for MSVS.
   @type version: string
@@ -97,7 +97,7 @@ def getPlatformSdkVersions():
   results = []
   try:
     subKeyCount, valueCount, timestamp = winreg.QueryInfoKey(keyHandle)
-    for i in xrange(subKeyCount):
+    for i in range(subKeyCount):
       name = winreg.EnumKey(keyHandle, i)
       subKeyHandle = winreg.OpenKey(keyHandle, name, 0, sam)
       try:

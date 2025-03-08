@@ -23,7 +23,7 @@ def compressFile(source, target):
   data = cake.filesys.readFile(source)
   try:
     data = zlib.compress(data, 1)
-  except zlib.error, e:
+  except zlib.error as e:
     raise EnvironmentError(str(e))
   cake.filesys.writeFile(target, data)
 
@@ -38,7 +38,7 @@ def decompressFile(source, target):
   data = cake.filesys.readFile(source)
   try:
     data = zlib.decompress(data)
-  except zlib.error, e:
+  except zlib.error as e:
     raise EnvironmentError(str(e))
   cake.filesys.writeFile(target, data)
   
@@ -71,7 +71,7 @@ def isDirectoryInfo(zipInfo):
   @return: True if the zipInfo corresponds to a directory.
   @rtype: bool
   """
-  return (zipInfo.external_attr & 0x00000010L) != 0L # FILE_ATTRIBUTE_DIRECTORY
+  return (zipInfo.external_attr & 0x00000010) != 0 # FILE_ATTRIBUTE_DIRECTORY
 
 def writeFileToZip(zipFile, sourcePath, targetPath):
   """Write a source file or directory to a zip.
@@ -92,7 +92,7 @@ def writeFileToZip(zipFile, sourcePath, targetPath):
 
     zi = zipfile.ZipInfo(targetPath, utcTime[0:6])
     zi.compress_type = zipfile.ZIP_DEFLATED
-    zi.external_attr = 0x00000010L # FILE_ATTRIBUTE_DIRECTORY
+    zi.external_attr = 0x00000010 # FILE_ATTRIBUTE_DIRECTORY
     zipFile.writestr(zi, "")
   else:  
     f = open(sourcePath, "rb")
@@ -103,7 +103,7 @@ def writeFileToZip(zipFile, sourcePath, targetPath):
     
     zi = zipfile.ZipInfo(targetPath, utcTime[0:6])
     zi.compress_type = zipfile.ZIP_DEFLATED
-    zi.external_attr = 0x00000020L # FILE_ATTRIBUTE_ARCHIVE
+    zi.external_attr = 0x00000020 # FILE_ATTRIBUTE_ARCHIVE
     zipFile.writestr(zi, data)
     
 def zipFiles(sourcePath, targetZip):
@@ -123,7 +123,7 @@ def zipFiles(sourcePath, targetZip):
   f = open(targetZip, "wb")
   try:
     zipFile = zipfile.ZipFile(f, "w")
-    for originalPath in toZip.itervalues():
+    for originalPath in toZip.values():
       sourceFilePath = os.path.join(sourcePath, originalPath)
       writeFileToZip(zipFile, sourceFilePath, originalPath)
     zipFile.close()

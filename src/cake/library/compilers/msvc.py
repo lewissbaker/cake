@@ -560,7 +560,7 @@ def findMsvcCompiler(
         for wsdkName, wsdkVer, wsdkPath in windowsSdkVersions:
           try:
             return _createMsvcCompiler(configuration, v, e, a, hostArchitecture, wsdkPath)
-          except WindowsError, ex:
+          except WindowsError as ex:
             pass
   else:
     raise CompilerNotFoundError(

@@ -10,17 +10,14 @@ import threading
 import os.path
 import codecs
 import itertools
-try:
-  import cStringIO as StringIO
-except ImportError:
-  import StringIO
+import io
 
 import cake.path
 import cake.filesys
 import cake.hash
 
 from cake.target import FileTarget, getPath, getPaths
-from cake.async import getResult, waitForAsyncResult, flatten
+from cake.async_util import getResult, waitForAsyncResult, flatten
 from cake.library import Tool
 from cake.script import Script
 
@@ -319,7 +316,7 @@ class ProjectTool(Tool):
 
     def __init__(self, project, **kwargs):
       self.project = project
-      for k, v in kwargs.iteritems():
+      for k, v in kwargs.items():
         setattr(self, k, v)
 
   _projects = _ProjectRegistry()
@@ -451,7 +448,7 @@ class ProjectTool(Tool):
     @rtype: L{FileTarget}
     """
     tool = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(tool, k, v)
 
     basePath = self.configuration.basePath
@@ -595,7 +592,7 @@ class ProjectTool(Tool):
       if sys.dont_write_bytecode:
         buildArgs.insert(1, "-B")
 
-      buildArgs.extend("=".join([k, v]) for k, v in keywords.iteritems())
+      buildArgs.extend("=".join([k, v]) for k, v in keywords.items())
 
       try:
         version = self._toProjectVersion[self.product]
@@ -638,7 +635,7 @@ class ProjectTool(Tool):
     @type projects: list of string
     """
     tool = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(tool, k, v)
 
     basePath = self.configuration.basePath
@@ -866,7 +863,7 @@ def _writeIt(generator, target):
   engine = configuration.engine
   type = generator.type
 
-  stream = StringIO.StringIO()
+  stream = io.StringIO()
   writer = codecs.getwriter(generator.encoding)(stream)
   try:
     generator._writeContents(writer)
@@ -959,7 +956,7 @@ _msvsProjectConfigurationMakeTool = """\
 _msvsProjectConfigurationXboxDeploymentTool = """\
 \t\t\t<Tool
 \t\t\t\tName="VCX360DeploymentTool"
-\t\t\t\tRemoteRoot="devkit:\$(ProjectName)"
+\t\t\t\tRemoteRoot="devkit:$(ProjectName)"
 \t\t\t\tDeploymentType="0"
 \t\t\t/>
 """
@@ -1176,7 +1173,7 @@ class MsvsProjectGenerator(object):
     mergedFilterSubItems = {}
 
     # Merge the subitems from each config
-    for config, items  in configItems.iteritems():
+    for config, items  in configItems.items():
       for item in items:
         if item.kind == 'filter':
           filters = mergedFilterSubItems.setdefault(item.name, {})
@@ -1236,7 +1233,7 @@ _msbuildProjectHeader = """\
 >
 """
 _msbuildProjectTailer = """\
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
@@ -1257,11 +1254,11 @@ _msbuildGlobals = """\
 """
 
 _msbuildConfigurationTypesHeader = """\
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.Default.props" />
 """
 
 _msbuildConfigurationTypesTailer = """\
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
 """
@@ -1278,7 +1275,7 @@ _msbuildConfigurationType = """\
 
 _msbuildConfigurationPropertySheet = """\
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='%(name)s|%(platform)s'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
 """
 
@@ -1529,7 +1526,7 @@ class MsBuildProjectGenerator(object):
     mergedFilterSubItems = {}
 
     # Merge the subitems from each config
-    for config, items  in configItems.iteritems():
+    for config, items  in configItems.items():
       for item in items:
         if item.kind == 'filter':
           filters = mergedFilterSubItems.setdefault(item.name, {})
@@ -1688,7 +1685,7 @@ class MsBuildFiltersGenerator(object):
     mergedFilterSubItems = {}
 
     # Merge the subitems from each config
-    for config, items  in configItems.iteritems():
+    for config, items  in configItems.items():
       for item in items:
         if item.kind == 'filter':
           filters = mergedFilterSubItems.setdefault(item.name, {})
@@ -1726,7 +1723,7 @@ class MsBuildFiltersGenerator(object):
     mergedFilterSubItems = {}
 
     # Merge the subitems from each config
-    for config, items  in configItems.iteritems():
+    for config, items  in configItems.items():
       for item in items:
         if item.kind == 'filter':
           filters = mergedFilterSubItems.setdefault(item.name, {})
@@ -1807,7 +1804,7 @@ class MsvsSolutionGenerator(object):
           path = project.path
           projectFilePathToProject[path] = project
         else:
-          print "Warning: skipping project %s (not built by cake)" % projectConfig.path
+          print("Warning: skipping project %s (not built by cake)" % projectConfig.path)
     projectFilePaths = projectFilePathToProject.keys()
     projectFilePaths.sort()
     self.projects = [projectFilePathToProject[p] for p in projectFilePaths]

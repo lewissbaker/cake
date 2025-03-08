@@ -41,7 +41,7 @@ def memoise(func):
   
   undefined = object()
   def run(*args, **kwargs):
-    kwargsTuple = tuple((k,v) for k, v in kwargs.iteritems())
+    kwargsTuple = tuple((k,v) for k, v in kwargs.items())
     
     self = args[0]
     key = (func, args[1:], kwargsTuple)
@@ -114,7 +114,7 @@ def cloneTools(obj):
   if isinstance(obj, Tool):
     return obj.clone()
   elif isinstance(obj, dict):
-    return dict((cloneTools(k), cloneTools(v)) for k, v in obj.iteritems())
+    return dict((cloneTools(k), cloneTools(v)) for k, v in obj.items())
   elif isinstance(obj, (list, tuple, set)):
     return type(obj)(cloneTools(i) for i in obj)
   else:

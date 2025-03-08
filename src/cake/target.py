@@ -8,7 +8,7 @@
 import types
 
 from cake.task import Task
-from cake.async import AsyncResult
+from cake.async_util import AsyncResult
 
 class Target(object):
   """Base class for targets that are built asynchronously.
@@ -121,13 +121,13 @@ def getPath(file):
   could be specified either as a FileTarget, DirectoryTarget or string.
 
   @param file: The object representing the file.
-  @type file: L{FileTarget}, L{DirectoryTarget} or C{basestring}
+  @type file: L{FileTarget}, L{DirectoryTarget} or C{str}
   """
   assert not isinstance(file, AsyncResult)
     
   if isinstance(file, (FileTarget, DirectoryTarget)):
     return file.path
-  elif isinstance(file, basestring):
+  elif isinstance(file, str):
     return file
   else:
     return None
@@ -143,7 +143,7 @@ def getPaths(files):
   @rtype: C{list} of string
   """
   assert not isinstance(files, AsyncResult)
-  assert not isinstance(files, basestring)
+  assert not isinstance(files, str)
 
   paths = []
   for f in files:

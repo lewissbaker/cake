@@ -24,7 +24,7 @@ def _getClangVersion(clangExe):
       args=args,
       stdout=subprocess.PIPE,
       )
-  except EnvironmentError, e:
+  except EnvironmentError as e:
     raise EnvironmentError(
       "cake: failed to launch %s: %s\n" % (args[0], str(e))
       )

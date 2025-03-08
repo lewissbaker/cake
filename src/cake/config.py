@@ -3,7 +3,7 @@
 # found by searching up from the working directory.
 #-------------------------------------------------------------------------------
 from cake.engine import Variant
-from cake.async import waitForAsyncResult
+from cake.async_util import waitForAsyncResult
 from cake.library.compilers import CompilerNotFoundError
 from cake.library.compilers.dummy import DummyCompiler
 from cake.library.env import EnvironmentTool
@@ -30,7 +30,7 @@ def basePath(value):
 
   @waitForAsyncResult
   def _basePath(path):
-    if isinstance(path, basestring):
+    if isinstance(path, str):
       path = env.expand(path)
       if path.startswith("#"):
         if path[1] in '\\/': # Keep project paths relative but remove slashes.
@@ -46,7 +46,7 @@ def basePath(value):
     elif isinstance(path, tuple):
       return tuple(_basePath(p) for p in path)
     elif isinstance(path, dict):
-      return dict((k, _basePath(v)) for k, v in path.iteritems())
+      return dict((k, _basePath(v)) for k, v in path.items())
     else:
       return path # Could be a FileTarget. Leave it as is.
   
@@ -104,7 +104,7 @@ def createVariants(platform, architecture, compiler):
     
     # Disable all other tools if the project tool is enabled.
     if projectTool.enabled:
-      for tool in variant.tools.itervalues():
+      for tool in variant.tools.values():
         if not isinstance(tool, ProjectTool):
           tool.enabled = False
               

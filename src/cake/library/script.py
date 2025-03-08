@@ -136,7 +136,7 @@ class ScriptTool(Tool):
     Ignored if useContext is True.
     @type configScriptName: string or None
     """
-    if not isinstance(script, basestring):
+    if not isinstance(script, str):
       raise ValueError("'script' must be a string")
    
     script = self.configuration.basePath(script)
@@ -197,7 +197,7 @@ class ScriptTool(Tool):
     scripts = basePath(scripts)
     
     include = self._include
-    if isinstance(scripts, basestring):
+    if isinstance(scripts, str):
       include(scripts)
     else:
       for path in scripts:
@@ -232,7 +232,7 @@ class ScriptTool(Tool):
     
     try:
       includedScript.execute()
-    except IOError, e:
+    except IOError as e:
       currentScript.engine.raiseError(
         ("Failed to include cake script %s: %s\n" % (path, str(e))) +
         "".join("  from " + s.path + "\n" for s in currentScript.getAncestors()))
@@ -267,7 +267,7 @@ class ScriptTool(Tool):
       self.addDefaultTarget(script.getDefaultTarget())
       return ScriptProxy(script)
 
-    if isinstance(scripts, basestring):
+    if isinstance(scripts, str):
       return _execute(scripts)
     else:
       return [_execute(path) for path in scripts]

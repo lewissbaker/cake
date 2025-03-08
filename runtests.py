@@ -26,8 +26,8 @@ passed = reporter.passedTests()
 failed = reporter.failedTests()
 ignored = reporter.ignoredTests()
 
-print "-------"
-print "Summary:",
-print len(passed), "passed,", len(failed), "failed,", len(ignored), "ignored"
+print("-------")
+print("Summary:", end=None)
+print(len(passed), "passed,", len(failed), "failed,", len(ignored), "ignored")
 
 sys.exit(len(reporter.failedTests()))

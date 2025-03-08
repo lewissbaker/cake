@@ -119,7 +119,7 @@ class EnvironmentTool(Tool):
         MESSAGE="Added /O1 flag. ",
         )
     """
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       try:
         old = self.vars[k]
         if type(old) != type(v):
@@ -140,7 +140,7 @@ class EnvironmentTool(Tool):
         MESSAGE="Added /O1 flag. ",
         )
     """
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       try:
         old = self.vars[k]
         if type(old) != type(v):

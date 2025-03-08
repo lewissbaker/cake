@@ -25,7 +25,7 @@ import cake.system
 import cake.zipping
 
 from cake.gnu import parseDependencyFile
-from cake.async import AsyncResult, waitForAsyncResult, flatten, getResult
+from cake.async_util import AsyncResult, waitForAsyncResult, flatten, getResult
 from cake.target import FileTarget, getPath, getPaths, getTask, getTasks
 from cake.task import Task
 from cake.library import Tool, memoise
@@ -980,7 +980,7 @@ class Compiler(Tool):
     @rtype: list of L{FileTarget}
     """
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
       
     return compiler._copyModulesTo(self.configuration.basePath(targetDir))
@@ -1014,7 +1014,7 @@ class Compiler(Tool):
       try:
         cake.filesys.makeDirs(cake.path.dirName(targetAbsPath))
         cake.filesys.copyFile(sourceAbsPath, targetAbsPath)
-      except EnvironmentError, e:
+      except EnvironmentError as e:
         engine.raiseError("%s: %s\n" % (target, str(e)))
 
       engine.notifyFileChanged(targetAbsPath)
@@ -1072,7 +1072,7 @@ class Compiler(Tool):
      
     # Take a snapshot of the build settings at this point and use that.
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
       
     basePath = self.configuration.basePath
@@ -1181,7 +1181,7 @@ class Compiler(Tool):
      
     # Take a snapshot of the build settings at this point and use that.
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
 
     basePath = self.configuration.basePath
@@ -1288,7 +1288,7 @@ class Compiler(Tool):
     built.
     """
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
     
     @waitForAsyncResult
@@ -1329,7 +1329,7 @@ class Compiler(Tool):
     built.
     """
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
 
     @waitForAsyncResult
@@ -1376,7 +1376,7 @@ class Compiler(Tool):
 
     # Take a snapshot of the current compiler settings
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
 
     basePath = self.configuration.basePath
@@ -1487,7 +1487,7 @@ class Compiler(Tool):
     
     # Take a snapshot of the current compiler settings
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
 
     basePath = self.configuration.basePath
@@ -1610,7 +1610,7 @@ class Compiler(Tool):
     
     # Take a snapshot of the current compiler settings
     compiler = self.clone()
-    for name, value in kwargs.iteritems():
+    for name, value in kwargs.items():
       setattr(compiler, name, value)
   
     basePath = self.configuration.basePath
@@ -1711,7 +1711,7 @@ class Compiler(Tool):
 
     # Take a snapshot of the current compiler settings
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
 
     basePath = self.configuration.basePath
@@ -1793,7 +1793,7 @@ class Compiler(Tool):
     built.
     """
     compiler = self.clone()
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       setattr(compiler, k, v)
     
     @waitForAsyncResult
@@ -1920,7 +1920,7 @@ class Compiler(Tool):
       absTarget = self.configuration.abspath(target)
       try:
         cake.filesys.makeDirs(cake.path.dirName(absTarget))
-      except Exception, e:
+      except Exception as e:
         msg = "cake: Error creating target directory %s: %s\n" % (
           cake.path.dirName(target), str(e))
         self.engine.raiseError(msg, targets=[target])
@@ -1976,7 +1976,7 @@ class Compiler(Tool):
           stdout=stdout,
           stderr=stderr,
           )
-      except EnvironmentError, e:
+      except EnvironmentError as e:
         self.engine.raiseError(
           "cake: failed to launch %s: %s\n" % (args[0], str(e)),
           targets=[target],

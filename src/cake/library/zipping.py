@@ -65,7 +65,7 @@ def _extractFile(configuration, zipFile, zipPath, zipInfo, targetDir, absTargetD
     
     try:
       cake.filesys.writeFile(absTargetFile, zipFile.read(zipInfo.filename))
-    except Exception, e:
+    except Exception as e:
       engine.raiseError(
         "Failed to extract file %s from zip %s: %s\n" % (
           zipInfo.filename,
@@ -119,7 +119,7 @@ def _shouldCompress(
     return None, "'" + targetPath + "' doesn't exist" 
 
   # Check modification times of source files against those in the zip
-  for casedPath, originalPath in toZip.iteritems():
+  for casedPath, originalPath in toZip.items():
     zipInfo = fromZip.get(casedPath, None)
 
     # Not interested in modified directories
@@ -135,7 +135,7 @@ def _shouldCompress(
         return None, "'" + sourceFilePath + "' has been changed"
       
   if removeStale:
-    for path, zipInfo in fromZip.iteritems():
+    for path, zipInfo in fromZip.items():
       if path not in toZip:
         # We must recreate the zip to remove files
         sourceFilePath = os.path.join(sourcePath, zipInfo.filename)
@@ -143,7 +143,7 @@ def _shouldCompress(
   
   toAppend = []
   reasonToBuild = None
-  for casedPath, originalPath in toZip.iteritems():
+  for casedPath, originalPath in toZip.items():
     if casedPath not in fromZip:
       toAppend.append(originalPath)
       if reasonToBuild is None:
@@ -187,7 +187,7 @@ class ZipTool(Tool):
     @return: A DirectoryTarget that will complete when the extraction has finished.
     @rtype: L{DirectoryTarget} 
     """
-    if not isinstance(targetDir, basestring):
+    if not isinstance(targetDir, str):
       raise TypeError("targetDir must be a string")
 
     engine = self.engine
@@ -243,7 +243,7 @@ class ZipTool(Tool):
         _extract()
       except BuildError:
         raise
-      except Exception, e:
+      except Exception as e:
         msg = "cake: Error extracting %s to %s: %s\n" % (
           getPath(source), targetDir, str(e))
         engine.raiseError(msg, targets=[targetDir])
@@ -294,7 +294,7 @@ class ZipTool(Tool):
     It's task will complete when the zip file has been built.
     @rtype: L{FileTarget}
     """
-    if not isinstance(target, basestring):
+    if not isinstance(target, str):
       raise TypeError("target must be a string")
 
     engine = self.engine
@@ -340,7 +340,7 @@ class ZipTool(Tool):
         f = open(absTargetPath, "wb")
         try:
           zipFile = zipfile.ZipFile(f, "w")
-          for originalPath in toZip.itervalues():
+          for originalPath in toZip.values():
             sourcePath = os.path.join(sourceDir, originalPath)
             absSourcePath = configuration.abspath(sourcePath)
             configuration.engine.logger.outputInfo("Adding %s to %s\n" % (sourcePath, target))
@@ -375,7 +375,7 @@ class ZipTool(Tool):
         return _compress()
       except BuildError:
         raise
-      except Exception, e:
+      except Exception as e:
         msg = "cake: Error creating %s: %s\n" % (target, str(e))
         engine.raiseError(msg, targets=[target])
       

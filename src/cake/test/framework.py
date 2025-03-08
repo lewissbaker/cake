@@ -12,7 +12,6 @@ import subprocess
 import shutil
 import datetime
 import time
-import thread
 import threading
 from functools import wraps
 
@@ -34,7 +33,7 @@ class TestCase:
         context.cleanUp()
       except TestFailedException:
         pass
-      except Exception, e:
+      except Exception as e:
         reporter.result.errors.append(
           "Test threw unhandled exception: %s" % str(e))
       finally:
@@ -75,11 +74,11 @@ class TestReporter:
     timeString = "%0.3fs" % timeTaken.total_seconds()
 
     if self.result.errors:
-      print "FAILED     %s: took %s" % (self.result.testName, timeString)
+      print("FAILED     %s: took %s" % (self.result.testName, timeString))
       for err in self.result.errors:
-        print "  ERROR:", err
+        print("  ERROR:", err)
     else:
-      print "PASSED     %s: took %s" % (self.result.testName, timeString)
+      print("PASSED     %s: took %s" % (self.result.testName, timeString))
 
     self.results.append(self.result)
     self.result = None
@@ -109,7 +108,7 @@ class TestReporter:
     result.reason = reason
     self.results.append(result)
 
-    print "IGNORED  %s: %s" % (testName, reason)
+    print("IGNORED  %s: %s" % (testName, reason))
 
   def passedTests(self):
     return [r for r in self.results if not r.ignored and not r.errors]
@@ -207,11 +206,8 @@ class TestContext:
     if not os.path.isdir(dirPath):
       os.makedirs(dirPath)
 
-    f = open(path, 'wt')
-    try:
+    with open(path, 'wb') as f:
       f.write(contents.encode("utf8"))
-    finally:
-      f.close()
 
   def readFileContents(self, path):
     absPath = self.abspath(path)
@@ -221,7 +217,7 @@ class TestContext:
         return f.read()
       finally:
         f.close()
-    except Exception, e:
+    except Exception as e:
       if os.path.isfile(absPath):
         self.reporter.error("Error reading file '%s': %s" % (path, str(e)))
       else:
@@ -261,8 +257,9 @@ class TestContext:
     outfile = tempfile.TemporaryFile()
     try:
       try:
+        popen_args = (sys.executable, '-u', cakeScript) + args
         p = subprocess.Popen(
-          args=[sys.executable, '-u', cakeScript, args],
+          args=popen_args,
           env=env,
           cwd=cwd,
           stdout=outfile,
@@ -286,7 +283,7 @@ class TestContext:
           if hasattr(p, "kill"):
             try:
               p.kill()
-            except Exception, e:
+            except Exception as e:
               self.reporter.warning(
                 "Failed to kill long-running cake command (pid %i): %s" % (
                   p.pid,
@@ -298,11 +295,11 @@ class TestContext:
               " ".join(args)))
 
         outfile.seek(0)
-        output = outfile.read()
+        output = outfile.read().decode(encoding='latin_1')
 
         return CakeOutput(self.reporter, args, p.returncode, output)
         
-      except EnvironmentError, e:
+      except EnvironmentError as e:
         self.reporter.error("Error running cake: %s" % str(e))
 
     finally:
@@ -465,8 +462,10 @@ def findTests(testDir):
 
     scriptPath = os.path.join(testDir, name)
     scriptGlobals = {'__file__': scriptPath}
-    execfile(scriptPath, scriptGlobals)
-    
+    with open(scriptPath) as f:
+      code = compile(f.read(), scriptPath, 'exec')
+      exec(code, scriptGlobals)
+
     for v in scriptGlobals.values():
       if isinstance(v, TestCase):
         yield v

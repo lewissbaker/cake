@@ -9,7 +9,7 @@ import os
 import subprocess
 import cake.filesys
 import cake.path
-from cake.async import waitForAsyncResult, flatten
+from cake.async_util import waitForAsyncResult, flatten
 from cake.target import Target, FileTarget, getPaths, getTasks
 from cake.library import Tool
 from cake.script import Script
@@ -64,7 +64,7 @@ class ShellTool(Tool):
       configuration = self.configuration
       abspath = configuration.abspath
 
-      if isinstance(args, basestring):
+      if isinstance(args, str):
         argsString = args
         argsList = [args]
         executable = None
@@ -99,7 +99,7 @@ class ShellTool(Tool):
           
           try:
             cake.filesys.makeDirs(cake.path.dirName(absT))
-          except Exception, e:
+          except Exception as e:
             msg = "cake: Error creating target directory %s: %s\n" % (
               cake.path.dirName(t), str(e))
             engine.raiseError(msg, targets=targets)
@@ -107,7 +107,7 @@ class ShellTool(Tool):
           if removeTargets:
             try:
               cake.filesys.remove(absT)
-            except Exception, e:
+            except Exception as e:
               msg = "cake: Error removing old target %s: %s\n" % (
                 t, str(e))
               engine.raiseError(msg, targets=targets)
@@ -134,7 +134,7 @@ class ShellTool(Tool):
           shell=shell,
           cwd=cwd,
           )
-      except EnvironmentError, e:
+      except EnvironmentError as e:
         msg = "cake: failed to launch %s: %s\n" % (argsList[0], str(e))
         engine.raiseError(msg, targets=targets)
 

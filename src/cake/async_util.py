@@ -9,7 +9,7 @@ from cake.task import Task
 
 class AsyncResult(object):
   """Base class for asynchronous results.
-  
+
   @ivar task: A Task that will complete when the result is available.
   @ivar result: The result of the asynchronous operation.
   """
@@ -17,7 +17,7 @@ class AsyncResult(object):
 class DeferredResult(AsyncResult):
   """An AsyncResult where the result is the return value of the task's function.
   """
-  
+
   def __init__(self, task):
     self.task = task
 
@@ -37,7 +37,7 @@ def _findAsyncResults(value):
       for result in _findAsyncResults(item):
         yield result
   elif isinstance(value, dict):
-    for k, v in value.iteritems():
+    for k, v in value.items():
       for result in _findAsyncResults(k):
         yield result
       for result in _findAsyncResults(v):
@@ -57,7 +57,7 @@ def _resolveAsyncResults(value):
     return type(value)(_resolveAsyncResults(x) for x in value)
   elif isinstance(value, dict):
     return type(value)(
-      (_resolveAsyncResults(k), _resolveAsyncResults(v)) for k, v in value.iteritems()
+      (_resolveAsyncResults(k), _resolveAsyncResults(v)) for k, v in value.items()
       )
   else:
     return value
@@ -100,7 +100,7 @@ def waitForAsyncResult(func):
   """Decorator to be used with functions that need to
   wait for its argument values to become available before
   calling the function.
-  
+
   eg.
   @waitForAsyncResult
   def someFunction(source):
@@ -122,7 +122,7 @@ def waitForAsyncResult(func):
       newArgs = _resolveAsyncResults(args)
       newKwargs = _resolveAsyncResults(kwargs)
       return func(*newArgs, **newKwargs)
-    
+
     taskFactory = _getTaskFactory()
 
     runTask = taskFactory(run)
@@ -133,7 +133,7 @@ def waitForAsyncResult(func):
       parentTask.completeAfter(runTask)
 
     return DeferredResult(runTask)
-  
+
   return call
 
 def getResult(value):
@@ -147,7 +147,7 @@ def getResults(values):
   """Get the results of a list of values that may be an AsyncResult
   objects.
   """
-  for value in values: 
+  for value in values:
     yield getResult(value)
 
 @waitForAsyncResult
@@ -161,7 +161,7 @@ def flatten(value):
   an AsyncResult value that results in the flattened items.
   """
   sequenceTypes = (list, tuple, set, frozenset)
-  
+
   def _flatten(value):
     if isinstance(value, sequenceTypes):
       for item in value:

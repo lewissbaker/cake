@@ -22,176 +22,16 @@ import cake.task
 import cake.threadpool
 import cake.version
 
-from cake.async import flatten
+from cake.async_util import flatten
 
-from cake.optparse import Option, OptionParser
+from optparse import Option, OptionParser
 
-# Make sure stat() returns floats so timestamps are consistent across
-# Python versions (2.4 used longs, 2.5+ uses floats).
-os.stat_float_times(True)
+class DebugKeywords:
+  def __init__(self):
+    self.keywords = []
 
-def callOnce(f):
-  """Decorator that handles calling a function only once.
-
-  The second and subsequent times it is called the cached
-  result is returned.
-  """
-  state = {}
-  def func(*args, **kwargs):
-    if state:
-      try:
-        return state["result"]
-      except KeyError:
-        raise state["exception"]
-    else:
-      try:
-        result = state["result"] = f(*args, **kwargs)
-        return result
-      except Exception, e:
-        state["exception"] = e
-        raise
-  return func 
-
-@callOnce
-def _overrideFile():
-  """Override the builtin file() class to make use of the open() function
-  so that the no-inherit flag on files is set to prevent processes from
-  inheriting file handles.
-  """
-  import __builtin__
-  old_file = __builtin__.file
-  
-  class new_file(old_file):
-    def __init__(self, *args, **kwargs):
-      pass
-      
-    def __new__(cls, filename, mode="r", bufsize=0):
-      return open(filename, mode, bufsize)
-      
-  __builtin__.file = new_file
-
-@callOnce
-def _overrideOpen():
-  """
-  Override the built-in open() and os.open() to set the no-inherit
-  flag on files to prevent processes from inheriting file handles.
-  """
-  if hasattr(os, "O_NOINHERIT"):
-    import __builtin__
-    
-    if (sys.hexversion >= 0x03000000 or
-       platform.python_compiler().startswith("MSC v.1310")):
-      # Python 3.x or Python 2.x compiled with MSVC 7.1 doesn't support the
-      # 'N' flag being passed to fopen. It is ignored. So we need to manually
-      # interpret mode string and call onto os.open().
-
-      _basicFlags = {
-        'r': os.O_RDONLY,
-        'w': os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-        'a': os.O_WRONLY | os.O_CREAT | os.O_APPEND,
-        }
-
-      _otherFlags = {
-        '+': os.O_RDWR, # Also clears os.O_RDONLY and os.O_WRONLY
-        't': os.O_TEXT,
-        'b': os.O_BINARY,
-        'N': os.O_NOINHERIT,
-        'D': os.O_TEMPORARY,
-        'T': os.O_SHORT_LIVED,
-        'S': os.O_SEQUENTIAL,
-        'R': os.O_RANDOM,
-        ' ': 0,
-        ',': 0,
-        'U': 0,
-        }
-      
-      def new_open(filename, mode="r", bufsize=-1):
-        try:
-          flags = _basicFlags[mode[0]]
-        except LookupError:
-          raise ValueError("mode must start with 'r', 'w' or 'a'")
-
-        for c in mode[1:]:
-          try:
-            flags |= _otherFlags[c]
-          except KeyError:
-            raise ValueError("unknown flag '%s' in mode" % c)
-
-        if flags & os.O_RDWR:
-          flags &= ~(os.O_RDONLY | os.O_WRONLY)
-          
-        if flags & os.O_BINARY and flags & os.O_TEXT:
-          raise ValueError("Cannot specify both 't' and 'b' in mode")
-        if flags & os.O_SEQUENTIAL and flags & os.O_RANDOM:
-          raise ValueError("Cannot specify both 'S' and 'R' in mode")
-
-        try:
-          fd = os.open(filename, flags)
-        except OSError, e:
-          raise IOError(str(e))
-
-        return os.fdopen(fd,  mode, bufsize)
-    else:
-      # Simpler version for platforms that have fopen() that understands 'N'
-      old_open = __builtin__.open
-      def new_open(filename, mode="r", *args, **kwargs):
-        if "N" not in mode:
-          mode += "N"
-        return old_open(filename, mode, *args, **kwargs)
-    __builtin__.open = new_open
-  
-    old_os_open = os.open
-    def new_os_open(filename, flag, mode=0777):
-      flag |= os.O_NOINHERIT
-      return old_os_open(filename, flag, mode)
-    os.open = new_os_open
-
-@callOnce
-def _overridePopen():
-  """
-  Override the subprocess Popen class due to a bug in Python 2.4
-  that can cause an exception if a process finishes too quickly.
-  """
-  version = platform.python_version_tuple()
-  if version[0] == "2" and version[1] == "4":
-    import subprocess
-    
-    old_Popen = subprocess.Popen
-    class new_Popen(old_Popen):
-      def poll(self):
-        try:
-          return old_Popen.poll(self)
-        except ValueError:
-          return self.returncode
-      
-      def wait(self):
-        try:
-          return old_Popen.wait(self)
-        except ValueError:
-          return self.returncode
-    subprocess.Popen = new_Popen
-
-@callOnce    
-def _speedUp():
-  """
-  Speed up execution by importing Psyco and binding the slowest functions
-  with it.
-  """ 
-  try:
-    import psyco
-    psyco.bind(cake.engine.Configuration.checkDependencyInfo)
-    psyco.bind(cake.engine.Configuration.createDependencyInfo)
-    #psyco.full()
-    #psyco.profile()
-    #psyco.log()
-  except ImportError:
-    # Only report import failures on systems we know Psyco supports.
-    version = platform.python_version_tuple()
-    supportsVersion = version[0] == "2" and version[1] in ["5", "6"]
-    if platform.system() == "Windows" and supportsVersion:
-      sys.stderr.write(
-        "warning: Psyco is not installed. Installing it may halve your incremental build time.\n"
-        )
+  def append(self, arg_value):
+    self.keywords.extend(value.split(sep=","))
 
 def run(args=None, cwd=None):
   """Run a cake build with the specified command-line args.
@@ -208,11 +48,6 @@ def run(args=None, cwd=None):
   @rtype: int
   """
   startTime = datetime.datetime.utcnow()
-  
-  _overrideFile()
-  _overrideOpen()
-  _overridePopen()
-  _speedUp()
   
   if args is None:
     args = sys.argv[1:]
@@ -254,10 +89,10 @@ def run(args=None, cwd=None):
     )
   parser.add_option(
     "--debug", metavar="KEYWORDS",
-    action="extend",
+    action="append",
     dest="debugComponents",
     help="Set features to debug, eg: 'reason,run,script,scan,time'.",
-    default=[],
+    default=DebugKeywords(),
     )
   parser.add_option(
     "-s", "--silent", "--quiet",
@@ -402,7 +237,7 @@ def run(args=None, cwd=None):
     parser.error("unknown args: %s" % " ".join(unknownArgs))
   
   # Set components to debug.
-  for c in options.debugComponents:
+  for c in options.debugComponents.keywords:
     logger.enableDebug(c)
   logger.quiet = options.quiet
   
@@ -455,7 +290,7 @@ def run(args=None, cwd=None):
       else:
         configuration = engine.getConfiguration(configScript)
 
-      variants = configuration.findAllVariants(keywords)      
+      variants = configuration.findAllVariants(keywords)
 
       scripts = [configuration.execute(scriptPath, variant)
                  for variant in variants] 

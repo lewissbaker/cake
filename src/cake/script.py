@@ -9,7 +9,7 @@ import threading
 import cake.path
 
 from cake.target import Target
-from cake.async import AsyncResult, waitForAsyncResult, flatten
+from cake.async_util import AsyncResult, waitForAsyncResult, flatten
 
 _undefined = object()
 
@@ -217,7 +217,7 @@ class Script(object):
     """Get the named script target for this script.
 
     @param name: The name of the target.
-    @type name: C{basestring}
+    @type name: C{str}
 
     @return: The ScriptTarget with the specified name.
     @rtype: L{ScriptTarget}
@@ -270,7 +270,7 @@ class Script(object):
           old = Script.getCurrent()
           Script._current.value = self
           try:
-            exec byteCode in scriptGlobals
+            exec(byteCode, scriptGlobals)
           finally:
             Script._current.value = old
         finally:

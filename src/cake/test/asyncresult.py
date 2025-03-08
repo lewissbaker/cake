@@ -6,7 +6,7 @@ Tests for AsyncResult and @waitForAsyncResult decorator.
 import unittest
 import threading
 import sys
-from cake.async import waitForAsyncResult, flatten, DeferredResult, AsyncResult
+from cake.async_util import waitForAsyncResult, flatten, DeferredResult, AsyncResult
 from cake.task import Task
 
 class AsyncResultTests(unittest.TestCase):

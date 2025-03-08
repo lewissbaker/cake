@@ -97,7 +97,7 @@ def commonPath(path1, path2):
   charCount = min(path1len, path2len)
   safeCount = 0
 
-  for i in xrange(charCount):
+  for i in range(charCount):
     if path1[i] != path2[i]:
       return path1[:safeCount] # No more matches
     elif path1[i] in seps:
@@ -432,7 +432,7 @@ def join(*args):
   anyLists = False
   
   last = args[-1]
-  if isinstance(last, basestring):
+  if isinstance(last, str):
     results = [last]
   else:
     results = last
@@ -440,9 +440,9 @@ def join(*args):
 
   osJoin = os.path.join
 
-  for i in xrange(len(args) - 2, -1, -1):
+  for i in range(len(args) - 2, -1, -1):
     arg = args[i]
-    if isinstance(arg, basestring):
+    if isinstance(arg, str):
       results = [osJoin(arg, r) for r in results]
     else:
       anyLists = True

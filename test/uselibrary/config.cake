@@ -14,7 +14,7 @@ variant = Variant()
 variant.tools["script"] = ScriptTool(configuration=configuration)
 try:
   variant.tools["compiler"] = findDefaultCompiler(configuration)
-except CompilerNotFoundError, e:
+except CompilerNotFoundError as e:
   configuration.engine.raiseError(
     "Unable to find a suitable compiler for the test: %s" % str(e))
 

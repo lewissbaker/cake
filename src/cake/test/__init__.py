@@ -14,7 +14,7 @@ def suite():
   loader = unittest.TestLoader()
   s = unittest.TestSuite()
   for name in _modules:
-    print name
+    print(name)
     s.addTests(loader.loadTestsFromName(name))
   return s
 

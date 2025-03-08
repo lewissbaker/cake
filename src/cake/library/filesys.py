@@ -9,7 +9,7 @@ import glob
 import cake.path
 import cake.filesys
 
-from cake.async import flatten, waitForAsyncResult
+from cake.async_util import flatten, waitForAsyncResult
 from cake.target import DirectoryTarget, FileTarget, getPath, getTask
 from cake.library import Tool
 from cake.script import Script
@@ -77,7 +77,7 @@ class FileSystemTool(Tool):
     @return: A FileTarget representing the file that will be copied.
     @rtype: L{FileTarget}
     """
-    if not isinstance(target, basestring):
+    if not isinstance(target, str):
       raise TypeError("target must be a string")
     
     basePath = self.configuration.basePath
@@ -119,7 +119,7 @@ class FileSystemTool(Tool):
       try:
         cake.filesys.makeDirs(cake.path.dirName(targetAbsPath))
         cake.filesys.copyFile(sourceAbsPath, targetAbsPath)
-      except EnvironmentError, e:
+      except EnvironmentError as e:
         engine.raiseError("%s: %s\n" % (target, str(e)), targets=[target])
 
       engine.notifyFileChanged(targetAbsPath)
@@ -155,7 +155,7 @@ class FileSystemTool(Tool):
     copied.
     @rtype: list of L{FileTarget}
     """
-    if not isinstance(targetDir, basestring):
+    if not isinstance(targetDir, str):
       raise TypeError("targetDir must be a string")
     
     basePath = self.configuration.basePath
@@ -214,7 +214,7 @@ class FileSystemTool(Tool):
     copied.
     @rtype: list of L{FileTarget}
     """
-    if not isinstance(targetDir, basestring):
+    if not isinstance(targetDir, str):
       raise TypeError("targetDir must be a string")
     
     basePath = self.configuration.basePath
@@ -232,7 +232,7 @@ class FileSystemTool(Tool):
       engine.logger.outputInfo("Creating Directory %s\n" % path)
       try:
         cake.filesys.makeDirs(targetAbsPath)
-      except EnvironmentError, e:
+      except EnvironmentError as e:
         engine.raiseError("%s: %s\n" % (targetDir, str(e)))
 
     def doDelete(paths):

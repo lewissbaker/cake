@@ -31,9 +31,9 @@ class ThreadPoolTests(unittest.TestCase):
       s.release()
        
     threadPool = cake.threadpool.ThreadPool(numWorkers=10)
-    for _ in xrange(jobCount):
+    for _ in range(jobCount):
       threadPool.queueJob(job)
-    for _ in xrange(jobCount):
+    for _ in range(jobCount):
       s.acquire()
     
     self.assertEqual(len(result), 50)

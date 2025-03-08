@@ -49,7 +49,7 @@ class ThreadPool(object):
   
   Usage::
     pool = ThreadPool(numWorkers=4)
-    for i in xrange(50):
+    for i in range(50):
       pool.queueJob(lambda i=i: someFunction(i))
   """
   def __init__(self, numWorkers):
@@ -64,7 +64,7 @@ class ThreadPool(object):
     self._finished = False
 
     # Create the worker threads.
-    for _ in xrange(numWorkers):
+    for _ in range(numWorkers):
       worker = threading.Thread(target=self._runThread)
       worker.daemon = True
       worker.start()

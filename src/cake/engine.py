@@ -63,7 +63,7 @@ class Variant(object):
     self._isConstructed = False
   
   def __repr__(self):
-    keywords = ", ".join('%s=%r' % (k, v) for k, v in self.keywords.iteritems())
+    keywords = ", ".join('%s=%r' % (k, v) for k, v in self.keywords.items())
     return "Variant(%s)" % keywords 
   
   def __getitem__(self, key):
@@ -103,7 +103,7 @@ class Variant(object):
     # self.
     self, = args
     variantKeywords = self.keywords
-    for key, value in keywords.iteritems():
+    for key, value in keywords.items():
       variantValue = variantKeywords.get(key, None)
       if isinstance(value, (list, tuple)):
         for v in value:
@@ -129,7 +129,7 @@ class Variant(object):
     newKeywords = self.keywords.copy()
     newKeywords.update(keywords)
     v = Variant(**newKeywords)
-    v.tools = dict((name, tool.clone()) for name, tool in self.tools.iteritems())
+    v.tools = dict((name, tool.clone()) for name, tool in self.tools.items())
     return v
 
 class Engine(object):
@@ -458,7 +458,7 @@ class Engine(object):
       except BuildError:
         # Assume build errors have already been reported
         raise
-      except Exception, e:
+      except Exception as e:
         tbs = [traceback.extract_tb(sys.exc_info()[2])]
 
         t = task
@@ -565,7 +565,7 @@ class Engine(object):
       # Assuming here that os.stat() returns the modification time in
       # seconds since the unix time epoch (Jan 1 1970 UTC).
       stat = os.stat(path)
-      timestamp = stat.st_mtime
+      timestamp = stat.st_mtime_ns
       self._timestampCache[path] = timestamp
     return timestamp
 
@@ -686,7 +686,7 @@ class Engine(object):
  
     try:
       cake.filesys.writeFile(depPath, dependencyString + DependencyInfo.MAGIC)
-    except Exception, e:
+    except Exception as e:
       msg = "cake: Error writing dependency info to %s: %s" % (depPath, e)
       self.raiseError(msg, targets=dependencyInfo.targets)
   
@@ -807,7 +807,7 @@ class Configuration(object):
     @param variant: The Variant object to register.
     @type variant: L{Variant}    
     """
-    key = frozenset(variant.keywords.iteritems())
+    key = frozenset(variant.keywords.items())
     if key in self._variants:
       raise KeyError("Already added variant with these keywords: %r" % variant)
     
@@ -822,7 +822,7 @@ class Configuration(object):
     @return: Sequence of Variant objects that match the keywords.
     @rtype: sequence of L{Variant}
     """
-    for variant in self._variants.itervalues():
+    for variant in self._variants.values():
       if variant.matches(**keywords):
         yield variant
   
@@ -850,7 +850,7 @@ class Configuration(object):
       results = []
       getBaseValue = baseVariant.keywords.get
       for variant in self.findAllVariants(keywords):
-        for key, value in variant.keywords.iteritems():
+        for key, value in variant.keywords.items():
           if key not in keywords:
             baseValue = getBaseValue(key, None)
             if value != baseValue:
@@ -997,7 +997,7 @@ class Configuration(object):
     absTargetPath = abspath(targetPath)
     try:
       dependencyInfo = self.engine.getDependencyInfo(absTargetPath)
-    except DependencyInfoError, e:
+    except DependencyInfoError as e:
       return None, "'" + targetPath + ".dep' " + str(e)
 
     if self.engine.forceBuild:
@@ -1015,7 +1015,7 @@ class Configuration(object):
     paths = dependencyInfo.depPaths
     timestamps = dependencyInfo.depTimestamps
     assert len(paths) == len(timestamps)
-    for i in xrange(len(paths)):
+    for i in range(len(paths)):
       path = paths[i]
       try:
         if getTimestamp(abspath(path)) != timestamps[i]:
@@ -1080,7 +1080,7 @@ class Configuration(object):
       assert len(timestamps) == len(paths)
       updateFileDigestCache = self.engine.updateFileDigestCache
       abspath = self.abspath
-      for i in xrange(len(paths)):
+      for i in range(len(paths)):
         updateFileDigestCache(abspath(paths[i]), timestamps[i], digests[i])
 
   def calculateDigest(self, dependencyInfo):

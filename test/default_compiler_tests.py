@@ -6,7 +6,7 @@ def testBuildCLibrary(t):
   out = t.runCake()
   out.checkSucceeded()
   out.checkHasLine("Compiling foo.c")
-  out.checkHasLineMatching("Archiving foo\\.(a|lib)")
+  out.checkHasLineMatching("Archiving (lib)?foo\\.(a|lib)")
 
   t.runCake().checkBuildWasNoop()
 
@@ -19,7 +19,7 @@ def testModifyAndRebuildCLibrary(t):
   out = t.runCake()
   out.checkSucceeded()
   out.checkHasLine("Compiling foo.c")
-  out.checkHasLineMatching("Archiving foo\\.(a|lib)")
+  out.checkHasLineMatching("Archiving (lib)?foo\\.(a|lib)")
 
 @caketest(fixture="uselibrary")
 def testCompileProgramUsingLibrary(t):
@@ -27,7 +27,7 @@ def testCompileProgramUsingLibrary(t):
   out.checkSucceeded()
   out.checkHasLine("Compiling main/main.cpp")
   out.checkHasLine("Compiling printer/source/printer.cpp")
-  out.checkHasLine("Archiving printer/lib/printer.lib")
+  out.checkHasLineMatching("Archiving printer/lib/(lib)?printer\\.(a|lib)")
 
   t.runCake("main").checkBuildWasNoop()
   t.runCake("printer").checkBuildWasNoop()
